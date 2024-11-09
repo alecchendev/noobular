@@ -3,15 +3,24 @@ package main
 import (
 	// "fmt"
 	"database/sql"
-	_ "github.com/mattn/go-sqlite3"
+	"encoding/json"
+	"fmt"
 	"html/template"
 	"log"
 	"net/http"
 	"os"
 	"regexp"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
-var templates = template.Must(template.ParseFiles("edit.html", "view.html"))
+var resp_tmpl = `
+<div id="response-message">
+	<p>Course created successfully</p>
+</div>
+`
+
+var templates = template.Must(template.Must(template.ParseFiles("edit.html", "view.html")).New("created_course_response.html").Parse(resp_tmpl))
 
 var validPath = regexp.MustCompile("^/(edit|save|view)/([a-zA-Z0-9]+)$")
 
@@ -104,10 +113,27 @@ func (hm HandlerMap) Post(handler func(http.ResponseWriter, *http.Request)) Hand
 	return hm
 }
 
-func createCourseHandler(w http.ResponseWriter, r *http.Request) {
+func withDbClient(dbClient *DbClient, handler func(http.ResponseWriter, *http.Request, *DbClient)) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		handler(w, r, dbClient)
+	}
+}
+
+func createCourseHandler(w http.ResponseWriter, r *http.Request, dbClient *DbClient) {
+	fmt.Println("Creating course")
+	var course Course
+	err := json.NewDecoder(r.Body).Decode(&course)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	fmt.Println(course)
+	dbClient.CreateCourse(course)
+	templates.ExecuteTemplate(w, "created_course_response.html", nil)
 }
 
 func createCourseFormHandler(w http.ResponseWriter, r *http.Request) {
+	http.ServeFile(w, r, "create_course.html")
 }
 
 func homePageHandler(w http.ResponseWriter, r *http.Request) {
@@ -115,68 +141,63 @@ func homePageHandler(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	homePage, err := os.ReadFile("index.html")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.Write(homePage)
+	http.ServeFile(w, r, "index.html")
 }
 
-func runServer() {
+func runServer(dbClient *DbClient) {
 	http.HandleFunc("/view/", makeHandler(viewHandler))
 	http.HandleFunc("/edit/", makeHandler(editHandler))
 	http.HandleFunc("/save/", makeHandler(saveHandler))
-	http.Handle("/course/create", NewHandlerMap().Get(createCourseFormHandler).Post(createCourseHandler))
+	http.Handle("/course/create", NewHandlerMap().Get(createCourseFormHandler).Post(withDbClient(dbClient, createCourseHandler)))
+	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 	http.Handle("/", NewHandlerMap().Get(homePageHandler))
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
 type Course struct {
-	Title       string
-	Description string
+	Title       string `json:"title"`
+	Description string `json:"description"`
 }
 
-func dbExample() {
+type DbClient struct {
+	db *sql.DB
+}
+
+func NewDbClient(db *sql.DB) *DbClient {
+	return &DbClient{db}
+}
+
+func (c *DbClient) CreateCourse(course Course) error {
+	// exampleCourses := []Course{{"Cryptography", "Intro to cryptographic primitives"}, {"Abstract algebra", "Intro to abstract algebra"}}
+
+	_, err := c.db.Exec("insert into courses(title, description) values(?, ?)", course.Title, course.Description)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func initDb(db *sql.DB) {
+	sqlStmt := `
+	create table courses (title text, description text);
+	delete from courses;
+	`
+	_, err := db.Exec(sqlStmt)
+	if err != nil {
+		log.Printf("Error creating courses table: %q: %s\n", err, sqlStmt)
+		return
+	}
+}
+
+func main() {
 	os.Remove("test.db")
 	db, err := sql.Open("sqlite3", "test.db")
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer db.Close()
+	initDb(db)
 
-	sqlStmt := `
-	create table courses (title text, description text);
-	delete from courses;
-	`
-	_, err = db.Exec(sqlStmt)
-	if err != nil {
-		log.Printf("%q: %s\n", err, sqlStmt)
-		return
-	}
-
-	tx, err := db.Begin()
-	if err != nil {
-		log.Fatal(err)
-	}
-	stmt, err := db.Prepare("insert into courses(title, description) values(?, ?)")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer stmt.Close()
-	courses := []Course{{"Cryptography", "Intro to cryptographic primitives"}, {"Abstract algebra", "Intro to abstract algebra"}}
-	for _, course := range courses {
-		_, err = stmt.Exec(course.Title, course.Description)
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
-	err = tx.Commit()
-	if err != nil {
-		log.Fatal(err)
-	}
-}
-
-func main() {
-	runServer()
+	dbClient := NewDbClient(db)
+	runServer(dbClient)
 }
