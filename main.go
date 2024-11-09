@@ -2,6 +2,8 @@ package main
 
 import (
 	// "fmt"
+	"database/sql"
+	_ "github.com/mattn/go-sqlite3"
 	"html/template"
 	"log"
 	"net/http"
@@ -78,9 +80,54 @@ func saveHandler(w http.ResponseWriter, r *http.Request, title string) {
 	http.Redirect(w, r, "/view/"+title, http.StatusFound)
 }
 
-func main() {
+func run_server() {
 	http.HandleFunc("/view/", makeHandler(viewHandler))
 	http.HandleFunc("/edit/", makeHandler(editHandler))
 	http.HandleFunc("/save/", makeHandler(saveHandler))
 	log.Fatal(http.ListenAndServe(":8080", nil))
+}
+
+type Course struct {
+	Title       string
+	Description string
+}
+
+func main() {
+	os.Remove("test.db")
+	db, err := sql.Open("sqlite3", "test.db")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+
+	sqlStmt := `
+	create table courses (title text, description text);
+	delete from courses;
+	`
+	_, err = db.Exec(sqlStmt)
+	if err != nil {
+		log.Printf("%q: %s\n", err, sqlStmt)
+		return
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		log.Fatal(err)
+	}
+	stmt, err := db.Prepare("insert into courses(title, description) values(?, ?)")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer stmt.Close()
+	courses := []Course{{"Cryptography", "Intro to cryptographic primitives"}, {"Abstract algebra", "Intro to abstract algebra"}}
+	for _, course := range courses {
+		_, err = stmt.Exec(course.Title, course.Description)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+	err = tx.Commit()
+	if err != nil {
+		log.Fatal(err)
+	}
 }
