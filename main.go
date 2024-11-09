@@ -80,10 +80,55 @@ func saveHandler(w http.ResponseWriter, r *http.Request, title string) {
 	http.Redirect(w, r, "/view/"+title, http.StatusFound)
 }
 
-func run_server() {
+type HandlerMap map[string]func(http.ResponseWriter, *http.Request)
+
+func (hm HandlerMap) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if handler, ok := hm[r.Method]; ok {
+		handler(w, r)
+		return
+	}
+	http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+}
+
+func NewHandlerMap() HandlerMap {
+	return HandlerMap{}
+}
+
+func (hm HandlerMap) Get(handler func(http.ResponseWriter, *http.Request)) HandlerMap {
+	hm["GET"] = handler
+	return hm
+}
+
+func (hm HandlerMap) Post(handler func(http.ResponseWriter, *http.Request)) HandlerMap {
+	hm["POST"] = handler
+	return hm
+}
+
+func createCourseHandler(w http.ResponseWriter, r *http.Request) {
+}
+
+func createCourseFormHandler(w http.ResponseWriter, r *http.Request) {
+}
+
+func homePageHandler(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		http.NotFound(w, r)
+		return
+	}
+	homePage, err := os.ReadFile("index.html")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Write(homePage)
+}
+
+func runServer() {
 	http.HandleFunc("/view/", makeHandler(viewHandler))
 	http.HandleFunc("/edit/", makeHandler(editHandler))
 	http.HandleFunc("/save/", makeHandler(saveHandler))
+	http.Handle("/course/create", NewHandlerMap().Get(createCourseFormHandler).Post(createCourseHandler))
+	http.Handle("/", NewHandlerMap().Get(homePageHandler))
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
@@ -92,7 +137,7 @@ type Course struct {
 	Description string
 }
 
-func main() {
+func dbExample() {
 	os.Remove("test.db")
 	db, err := sql.Open("sqlite3", "test.db")
 	if err != nil {
@@ -130,4 +175,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+func main() {
+	runServer()
 }
