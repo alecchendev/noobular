@@ -11,7 +11,11 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-var templates = template.Must(template.ParseFiles("template/index.html", "template/courses.html", "template/create_course.html", "template/created_course_response.html"))
+var templates = map[string]*template.Template{
+	"index.html": template.Must(template.ParseFiles("template/page.html", "template/index.html")),
+	"courses.html": template.Must(template.ParseFiles("template/page.html", "template/courses.html")),
+	"create_course.html": template.Must(template.ParseFiles("template/page.html", "template/create_course.html", "template/created_course_response.html")),
+}
 
 type HandlerMap map[string]func(http.ResponseWriter, *http.Request)
 
@@ -49,7 +53,7 @@ func coursePageHandler(w http.ResponseWriter, r *http.Request, dbClient *DbClien
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	templates.ExecuteTemplate(w, "courses.html", courses)
+	templates["courses.html"].ExecuteTemplate(w, "page.html", courses)
 }
 
 func createCourseHandler(w http.ResponseWriter, r *http.Request, dbClient *DbClient) {
@@ -62,11 +66,11 @@ func createCourseHandler(w http.ResponseWriter, r *http.Request, dbClient *DbCli
 	}
 	fmt.Println(course)
 	dbClient.CreateCourse(course)
-	templates.ExecuteTemplate(w, "created_course_response.html", nil)
+	templates["create_course.html"].ExecuteTemplate(w, "created_course_response.html", nil)
 }
 
-func createCourseFormHandler(w http.ResponseWriter, r *http.Request) {
-	templates.ExecuteTemplate(w, "create_course.html", nil)
+func createCoursePageHandler(w http.ResponseWriter, r *http.Request) {
+	templates["create_course.html"].ExecuteTemplate(w, "page.html", nil)
 }
 
 func homePageHandler(w http.ResponseWriter, r *http.Request) {
@@ -74,13 +78,14 @@ func homePageHandler(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	templates.ExecuteTemplate(w, "index.html", nil)
+	templates["index.html"].ExecuteTemplate(w, "page.html", nil)
 }
 
 func runServer(dbClient *DbClient) {
-	http.Handle("/course/create", NewHandlerMap().Get(createCourseFormHandler).Post(withDbClient(dbClient, createCourseHandler)))
+	http.Handle("/course/create", NewHandlerMap().Get(createCoursePageHandler).Post(withDbClient(dbClient, createCourseHandler)))
 	http.Handle("/course", NewHandlerMap().Get(withDbClient(dbClient, coursePageHandler)))
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
+	http.Handle("/style/", http.StripPrefix("/style/", http.FileServer(http.Dir("style"))))
 	http.Handle("/", NewHandlerMap().Get(homePageHandler))
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }

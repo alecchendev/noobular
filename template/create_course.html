@@ -1,27 +1,21 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Create Course</title>
-    <script src="/static/htmx.min.js"></script>
-    <script src="/static/json-enc.js"></script>
-</head>
-<body>
-    <h1>Create Course</h1>
-    <form
-        hx-post="/course/create"
-        hx-target="#response-message"
-        hx-swap="outerHTML"
-        hx-ext="json-enc"
-    >
-        <label for="title">Title:</label>
-        <input type="text" id="title" name="title" required>
-        
-        <label for="description">Description:</label>
-        <textarea id="description" name="description" required></textarea>
-        
-        <button type="submit">Create Item</button>
-    </form>
+{{ define "title" }}Create Course{{ end }}
+{{ define "content" }}
+<h1>Create Course</h1>
+<form
+    hx-post="/course/create"
+    hx-target="#response-message"
+    hx-swap="outerHTML"
+    hx-ext="json-enc"
+>
+    <label for="title">Title:</label>
+    <input type="text" id="title" name="title" required>
 
-    <!-- Placeholder for response message -->
-    <div id="response-message"></div>
-</body>
+    <label for="description">Description:</label>
+    <textarea id="description" name="description" required></textarea>
+
+    <button type="submit">Create Item</button>
+</form>
+
+<!-- Placeholder for response message -->
+<div id="response-message"></div>
+{{ end }}
