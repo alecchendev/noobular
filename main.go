@@ -12,8 +12,8 @@ import (
 )
 
 var templates = map[string]*template.Template{
-	"index.html": template.Must(template.ParseFiles("template/page.html", "template/index.html")),
-	"courses.html": template.Must(template.ParseFiles("template/page.html", "template/courses.html")),
+	"index.html":         template.Must(template.ParseFiles("template/page.html", "template/index.html")),
+	"courses.html":       template.Must(template.ParseFiles("template/page.html", "template/courses.html")),
 	"create_course.html": template.Must(template.ParseFiles("template/page.html", "template/create_course.html", "template/created_course_response.html")),
 }
 
@@ -91,6 +91,7 @@ func runServer(dbClient *DbClient) {
 }
 
 type Course struct {
+	Id          int    `json:"id"`
 	Title       string `json:"title"`
 	Description string `json:"description"`
 }
@@ -134,16 +135,56 @@ func (c *DbClient) GetCourses() ([]Course, error) {
 	return courses, nil
 }
 
+const createCourseTable = `
+create table if not exists courses (
+	id integer primary key,
+	title text not null,
+	description text not null
+);
+`
+
+const createModuleTable = `
+create table if not exists modules (
+	id integer primary key,
+	course_id integer not null,
+	title text not null,
+	description text not null,
+	foreign key (course_id) references courses(id) on delete cascade
+);
+`
+
+const createQuestionTable = `
+create table if not exists questions (
+	id integer primary key,
+	module_id integer not null,
+	question_text text not null,
+	foreign key (module_id) references modules(id) on delete cascade
+);
+`
+
+const createChoiceTable = `
+create table if not exists choices (
+	id integer primary key,
+	question_id integer not null,
+	choice_text text not null,
+	foreign key (question_id) references questions(id) on delete cascade
+);
+`
 
 func initDb(db *sql.DB) {
-	sqlStmt := `
-	create table if not exists courses (title text, description text);
-	`
-	_, err := db.Exec(sqlStmt)
+	tx, err := db.Begin()
 	if err != nil {
-		log.Printf("Error creating courses table: %q: %s\n", err, sqlStmt)
-		return
+		log.Fatal(err)
 	}
+	stmts := []string{createCourseTable, createModuleTable, createQuestionTable, createChoiceTable}
+	for _, stmt := range stmts {
+		_, err := tx.Exec(stmt)
+		if err != nil {
+			tx.Rollback()
+			log.Fatal(err)
+		}
+	}
+	tx.Commit()
 }
 
 func main() {
