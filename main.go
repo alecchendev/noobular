@@ -7,12 +7,11 @@ import (
 	"html/template"
 	"log"
 	"net/http"
-	"os"
 
 	_ "github.com/mattn/go-sqlite3"
 )
 
-var templates = template.Must(template.ParseFiles("template/index.html", "template/create_course.html", "template/created_course_response.html"))
+var templates = template.Must(template.ParseFiles("template/index.html", "template/courses.html", "template/create_course.html", "template/created_course_response.html"))
 
 type HandlerMap map[string]func(http.ResponseWriter, *http.Request)
 
@@ -45,7 +44,12 @@ func withDbClient(dbClient *DbClient, handler func(http.ResponseWriter, *http.Re
 }
 
 func coursePageHandler(w http.ResponseWriter, r *http.Request, dbClient *DbClient) {
-	fmt.Println("Getting course")
+	courses, err := dbClient.GetCourses()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	templates.ExecuteTemplate(w, "courses.html", courses)
 }
 
 func createCourseHandler(w http.ResponseWriter, r *http.Request, dbClient *DbClient) {
@@ -104,10 +108,31 @@ func (c *DbClient) CreateCourse(course Course) error {
 	return nil
 }
 
+func (c *DbClient) GetCourses() ([]Course, error) {
+	rows, err := c.db.Query("select title, description from courses")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var courses []Course
+	for rows.Next() {
+		var course Course
+		err := rows.Scan(&course.Title, &course.Description)
+		if err != nil {
+			return nil, err
+		}
+		courses = append(courses, course)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return courses, nil
+}
+
+
 func initDb(db *sql.DB) {
 	sqlStmt := `
-	create table courses (title text, description text);
-	delete from courses;
+	create table if not exists courses (title text, description text);
 	`
 	_, err := db.Exec(sqlStmt)
 	if err != nil {
@@ -117,7 +142,6 @@ func initDb(db *sql.DB) {
 }
 
 func main() {
-	os.Remove("test.db")
 	db, err := sql.Open("sqlite3", "test.db")
 	if err != nil {
 		log.Fatal(err)
