@@ -1,7 +1,6 @@
 package main
 
 import (
-	// "fmt"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -9,85 +8,11 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"regexp"
 
 	_ "github.com/mattn/go-sqlite3"
 )
 
-var resp_tmpl = `
-<div id="response-message">
-	<p>Course created successfully</p>
-</div>
-`
-
-var templates = template.Must(template.Must(template.ParseFiles("edit.html", "view.html")).New("created_course_response.html").Parse(resp_tmpl))
-
-var validPath = regexp.MustCompile("^/(edit|save|view)/([a-zA-Z0-9]+)$")
-
-type Page struct {
-	Title string
-	Body  []byte
-}
-
-func (p *Page) save() error {
-	filename := p.Title + ".txt"
-	return os.WriteFile(filename, p.Body, 0600)
-}
-
-func loadPage(title string) (*Page, error) {
-	filename := title + ".txt"
-	body, err := os.ReadFile(filename)
-	if err != nil {
-		return nil, err
-	}
-	return &Page{Title: title, Body: body}, nil
-}
-
-func makeHandler(fn func(http.ResponseWriter, *http.Request, string)) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		m := validPath.FindStringSubmatch(r.URL.Path)
-		if m == nil {
-			http.NotFound(w, r)
-			return
-		}
-		fn(w, r, m[2])
-	}
-}
-
-func renderTemplate(w http.ResponseWriter, tmpl string, p *Page) {
-	err := templates.ExecuteTemplate(w, tmpl+".html", p)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-}
-
-func viewHandler(w http.ResponseWriter, r *http.Request, title string) {
-	p, err := loadPage(title)
-	if err != nil {
-		http.Redirect(w, r, "/edit/"+title, http.StatusFound)
-		return
-	}
-	renderTemplate(w, "view", p)
-}
-
-func editHandler(w http.ResponseWriter, r *http.Request, title string) {
-	p, err := loadPage(title)
-	if err != nil {
-		p = &Page{Title: title}
-	}
-	renderTemplate(w, "edit", p)
-}
-
-func saveHandler(w http.ResponseWriter, r *http.Request, title string) {
-	body := r.FormValue("body")
-	p := &Page{Title: title, Body: []byte(body)}
-	err := p.save()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	http.Redirect(w, r, "/view/"+title, http.StatusFound)
-}
+var templates = template.Must(template.ParseFiles("template/index.html", "template/create_course.html", "template/created_course_response.html"))
 
 type HandlerMap map[string]func(http.ResponseWriter, *http.Request)
 
@@ -119,6 +44,10 @@ func withDbClient(dbClient *DbClient, handler func(http.ResponseWriter, *http.Re
 	}
 }
 
+func coursePageHandler(w http.ResponseWriter, r *http.Request, dbClient *DbClient) {
+	fmt.Println("Getting course")
+}
+
 func createCourseHandler(w http.ResponseWriter, r *http.Request, dbClient *DbClient) {
 	fmt.Println("Creating course")
 	var course Course
@@ -133,7 +62,7 @@ func createCourseHandler(w http.ResponseWriter, r *http.Request, dbClient *DbCli
 }
 
 func createCourseFormHandler(w http.ResponseWriter, r *http.Request) {
-	http.ServeFile(w, r, "create_course.html")
+	templates.ExecuteTemplate(w, "create_course.html", nil)
 }
 
 func homePageHandler(w http.ResponseWriter, r *http.Request) {
@@ -141,14 +70,12 @@ func homePageHandler(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	http.ServeFile(w, r, "index.html")
+	templates.ExecuteTemplate(w, "index.html", nil)
 }
 
 func runServer(dbClient *DbClient) {
-	http.HandleFunc("/view/", makeHandler(viewHandler))
-	http.HandleFunc("/edit/", makeHandler(editHandler))
-	http.HandleFunc("/save/", makeHandler(saveHandler))
 	http.Handle("/course/create", NewHandlerMap().Get(createCourseFormHandler).Post(withDbClient(dbClient, createCourseHandler)))
+	http.Handle("/course", NewHandlerMap().Get(withDbClient(dbClient, coursePageHandler)))
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 	http.Handle("/", NewHandlerMap().Get(homePageHandler))
 	log.Fatal(http.ListenAndServe(":8080", nil))
