@@ -2,7 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"html/template"
 	"log"
@@ -11,16 +10,30 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-var templates = map[string]*template.Template{
-	"index.html":         template.Must(template.ParseFiles("template/page.html", "template/index.html")),
-	"courses.html":       template.Must(template.ParseFiles("template/page.html", "template/courses.html")),
-	"create_course.html": template.Must(template.ParseFiles("template/page.html", "template/create_course.html", "template/created_course_response.html")),
+func initTemplates() map[string]*template.Template {
+	return map[string]*template.Template{
+		"index.html":   template.Must(template.ParseFiles("template/page.html", "template/index.html")),
+		"courses.html": template.Must(template.ParseFiles("template/page.html", "template/courses.html")),
+		"create_course.html": template.Must(template.ParseFiles(
+			"template/page.html", "template/create_course.html", "template/add_module.html",
+			"template/created_course_response.html")),
+	}
 }
 
-type HandlerMap map[string]func(http.ResponseWriter, *http.Request)
+var templates = initTemplates()
+
+type HandlerMap struct {
+	handlers        map[string]func(http.ResponseWriter, *http.Request)
+	reloadTemplates bool
+}
 
 func (hm HandlerMap) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if handler, ok := hm[r.Method]; ok {
+	if hm.reloadTemplates {
+		// Reload templates so we don't have to restart the server
+		// to see changes
+		templates = initTemplates()
+	}
+	if handler, ok := hm.handlers[r.Method]; ok {
 		handler(w, r)
 		return
 	}
@@ -28,16 +41,24 @@ func (hm HandlerMap) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func NewHandlerMap() HandlerMap {
-	return HandlerMap{}
+	return HandlerMap{
+		handlers:        make(map[string]func(http.ResponseWriter, *http.Request)),
+		reloadTemplates: true,
+	}
 }
 
 func (hm HandlerMap) Get(handler func(http.ResponseWriter, *http.Request)) HandlerMap {
-	hm["GET"] = handler
+	hm.handlers["GET"] = handler
 	return hm
 }
 
 func (hm HandlerMap) Post(handler func(http.ResponseWriter, *http.Request)) HandlerMap {
-	hm["POST"] = handler
+	hm.handlers["POST"] = handler
+	return hm
+}
+
+func (hm HandlerMap) Delete(handler func(http.ResponseWriter, *http.Request)) HandlerMap {
+	hm.handlers["DELETE"] = handler
 	return hm
 }
 
@@ -58,19 +79,40 @@ func coursePageHandler(w http.ResponseWriter, r *http.Request, dbClient *DbClien
 
 func createCourseHandler(w http.ResponseWriter, r *http.Request, dbClient *DbClient) {
 	fmt.Println("Creating course")
-	var course Course
-	err := json.NewDecoder(r.Body).Decode(&course)
+	err := r.ParseForm()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	fmt.Println(course)
-	dbClient.CreateCourse(course)
+	title := r.Form.Get("title")
+	description := r.Form.Get("description")
+	moduleTitles := r.Form["module-title[]"]
+	moduleDescriptions := r.Form["module-description[]"]
+	course, modules, err := dbClient.CreateCourse(title, description, moduleTitles, moduleDescriptions)
+	if err != nil {
+		fmt.Println("Error creating course:", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	fmt.Println("Created course:", course)
+	fmt.Println("Created modules:", modules)
 	templates["create_course.html"].ExecuteTemplate(w, "created_course_response.html", nil)
 }
 
 func createCoursePageHandler(w http.ResponseWriter, r *http.Request) {
 	templates["create_course.html"].ExecuteTemplate(w, "page.html", nil)
+}
+
+// These two handlers seem kinda dumb, i.e. they could just be done in javascript,
+// but I'm just going to do things the pure HTMX way for now to see how it goes.
+
+// Simply returns another small chunk of HTML to add new modules
+func addModuleHandler(w http.ResponseWriter, r *http.Request) {
+	templates["create_course.html"].ExecuteTemplate(w, "add_module.html", nil)
+}
+
+func deleteModuleHandler(w http.ResponseWriter, r *http.Request) {
+	// No op
 }
 
 func homePageHandler(w http.ResponseWriter, r *http.Request) {
@@ -81,19 +123,28 @@ func homePageHandler(w http.ResponseWriter, r *http.Request) {
 	templates["index.html"].ExecuteTemplate(w, "page.html", nil)
 }
 
-func runServer(dbClient *DbClient) {
-	http.Handle("/course/create", NewHandlerMap().Get(createCoursePageHandler).Post(withDbClient(dbClient, createCourseHandler)))
-	http.Handle("/course", NewHandlerMap().Get(withDbClient(dbClient, coursePageHandler)))
-	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
-	http.Handle("/style/", http.StripPrefix("/style/", http.FileServer(http.Dir("style"))))
-	http.Handle("/", NewHandlerMap().Get(homePageHandler))
-	log.Fatal(http.ListenAndServe(":8080", nil))
+func initRouter(dbClient *DbClient) *http.ServeMux {
+	mux := http.NewServeMux()
+	mux.Handle("/course/create", NewHandlerMap().Get(createCoursePageHandler).Post(withDbClient(dbClient, createCourseHandler)))
+	mux.Handle("/course/create/module", NewHandlerMap().Get(addModuleHandler).Delete(deleteModuleHandler))
+	mux.Handle("/course", NewHandlerMap().Get(withDbClient(dbClient, coursePageHandler)))
+	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
+	mux.Handle("/style/", http.StripPrefix("/style/", http.FileServer(http.Dir("style"))))
+	mux.Handle("/", NewHandlerMap().Get(homePageHandler))
+	return mux
 }
 
 type Course struct {
-	Id          int    `json:"id"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
+	Id          int
+	Title       string
+	Description string
+}
+
+type Module struct {
+	Id          int
+	CourseId    int
+	Title       string
+	Description string
 }
 
 type DbClient struct {
@@ -104,14 +155,35 @@ func NewDbClient(db *sql.DB) *DbClient {
 	return &DbClient{db}
 }
 
-func (c *DbClient) CreateCourse(course Course) error {
-	// exampleCourses := []Course{{"Cryptography", "Intro to cryptographic primitives"}, {"Abstract algebra", "Intro to abstract algebra"}}
-
-	_, err := c.db.Exec("insert into courses(title, description) values(?, ?)", course.Title, course.Description)
+func (c *DbClient) CreateCourse(title string, description string, moduleTitles []string, moduleDescriptions []string) (Course, []Module, error) {
+	res, err := c.db.Exec("insert into courses(title, description) values(?, ?)", title, description)
 	if err != nil {
-		return err
+		return Course{}, []Module{}, err
 	}
-	return nil
+	courseId, err := res.LastInsertId()
+	if err != nil {
+		return Course{}, []Module{}, err
+	}
+	if len(moduleTitles) != len(moduleDescriptions) {
+		return Course{}, []Module{}, fmt.Errorf("moduleTitles and moduleDescriptions must have the same length")
+	}
+	course := Course{int(courseId), title, description}
+	modules := make([]Module, len(moduleTitles))
+	for i := 0; i < len(moduleTitles); i++ {
+		moduleTitle := moduleTitles[i]
+		moduleDescription := moduleDescriptions[i]
+		res, err = c.db.Exec("insert into modules(course_id, title, description) values(?, ?, ?)", courseId, moduleTitle, moduleDescription)
+		if err != nil {
+			return Course{}, []Module{}, err
+		}
+		moduleId, err := res.LastInsertId()
+		if err != nil {
+			return Course{}, []Module{}, err
+		}
+		module := Module{int(moduleId), course.Id, moduleTitle, moduleDescription}
+		modules[i] = module
+	}
+	return course, modules, nil
 }
 
 func (c *DbClient) GetCourses() ([]Course, error) {
@@ -137,7 +209,7 @@ func (c *DbClient) GetCourses() ([]Course, error) {
 
 const createCourseTable = `
 create table if not exists courses (
-	id integer primary key,
+	id integer primary key autoincrement,
 	title text not null,
 	description text not null
 );
@@ -145,7 +217,7 @@ create table if not exists courses (
 
 const createModuleTable = `
 create table if not exists modules (
-	id integer primary key,
+	id integer primary key autoincrement,
 	course_id integer not null,
 	title text not null,
 	description text not null,
@@ -155,7 +227,7 @@ create table if not exists modules (
 
 const createQuestionTable = `
 create table if not exists questions (
-	id integer primary key,
+	id integer primary key autoincrement,
 	module_id integer not null,
 	question_text text not null,
 	foreign key (module_id) references modules(id) on delete cascade
@@ -164,7 +236,7 @@ create table if not exists questions (
 
 const createChoiceTable = `
 create table if not exists choices (
-	id integer primary key,
+	id integer primary key autoincrement,
 	question_id integer not null,
 	choice_text text not null,
 	foreign key (question_id) references questions(id) on delete cascade
@@ -196,5 +268,11 @@ func main() {
 	initDb(db)
 
 	dbClient := NewDbClient(db)
-	runServer(dbClient)
+	router := initRouter(dbClient)
+	server := http.Server{
+		Addr:    ":8080",
+		Handler: router,
+	}
+	fmt.Println("Listening on port 8080")
+	log.Fatal(server.ListenAndServe())
 }
