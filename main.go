@@ -6,17 +6,38 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"strconv"
+	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
 )
 
 func initTemplates() map[string]*template.Template {
+	funcMap := template.FuncMap{
+		"TitleCase": func(s string) string {
+			return strings.Title(strings.ToLower(s))
+		},
+		"EmptyModule": func () UiModule {
+			return UiModule{}
+		},
+		"EmptyQuestion": func () UiQuestion {
+			return UiQuestion{}
+		},
+		"EmptyChoice": func () UiChoice {
+			return UiChoice{}
+		},
+	}
 	return map[string]*template.Template{
+		// Pages
 		"index.html":   template.Must(template.ParseFiles("template/page.html", "template/index.html")),
 		"courses.html": template.Must(template.ParseFiles("template/page.html", "template/courses.html")),
-		"create_course.html": template.Must(template.ParseFiles(
-			"template/page.html", "template/create_course.html", "template/add_module.html",
-			"template/created_course_response.html")),
+		"create_course.html": template.Must(template.New("").Funcs(funcMap).ParseFiles(
+			"template/page.html", "template/create_course.html",
+			"template/add_element.html", "template/created_course_response.html",)),
+		"edit_module.html": template.Must(template.New("").Funcs(funcMap).ParseFiles(
+			"template/page.html", "template/edit_module.html", "template/add_element.html")),
+		// Standalone partials
+		"add_element.html": template.Must(template.New("").Funcs(funcMap).ParseFiles("template/add_element.html")),
 	}
 }
 
@@ -106,13 +127,49 @@ func createCoursePageHandler(w http.ResponseWriter, r *http.Request) {
 // These two handlers seem kinda dumb, i.e. they could just be done in javascript,
 // but I'm just going to do things the pure HTMX way for now to see how it goes.
 
-// Simply returns another small chunk of HTML to add new modules
-func addModuleHandler(w http.ResponseWriter, r *http.Request) {
-	templates["create_course.html"].ExecuteTemplate(w, "add_module.html", nil)
+// Simply returns another small chunk of HTML to add new elements
+func addElementHandler(w http.ResponseWriter, r *http.Request) {
+	var data interface{}
+	switch r.PathValue("element") {
+		case "module":
+			data = UiModule{}
+			break
+		case "question":
+			data = UiQuestion{}
+			break
+		case "choice":
+			data = UiChoice{}
+			break
+	}
+	templates["add_element.html"].ExecuteTemplate(w, "add_element.html", data)
+
 }
 
-func deleteModuleHandler(w http.ResponseWriter, r *http.Request) {
+func deleteElementHandler(w http.ResponseWriter, r *http.Request) {
 	// No op
+}
+
+func editModulePageHandler(w http.ResponseWriter, r *http.Request, dbClient *DbClient) {
+	// Get courseId and moduleId from "/course/:courseId/module/:moduleId/edit"
+
+	courseId, err := strconv.Atoi(r.PathValue("courseId"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	moduleId, err := strconv.Atoi(r.PathValue("moduleId"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	uiModule, err := dbClient.GetEditModule(courseId, moduleId)
+
+	err = templates["edit_module.html"].ExecuteTemplate(w, "page.html", uiModule)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
 func homePageHandler(w http.ResponseWriter, r *http.Request) {
@@ -126,7 +183,8 @@ func homePageHandler(w http.ResponseWriter, r *http.Request) {
 func initRouter(dbClient *DbClient) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.Handle("/course/create", NewHandlerMap().Get(createCoursePageHandler).Post(withDbClient(dbClient, createCourseHandler)))
-	mux.Handle("/course/create/module", NewHandlerMap().Get(addModuleHandler).Delete(deleteModuleHandler))
+	mux.Handle("/ui/{element}", NewHandlerMap().Get(addElementHandler).Delete(deleteElementHandler))
+	mux.Handle("/course/{courseId}/module/{moduleId}/edit", NewHandlerMap().Get(withDbClient(dbClient, editModulePageHandler)))
 	mux.Handle("/course", NewHandlerMap().Get(withDbClient(dbClient, coursePageHandler)))
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 	mux.Handle("/style/", http.StripPrefix("/style/", http.FileServer(http.Dir("style"))))
@@ -200,6 +258,10 @@ type UiModule struct {
 	Description string
 }
 
+func (m UiModule) ElementType() string {
+	return "module"
+}
+
 const getCoursesQuery = `
 select c.id, c.title, c.description, m.id, m.title, m.description
 from courses c
@@ -249,6 +311,98 @@ func (c *DbClient) GetCourses() ([]UiCourse, error) {
 		return nil, err
 	}
 	return courses, nil
+}
+
+const getEditModuleQuery = `
+select c.id, c.title, m.id, m.title, m.description, q.id, q.question_text, ch.id, ch.choice_text
+from courses c
+left join modules m on c.id = m.course_id
+left join questions q on m.id = q.module_id
+left join choices ch on q.id = ch.question_id
+where c.id = ? and m.id = ?
+order by c.id, m.id, q.id, ch.id;
+`
+
+type UiEditModule struct {
+	CourseId    int
+	CourseTitle string
+	ModuleId    int
+	ModuleTitle string
+	ModuleDesc  string
+	Questions   []UiQuestion
+}
+
+type UiQuestion struct {
+	Id           int
+	QuestionText string
+	Choices      []UiChoice
+}
+
+func (q UiQuestion) ElementType() string {
+	return "question"
+}
+
+type UiChoice struct {
+	Id         int
+	ChoiceText string
+}
+
+func (c UiChoice) ElementType() string {
+	return "choice"
+}
+
+func (c *DbClient) GetEditModule(courseId int, moduleId int) (UiEditModule, error) {
+	rows, err := c.db.Query(getEditModuleQuery, courseId, moduleId)
+	if err != nil {
+		return UiEditModule{}, err
+	}
+	defer rows.Close()
+
+	var uiModule UiEditModule
+	firstRow := true
+	for rows.Next() {
+		var row struct {
+			CourseId     int
+			CourseTitle  string
+			ModuleId     int
+			ModuleTitle  string
+			ModuleDesc   string
+			QuestionId   sql.NullInt64
+			QuestionText sql.NullString
+			ChoiceId     sql.NullInt64
+			ChoiceText   sql.NullString
+		}
+		err := rows.Scan(&row.CourseId, &row.CourseTitle, &row.ModuleId, &row.ModuleTitle, &row.ModuleDesc, &row.QuestionId, &row.QuestionText, &row.ChoiceId, &row.ChoiceText)
+		if err != nil {
+			return UiEditModule{}, err
+		}
+		if firstRow {
+			uiModule.CourseId = row.CourseId
+			uiModule.CourseTitle = row.CourseTitle
+			uiModule.ModuleId = row.ModuleId
+			uiModule.ModuleTitle = row.ModuleTitle
+			uiModule.ModuleDesc = row.ModuleDesc
+			uiModule.Questions = []UiQuestion{}
+			firstRow = false
+		}
+		if row.QuestionId.Valid && (len(uiModule.Questions) == 0 || uiModule.Questions[len(uiModule.Questions)-1].Id != int(row.QuestionId.Int64)) {
+			uiModule.Questions = append(uiModule.Questions, UiQuestion{
+				Id:           int(row.QuestionId.Int64),
+				QuestionText: row.QuestionText.String,
+				Choices:      []UiChoice{},
+			})
+		}
+		if row.ChoiceId.Valid {
+			uiModule.Questions[len(uiModule.Questions)-1].Choices = append(uiModule.Questions[len(uiModule.Questions)-1].Choices, UiChoice{
+				Id:         int(row.ChoiceId.Int64),
+				ChoiceText: row.ChoiceText.String,
+			})
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return UiEditModule{}, err
+	}
+	return uiModule, nil
 }
 
 const createCourseTable = `

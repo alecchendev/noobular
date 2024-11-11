@@ -65,9 +65,9 @@ button {
     <h2>Modules</h2>
 
     <div id="modules">
-        {{ template "add_module.html" }}
+        {{ template "add_element.html" EmptyModule }}
     </div>
-    <button id="add-module-button" type="button" hx-get="/course/create/module" hx-target="#modules" hx-swap="beforeend">Add Module</button>
+    <button id="add-module-button" type="button" hx-get="/ui/module" hx-target="previous" hx-swap="beforeend">Add Module</button>
 
     <button id="submit-button" type="submit">Submit</button>
 </form>
