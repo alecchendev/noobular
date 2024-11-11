@@ -1,13 +1,89 @@
 {{ define "title" }}Courses{{ end }}
-{{ define "style" }}{{ end }}
+{{ define "style" }}
+.courses {
+	display: flex;
+	flex-direction: column;
+	margin-bottom: 150px;
+}
+
+.module-toggle {
+	display: none;
+}
+
+.edit-module {
+	padding-top: 1rem;
+	display: flex;
+	justify-content: space-between;
+}
+
+.module-title {
+	margin: 0;
+}
+
+.edit-module-link {
+	display: flex;
+	align-items: center;
+}
+
+/* Toggle */
+
+.module-toggle-input {
+	display: none;
+}
+
+.module-toggle-style {
+	padding: 20px;
+	background-color: #f8f9fa;
+	margin: 0;
+	cursor: pointer;
+}
+
+.module-toggle-style:hover {
+	background-color: #e9ecef;
+}
+
+.module-toggle-input:checked + .module-toggle-label {
+	background-color: #0056b3;
+}
+
+.toggle-content {
+	max-height: 0;
+	overflow: hidden;
+	background-color: #f8f9fa;
+	margin-bottom: 10px;
+}
+
+.module-toggle-input:checked ~ .toggle-content {
+	max-height: 500px;
+	padding: 0 20px 20px 20px;
+
+}
+{{ end }}
 {{ define "content" }}
-<h1>Courses</h1>
-<a href="/">Home</a>
+<h1>My Courses</h1>
 <div class="courses">
-	{{range .}}
+	{{range $course := . }}
 	<div class="course">
 		<h2>{{.Title}}</h2>
 		<p>{{.Description}}</p>
+		<input type="checkbox"
+		       id="module-toggle-{{$course.Id}}"
+		       class="module-toggle-input">
+		<label for="module-toggle-{{$course.Id}}"
+		       class="module-toggle-label">
+			<h3 class="module-toggle-style">Modules</h3>
+		</label>
+		<div class="modules toggle-content">
+			{{range .Modules}}
+			<div id="{{$course.Id}}-module-{{.Id}}" class="module">
+				<div class="edit-module">
+					<h3 class="module-title">{{.Title}}</h3>
+					<a class="edit-module-link" href="/course/{{$course.Id}}/module/{{.Id}}/edit">Edit</a>
+				</div>
+				<p>{{.Description}}</p>
+			</div>
+			{{end}}
+		</div>
 	</div>
 	{{end}}
 </div>

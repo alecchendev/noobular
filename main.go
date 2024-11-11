@@ -186,20 +186,64 @@ func (c *DbClient) CreateCourse(title string, description string, moduleTitles [
 	return course, modules, nil
 }
 
-func (c *DbClient) GetCourses() ([]Course, error) {
-	rows, err := c.db.Query("select title, description from courses")
+// Course struct for feeding into a template to be rendered
+type UiCourse struct {
+	Id          int
+	Title       string
+	Description string
+	Modules     []UiModule
+}
+
+type UiModule struct {
+	Id          int
+	Title       string
+	Description string
+}
+
+const getCoursesQuery = `
+select c.id, c.title, c.description, m.id, m.title, m.description
+from courses c
+left join modules m on c.id = m.course_id
+order by c.id, m.id;
+`
+
+func (c *DbClient) GetCourses() ([]UiCourse, error) {
+	rows, err := c.db.Query(getCoursesQuery)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var courses []Course
+
+	var courses []UiCourse
 	for rows.Next() {
-		var course Course
-		err := rows.Scan(&course.Title, &course.Description)
+		var row struct {
+			CourseId    int
+			CourseTitle string
+			CourseDesc  string
+			ModuleId    sql.NullInt64
+			ModuleTitle sql.NullString
+			ModuleDesc  sql.NullString
+		}
+		err := rows.Scan(&row.CourseId, &row.CourseTitle, &row.CourseDesc, &row.ModuleId, &row.ModuleTitle, &row.ModuleDesc)
 		if err != nil {
 			return nil, err
 		}
-		courses = append(courses, course)
+		if len(courses) == 0 || courses[len(courses)-1].Id != row.CourseId {
+			courses = append(courses, UiCourse{
+				Id:          row.CourseId,
+				Title:       row.CourseTitle,
+				Description: row.CourseDesc,
+				Modules:     []UiModule{},
+			})
+		}
+		if row.ModuleId.Valid {
+			courses[len(courses)-1].Modules = append(courses[len(courses)-1].Modules, UiModule{
+				Id:          int(row.ModuleId.Int64),
+				Title:       row.ModuleTitle.String,
+				Description: row.ModuleDesc.String,
+			})
+		}
+
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
