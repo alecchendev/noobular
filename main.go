@@ -35,7 +35,8 @@ func initTemplates() map[string]*template.Template {
 			"template/page.html", "template/create_course.html",
 			"template/add_element.html", "template/created_course_response.html",)),
 		"edit_module.html": template.Must(template.New("").Funcs(funcMap).ParseFiles(
-			"template/page.html", "template/edit_module.html", "template/add_element.html")),
+			"template/page.html", "template/edit_module.html", "template/add_element.html",
+			"template/edited_module_response.html")),
 		// Standalone partials
 		"add_element.html": template.Must(template.New("").Funcs(funcMap).ParseFiles("template/add_element.html")),
 	}
@@ -75,6 +76,11 @@ func (hm HandlerMap) Get(handler func(http.ResponseWriter, *http.Request)) Handl
 
 func (hm HandlerMap) Post(handler func(http.ResponseWriter, *http.Request)) HandlerMap {
 	hm.handlers["POST"] = handler
+	return hm
+}
+
+func (hm HandlerMap) Put(handler func(http.ResponseWriter, *http.Request)) HandlerMap {
+	hm.handlers["PUT"] = handler
 	return hm
 }
 
@@ -172,6 +178,70 @@ func editModulePageHandler(w http.ResponseWriter, r *http.Request, dbClient *DbC
 	}
 }
 
+func editModuleHandler(w http.ResponseWriter, r *http.Request, dbClient *DbClient) {
+	fmt.Println("Editing module")
+	moduleId, err := strconv.Atoi(r.PathValue("moduleId"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	err = r.ParseForm()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	title := r.Form.Get("title")
+	description := r.Form.Get("description")
+	questions := r.Form["question-title[]"]
+	choices := r.Form["choice-title[]"]
+	// Choices are separated by "end-choice" in the form
+	// i.e. we expect r.Form["choice-title[]"] to look something like:
+	// ["choice1", "choice2", "end-choice", "choice3", "choice4", "end-choice"]
+	uiQuestions := make([]string, len(questions))
+	uiChoicesByQuestion := make([][]string, len(questions))
+	choiceIdx := 0
+	for i, question := range questions {
+		uiChoices := make([]string, 0)
+		for ; choiceIdx < len(choices); choiceIdx++ {
+			choice := choices[choiceIdx]
+			if choice == "end-choice" {
+				choiceIdx++
+				break
+			}
+			uiChoices = append(uiChoices, choice)
+		}
+		uiQuestions[i] = question
+		uiChoicesByQuestion[i] = uiChoices
+	}
+
+	// Validation
+	for i, question := range uiQuestions {
+		if question == "" {
+			http.Error(w, "Questions cannot be empty", http.StatusBadRequest)
+			return
+		}
+		if len(uiChoicesByQuestion[i]) == 0 {
+			http.Error(w, "Questions must have at least one choice", http.StatusBadRequest)
+			return
+		}
+		for _, choice := range uiChoicesByQuestion[i] {
+			if choice == "" {
+				http.Error(w, "Choices cannot be empty", http.StatusBadRequest)
+				return
+			}
+		}
+	}
+
+	err = dbClient.EditModule(moduleId, title, description, uiQuestions, uiChoicesByQuestion)
+	if err != nil {
+		fmt.Println("Error editing module:", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	fmt.Println("Updated module")
+	templates["edit_module.html"].ExecuteTemplate(w, "edited_module_response.html", nil)
+}
+
 func homePageHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
@@ -184,7 +254,7 @@ func initRouter(dbClient *DbClient) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.Handle("/course/create", NewHandlerMap().Get(createCoursePageHandler).Post(withDbClient(dbClient, createCourseHandler)))
 	mux.Handle("/ui/{element}", NewHandlerMap().Get(addElementHandler).Delete(deleteElementHandler))
-	mux.Handle("/course/{courseId}/module/{moduleId}/edit", NewHandlerMap().Get(withDbClient(dbClient, editModulePageHandler)))
+	mux.Handle("/course/{courseId}/module/{moduleId}/edit", NewHandlerMap().Get(withDbClient(dbClient, editModulePageHandler)).Put(withDbClient(dbClient, editModuleHandler)))
 	mux.Handle("/course", NewHandlerMap().Get(withDbClient(dbClient, coursePageHandler)))
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 	mux.Handle("/style/", http.StripPrefix("/style/", http.FileServer(http.Dir("style"))))
@@ -260,6 +330,10 @@ type UiModule struct {
 
 func (m UiModule) ElementType() string {
 	return "module"
+}
+
+func (m UiModule) ElementText() string {
+	return m.Title
 }
 
 const getCoursesQuery = `
@@ -342,6 +416,10 @@ func (q UiQuestion) ElementType() string {
 	return "question"
 }
 
+func (q UiQuestion) ElementText() string {
+	return q.QuestionText
+}
+
 type UiChoice struct {
 	Id         int
 	ChoiceText string
@@ -349,6 +427,10 @@ type UiChoice struct {
 
 func (c UiChoice) ElementType() string {
 	return "choice"
+}
+
+func (c UiChoice) ElementText() string {
+	return c.ChoiceText
 }
 
 func (c *DbClient) GetEditModule(courseId int, moduleId int) (UiEditModule, error) {
@@ -403,6 +485,48 @@ func (c *DbClient) GetEditModule(courseId int, moduleId int) (UiEditModule, erro
 		return UiEditModule{}, err
 	}
 	return uiModule, nil
+}
+
+func (c *DbClient) EditModule(moduleId int, title string, description string, questions []string, choices [][]string) error {
+	tx, err := c.db.Begin()
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec("update modules set title = ?, description = ? where id = ?;", title, description, moduleId)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	// Delete all questions and choices for this module (deleting quesitons cascades to choices)
+	_, err = tx.Exec("delete from questions where module_id = ?;", moduleId)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	for i, question := range questions {
+		res, err := tx.Exec("insert into questions(module_id, question_text) values(?, ?);", moduleId, question)
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
+		questionId, err := res.LastInsertId()
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
+		for _, choice := range choices[i] {
+			_, err = tx.Exec("insert into choices(question_id, choice_text) values(?, ?);", questionId, choice)
+			if err != nil {
+				tx.Rollback()
+				return err
+			}
+		}
+	}
+	err = tx.Commit()
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 const createCourseTable = `

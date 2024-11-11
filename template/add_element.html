@@ -59,7 +59,7 @@
 {{ end }}
 <div class="element-container">
 	<div class="element-title-delete-container">
-		<input type="text" class="element-title" name="{{ .ElementType }}-title[]" placeholder="{{ TitleCase .ElementType }}" required>
+		<input type="text" class="element-title" name="{{ .ElementType }}-title[]" placeholder="{{ TitleCase .ElementType }}" value="{{ .ElementText }}" required>
 		<button type="button"
 			class="delete-element"
 			hx-delete="/ui/{{ .ElementType }}"
@@ -79,6 +79,7 @@
 			{{ end }}
 		</div>
 		<button id="add-element-button" type="button" hx-get="/ui/choice" hx-target="previous" hx-swap="beforeend">Add Choice</button>
+		<input type="text" name="choice-title[]" value="end-choice" hidden/>
 	</div>
 	{{ end }}
 

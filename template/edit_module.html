@@ -63,7 +63,7 @@ button {
 </div>
 <h1>Edit Module</h1>
 <form
-    hx-post="/course/create"
+    hx-put="/course/{{ .CourseId }}/module/{{ .ModuleId }}/edit"
     hx-target="#response-message"
     hx-swap="outerHTML"
 >
