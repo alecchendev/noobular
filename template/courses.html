@@ -5,6 +5,16 @@
 	flex-direction: column;
 }
 
+.course-title-edit-container {
+	display: flex;
+	justify-content: space-between;
+}
+
+.edit-course-link {
+	display: flex;
+	align-items: center;
+}
+
 .module-toggle {
 	display: none;
 }
@@ -63,7 +73,10 @@
 <div class="courses">
 	{{range $course := . }}
 	<div class="course">
-		<h2>{{.Title}}</h2>
+		<div class="course-title-edit-container">
+			<h2>{{.Title}}</h2>
+			<a class="edit-course-link" href="/course/{{$course.Id}}/edit">Edit</a>
+		</div>
 		<p>{{.Description}}</p>
 		<input type="checkbox"
 		       id="module-toggle-{{$course.Id}}"

@@ -1,5 +1,9 @@
 {{ define "title" }}Create Course{{ end }}
 {{ define "style" }}
+.path {
+	margin-top: 1rem;
+}
+
 form {
     display: flex;
     flex-direction: column;
@@ -52,20 +56,40 @@ button {
 {{ template "substyle"}}
 {{ end }}
 {{ define "content" }}
+
+{{ $edit := not (eq "" .Title) }}
+
+{{ if $edit }}
+<div class="path">
+	<a href="/course">Courses</a> &gt; <a href="/course/{{ .Id }}/edit">{{ .Title }}</a>
+</div>
+<h1>Edit Course</h1>
+{{ else }}
 <h1>New Course</h1>
+{{ end }}
 <form
+    {{ if $edit }}
+    hx-put="/course/{{ .Id }}/edit"
+    {{ else }}
     hx-post="/course/create"
+    {{ end }}
     hx-target="#response-message"
     hx-swap="outerHTML"
 >
-    <input type="text" id="course-title" name="title" placeholder="Course name" autofocus required>
+    <input type="text" id="course-title" name="title" placeholder="Course name" value="{{ .Title }}" autofocus required>
 
-    <textarea id="course-description" name="description" placeholder="Course description" required></textarea>
+    <textarea id="course-description" name="description" placeholder="Course description" required>{{ .Description }}</textarea>
 
     <h2>Modules</h2>
 
     <div id="modules">
-        {{ template "add_element.html" EmptyModule }}
+        {{ range $module := .Modules }}
+            {{ template "add_element.html" $module }}
+        {{ end }}
+
+        {{ if eq 0 (len .Modules) }}
+            {{ template "add_element.html" EmptyModule }}
+        {{ end }}
     </div>
     <button id="add-module-button" type="button" hx-get="/ui/module" hx-target="previous" hx-swap="beforeend">Add Module</button>
 

@@ -18,13 +18,13 @@ func initTemplates() map[string]*template.Template {
 			return strings.Title(strings.ToLower(s))
 		},
 		"EmptyModule": func () UiModule {
-			return UiModule{}
+			return EmptyModule()
 		},
 		"EmptyQuestion": func () UiQuestion {
-			return UiQuestion{}
+			return EmptyQuestion()
 		},
 		"EmptyChoice": func () UiChoice {
-			return UiChoice{}
+			return EmptyChoice()
 		},
 	}
 	return map[string]*template.Template{
@@ -33,7 +33,8 @@ func initTemplates() map[string]*template.Template {
 		"courses.html": template.Must(template.ParseFiles("template/page.html", "template/courses.html")),
 		"create_course.html": template.Must(template.New("").Funcs(funcMap).ParseFiles(
 			"template/page.html", "template/create_course.html",
-			"template/add_element.html", "template/created_course_response.html",)),
+			"template/add_element.html", "template/created_course_response.html",
+			"template/edited_course_response.html")),
 		"edit_module.html": template.Must(template.New("").Funcs(funcMap).ParseFiles(
 			"template/page.html", "template/edit_module.html", "template/add_element.html",
 			"template/edited_module_response.html")),
@@ -126,8 +127,61 @@ func createCourseHandler(w http.ResponseWriter, r *http.Request, dbClient *DbCli
 	templates["create_course.html"].ExecuteTemplate(w, "created_course_response.html", nil)
 }
 
+func editCourseHandler(w http.ResponseWriter, r *http.Request, dbClient *DbClient) {
+	fmt.Println("Editing course")
+	courseId, err := strconv.Atoi(r.PathValue("courseId"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	err = r.ParseForm()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	title := r.Form.Get("title")
+	description := r.Form.Get("description")
+	moduleIdStrs := r.Form["module-id[]"]
+	moduleIds := make([]int, len(moduleIdStrs))
+	for i, moduleIdStr := range moduleIdStrs {
+		moduleIdInt, err := strconv.Atoi(moduleIdStr)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		moduleIds[i] = moduleIdInt
+	}
+	moduleTitles := r.Form["module-title[]"]
+	moduleDescriptions := r.Form["module-description[]"]
+	course, modules, err := dbClient.EditCourse(courseId, title, description, moduleIds, moduleTitles, moduleDescriptions)
+	if err != nil {
+		fmt.Println("Error editing course:", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	fmt.Println("Edited course:", course)
+	fmt.Println("Edited modules:", modules)
+	templates["create_course.html"].ExecuteTemplate(w, "edited_course_response.html", nil)
+}
+
 func createCoursePageHandler(w http.ResponseWriter, r *http.Request) {
-	templates["create_course.html"].ExecuteTemplate(w, "page.html", nil)
+	templates["create_course.html"].ExecuteTemplate(w, "page.html", EmptyCourse())
+}
+
+func editCoursePageHandler(w http.ResponseWriter, r *http.Request, dbClient *DbClient) {
+	courseId, err := strconv.Atoi(r.PathValue("courseId"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	course, err := dbClient.GetCourse(courseId)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	fmt.Println("Editing course:", course)
+	fmt.Println("Course modules:", course.Modules)
+	templates["create_course.html"].ExecuteTemplate(w, "page.html", course)
 }
 
 // These two handlers seem kinda dumb, i.e. they could just be done in javascript,
@@ -138,13 +192,13 @@ func addElementHandler(w http.ResponseWriter, r *http.Request) {
 	var data interface{}
 	switch r.PathValue("element") {
 		case "module":
-			data = UiModule{}
+			data = EmptyModule()
 			break
 		case "question":
-			data = UiQuestion{}
+			data = EmptyQuestion()
 			break
 		case "choice":
-			data = UiChoice{}
+			data = EmptyChoice()
 			break
 	}
 	templates["add_element.html"].ExecuteTemplate(w, "add_element.html", data)
@@ -153,6 +207,19 @@ func addElementHandler(w http.ResponseWriter, r *http.Request) {
 
 func deleteElementHandler(w http.ResponseWriter, r *http.Request) {
 	// No op
+}
+
+func deleteModuleHandler(w http.ResponseWriter, r *http.Request, dbClient *DbClient) {
+	moduleId, err := strconv.Atoi(r.PathValue("moduleId"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	err = dbClient.DeleteModule(moduleId)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
 func editModulePageHandler(w http.ResponseWriter, r *http.Request, dbClient *DbClient) {
@@ -253,8 +320,11 @@ func homePageHandler(w http.ResponseWriter, r *http.Request) {
 func initRouter(dbClient *DbClient) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.Handle("/course/create", NewHandlerMap().Get(createCoursePageHandler).Post(withDbClient(dbClient, createCourseHandler)))
+	mux.Handle("/course/{courseId}/edit", NewHandlerMap().Get(withDbClient(dbClient, editCoursePageHandler)).Put(withDbClient(dbClient, editCourseHandler)))
 	mux.Handle("/ui/{element}", NewHandlerMap().Get(addElementHandler).Delete(deleteElementHandler))
-	mux.Handle("/course/{courseId}/module/{moduleId}/edit", NewHandlerMap().Get(withDbClient(dbClient, editModulePageHandler)).Put(withDbClient(dbClient, editModuleHandler)))
+	// This is kinda a weird place to put the deleteModuleHandler because it's on a different page
+	// (the edit course page) but it's fine for now.
+	mux.Handle("/course/{courseId}/module/{moduleId}/edit", NewHandlerMap().Get(withDbClient(dbClient, editModulePageHandler)).Put(withDbClient(dbClient, editModuleHandler)).Delete(withDbClient(dbClient, deleteModuleHandler)))
 	mux.Handle("/course", NewHandlerMap().Get(withDbClient(dbClient, coursePageHandler)))
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 	mux.Handle("/style/", http.StripPrefix("/style/", http.FileServer(http.Dir("style"))))
@@ -284,6 +354,9 @@ func NewDbClient(db *sql.DB) *DbClient {
 }
 
 func (c *DbClient) CreateCourse(title string, description string, moduleTitles []string, moduleDescriptions []string) (Course, []Module, error) {
+	if len(moduleTitles) != len(moduleDescriptions) {
+		return Course{}, []Module{}, fmt.Errorf("moduleTitles and moduleDescriptions must have the same length")
+	}
 	res, err := c.db.Exec("insert into courses(title, description) values(?, ?)", title, description)
 	if err != nil {
 		return Course{}, []Module{}, err
@@ -291,9 +364,6 @@ func (c *DbClient) CreateCourse(title string, description string, moduleTitles [
 	courseId, err := res.LastInsertId()
 	if err != nil {
 		return Course{}, []Module{}, err
-	}
-	if len(moduleTitles) != len(moduleDescriptions) {
-		return Course{}, []Module{}, fmt.Errorf("moduleTitles and moduleDescriptions must have the same length")
 	}
 	course := Course{int(courseId), title, description}
 	modules := make([]Module, len(moduleTitles))
@@ -314,6 +384,42 @@ func (c *DbClient) CreateCourse(title string, description string, moduleTitles [
 	return course, modules, nil
 }
 
+func (c *DbClient) EditCourse(courseId int, title string, description string, moduleIds []int, moduleTitles []string, moduleDescriptions []string) (Course, []Module, error) {
+	if len(moduleTitles) != len(moduleDescriptions) || len(moduleTitles) != len(moduleIds) {
+		return Course{}, []Module{}, fmt.Errorf("moduleTitles, moduleDescriptions, and moduleIds must have the same length, got titles: %d, descs: %d, ids: %d", len(moduleTitles), len(moduleDescriptions), len(moduleIds))
+	}
+	res, err := c.db.Exec("update courses set title = ?, description = ? where id = ?;", title, description, courseId)
+	if err != nil {
+		return Course{}, []Module{}, err
+	}
+	course := Course{courseId, title, description}
+	modules := make([]Module, len(moduleTitles))
+	for i := 0; i < len(moduleTitles); i++ {
+		moduleId := moduleIds[i]
+		moduleTitle := moduleTitles[i]
+		moduleDescription := moduleDescriptions[i]
+		if moduleId == -1 {
+			res, err = c.db.Exec("insert into modules(course_id, title, description) values(?, ?, ?)", courseId, moduleTitle, moduleDescription)
+			if err != nil {
+				return Course{}, []Module{}, err
+			}
+			moduleIdInt64, err := res.LastInsertId()
+			if err != nil {
+				return Course{}, []Module{}, err
+			}
+			moduleId = int(moduleIdInt64)
+		} else {
+			_, err = c.db.Exec("update modules set title = ?, description = ? where id = ?;", moduleTitle, moduleDescription, moduleId)
+			if err != nil {
+				return Course{}, []Module{}, err
+			}
+		}
+		module := Module{moduleId, course.Id, moduleTitle, moduleDescription}
+		modules[i] = module
+	}
+	return course, modules, nil
+}
+
 // Course struct for feeding into a template to be rendered
 type UiCourse struct {
 	Id          int
@@ -322,10 +428,20 @@ type UiCourse struct {
 	Modules     []UiModule
 }
 
+func EmptyCourse() UiCourse {
+	return UiCourse{ -1, "", "", []UiModule{} }
+}
+
 type UiModule struct {
 	Id          int
+	// Now that I added this field it's the same as Module......
+	CourseId    int
 	Title       string
 	Description string
+}
+
+func EmptyModule() UiModule {
+	return UiModule{ -1, -1, "", "" }
 }
 
 func (m UiModule) ElementType() string {
@@ -334,6 +450,33 @@ func (m UiModule) ElementType() string {
 
 func (m UiModule) ElementText() string {
 	return m.Title
+}
+
+type GetCourseRow struct {
+	CourseId    int
+	CourseTitle string
+	CourseDesc  string
+	ModuleId    sql.NullInt64
+	ModuleTitle sql.NullString
+	ModuleDesc  sql.NullString
+}
+
+func (row GetCourseRow) NewCourse() UiCourse {
+	return UiCourse{
+		Id:          row.CourseId,
+		Title:       row.CourseTitle,
+		Description: row.CourseDesc,
+		Modules:     []UiModule{},
+	}
+}
+
+func (row GetCourseRow) NewModule() UiModule {
+	return UiModule{
+		Id:          int(row.ModuleId.Int64),
+		CourseId:    row.CourseId,
+		Title:       row.ModuleTitle.String,
+		Description: row.ModuleDesc.String,
+	}
 }
 
 const getCoursesQuery = `
@@ -352,32 +495,16 @@ func (c *DbClient) GetCourses() ([]UiCourse, error) {
 
 	var courses []UiCourse
 	for rows.Next() {
-		var row struct {
-			CourseId    int
-			CourseTitle string
-			CourseDesc  string
-			ModuleId    sql.NullInt64
-			ModuleTitle sql.NullString
-			ModuleDesc  sql.NullString
-		}
+		var row GetCourseRow
 		err := rows.Scan(&row.CourseId, &row.CourseTitle, &row.CourseDesc, &row.ModuleId, &row.ModuleTitle, &row.ModuleDesc)
 		if err != nil {
 			return nil, err
 		}
 		if len(courses) == 0 || courses[len(courses)-1].Id != row.CourseId {
-			courses = append(courses, UiCourse{
-				Id:          row.CourseId,
-				Title:       row.CourseTitle,
-				Description: row.CourseDesc,
-				Modules:     []UiModule{},
-			})
+			courses = append(courses, row.NewCourse())
 		}
 		if row.ModuleId.Valid {
-			courses[len(courses)-1].Modules = append(courses[len(courses)-1].Modules, UiModule{
-				Id:          int(row.ModuleId.Int64),
-				Title:       row.ModuleTitle.String,
-				Description: row.ModuleDesc.String,
-			})
+			courses[len(courses)-1].Modules = append(courses[len(courses)-1].Modules, row.NewModule())
 		}
 
 	}
@@ -385,6 +512,42 @@ func (c *DbClient) GetCourses() ([]UiCourse, error) {
 		return nil, err
 	}
 	return courses, nil
+}
+
+const getCourseQuery = `
+select c.id, c.title, c.description, m.id, m.title, m.description
+from courses c
+left join modules m on c.id = m.course_id
+where c.id = ?
+order by m.id;
+`
+
+func (c *DbClient) GetCourse(courseId int) (UiCourse, error) {
+	rows, err := c.db.Query(getCourseQuery, courseId)
+	if err != nil {
+		return UiCourse{}, err
+	}
+	defer rows.Close()
+	var course UiCourse = UiCourse{}
+	uninitialized := true
+	for rows.Next() {
+		var row GetCourseRow
+		err := rows.Scan(&row.CourseId, &row.CourseTitle, &row.CourseDesc, &row.ModuleId, &row.ModuleTitle, &row.ModuleDesc)
+		if err != nil {
+			return UiCourse{}, err
+		}
+		if uninitialized {
+			course = row.NewCourse()
+			uninitialized = false
+		}
+		if row.ModuleId.Valid {
+			course.Modules = append(course.Modules, row.NewModule())
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return UiCourse{}, err
+	}
+	return course, nil
 }
 
 const getEditModuleQuery = `
@@ -412,6 +575,10 @@ type UiQuestion struct {
 	Choices      []UiChoice
 }
 
+func EmptyQuestion() UiQuestion {
+	return UiQuestion{ -1, "", []UiChoice{} }
+}
+
 func (q UiQuestion) ElementType() string {
 	return "question"
 }
@@ -423,6 +590,10 @@ func (q UiQuestion) ElementText() string {
 type UiChoice struct {
 	Id         int
 	ChoiceText string
+}
+
+func EmptyChoice() UiChoice {
+	return UiChoice{ -1, "" }
 }
 
 func (c UiChoice) ElementType() string {
@@ -529,6 +700,14 @@ func (c *DbClient) EditModule(moduleId int, title string, description string, qu
 	return nil
 }
 
+func (c *DbClient) DeleteModule(moduleId int) error {
+	_, err := c.db.Exec("delete from modules where id = ?;", moduleId)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 const createCourseTable = `
 create table if not exists courses (
 	id integer primary key autoincrement,
@@ -582,7 +761,7 @@ func initDb(db *sql.DB) {
 }
 
 func main() {
-	db, err := sql.Open("sqlite3", "test.db")
+	db, err := sql.Open("sqlite3", "test.db?_foreign_keys=on")
 	if err != nil {
 		log.Fatal(err)
 	}
