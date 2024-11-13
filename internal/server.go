@@ -2,10 +2,8 @@ package internal
 
 import (
 	"fmt"
-	"html/template"
 	"net/http"
 	"strconv"
-	"strings"
 )
 
 func NewServer(dbClient *DbClient, port int) *http.Server {
@@ -16,42 +14,37 @@ func NewServer(dbClient *DbClient, port int) *http.Server {
 	}
 }
 
-
-func initTemplates() map[string]*template.Template {
-	funcMap := template.FuncMap{
-		"TitleCase": func(s string) string {
-			return strings.Title(strings.ToLower(s))
-		},
-		"EmptyModule": func () UiModule {
-			return EmptyModule()
-		},
-		"EmptyQuestion": func () UiQuestion {
-			return EmptyQuestion()
-		},
-		"EmptyChoice": func () UiChoice {
-			return EmptyChoice()
-		},
-	}
-	return map[string]*template.Template{
-		// Pages
-		"index.html":   template.Must(template.ParseFiles("template/page.html", "template/index.html")),
-		"courses.html": template.Must(template.ParseFiles("template/page.html", "template/courses.html")),
-		"create_course.html": template.Must(template.New("").Funcs(funcMap).ParseFiles(
-			"template/page.html", "template/create_course.html",
-			"template/add_element.html", "template/created_course_response.html",
-			"template/edited_course_response.html")),
-		"edit_module.html": template.Must(template.New("").Funcs(funcMap).ParseFiles(
-			"template/page.html", "template/edit_module.html", "template/add_element.html",
-			"template/edited_module_response.html")),
-		// Standalone partials
-		"add_element.html": template.Must(template.New("").Funcs(funcMap).ParseFiles("template/add_element.html")),
-	}
+func initRouter(dbClient *DbClient) *http.ServeMux {
+	mux := http.NewServeMux()
+	mux.Handle("/course/create", NewHandlerMap(dbClient).Get(createCoursePageHandler).Post(handleCreateCourse))
+	mux.Handle("/course/{courseId}/edit", NewHandlerMap(dbClient).Get(handleEditCoursePage).Put(handleEditCourse))
+	mux.Handle("/ui/{element}", NewHandlerMap(dbClient).Get(handleAddElement).Delete(handleDeleteElement))
+	// This is kinda a weird place to put the deleteModuleHandler because it's on a different page
+	// (the edit course page) but it's fine for now.
+	mux.Handle("/course/{courseId}/module/{moduleId}/edit", NewHandlerMap(dbClient).Get(handleEditModulePage).Put(handleEditModule).Delete(handleDeleteModule))
+	mux.Handle("/course", NewHandlerMap(dbClient).Get(handleCoursesPage))
+	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
+	mux.Handle("/style/", http.StripPrefix("/style/", http.FileServer(http.Dir("style"))))
+	mux.Handle("/", NewHandlerMap(dbClient).Get(handleHomePage))
+	return mux
 }
 
-var templates = initTemplates()
+// Things that all handlers should have access to
+type HandlerContext struct {
+	dbClient *DbClient
+	renderer Renderer
+}
+
+func NewHandlerContext(dbClient *DbClient, renderer Renderer) HandlerContext {
+	return HandlerContext{dbClient, renderer}
+}
+
+// Basically an http.Handle but returns an error
+type HandlerMapHandler func(http.ResponseWriter, *http.Request, HandlerContext) error
 
 type HandlerMap struct {
-	handlers        map[string]func(http.ResponseWriter, *http.Request)
+	handlers        map[string]HandlerMapHandler
+	ctx		HandlerContext
 	reloadTemplates bool
 }
 
@@ -59,90 +52,127 @@ func (hm HandlerMap) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if hm.reloadTemplates {
 		// Reload templates so we don't have to restart the server
 		// to see changes
-		templates = initTemplates()
+		hm.ctx.renderer.refreshTemplates()
 	}
+	// TODO: log the request
 	if handler, ok := hm.handlers[r.Method]; ok {
-		handler(w, r)
+		err := handler(w, r, hm.ctx)
+		if err != nil {
+			// TODO: Log the error
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 		return
 	}
 	http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 }
 
-func NewHandlerMap() HandlerMap {
+func NewHandlerMap(dbClient *DbClient) HandlerMap {
 	return HandlerMap{
-		handlers:        make(map[string]func(http.ResponseWriter, *http.Request)),
+		handlers:        make(map[string]HandlerMapHandler),
+		ctx:             NewHandlerContext(dbClient, NewRenderer()),
 		reloadTemplates: true,
 	}
 }
 
-func (hm HandlerMap) Get(handler func(http.ResponseWriter, *http.Request)) HandlerMap {
+func (hm HandlerMap) Get(handler HandlerMapHandler) HandlerMap {
 	hm.handlers["GET"] = handler
 	return hm
 }
 
-func (hm HandlerMap) Post(handler func(http.ResponseWriter, *http.Request)) HandlerMap {
+func (hm HandlerMap) Post(handler HandlerMapHandler) HandlerMap {
 	hm.handlers["POST"] = handler
 	return hm
 }
 
-func (hm HandlerMap) Put(handler func(http.ResponseWriter, *http.Request)) HandlerMap {
+func (hm HandlerMap) Put(handler HandlerMapHandler) HandlerMap {
 	hm.handlers["PUT"] = handler
 	return hm
 }
 
-func (hm HandlerMap) Delete(handler func(http.ResponseWriter, *http.Request)) HandlerMap {
+func (hm HandlerMap) Delete(handler HandlerMapHandler) HandlerMap {
 	hm.handlers["DELETE"] = handler
 	return hm
 }
 
-func withDbClient(dbClient *DbClient, handler func(http.ResponseWriter, *http.Request, *DbClient)) func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		handler(w, r, dbClient)
-	}
-}
+// Courses page
 
-func coursePageHandler(w http.ResponseWriter, r *http.Request, dbClient *DbClient) {
-	courses, err := dbClient.GetCourses()
+func handleCoursesPage(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
+	courses, err := ctx.dbClient.GetCourses()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return err
 	}
-	templates["courses.html"].ExecuteTemplate(w, "page.html", courses)
+	return ctx.renderer.RenderCoursePage(w, courses)
 }
 
-func createCourseHandler(w http.ResponseWriter, r *http.Request, dbClient *DbClient) {
-	fmt.Println("Creating course")
+// Create course page
+
+func createCoursePageHandler(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
+	return ctx.renderer.RenderCreateCoursePage(w)
+}
+
+type createCourseRequest struct {
+	title              string
+	description        string
+	moduleTitles       []string
+	moduleDescriptions []string
+}
+
+func parseCreateCourseRequest(r *http.Request) (createCourseRequest, error) {
 	err := r.ParseForm()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return createCourseRequest{}, err
 	}
 	title := r.Form.Get("title")
 	description := r.Form.Get("description")
 	moduleTitles := r.Form["module-title[]"]
 	moduleDescriptions := r.Form["module-description[]"]
-	course, modules, err := dbClient.CreateCourse(title, description, moduleTitles, moduleDescriptions)
-	if err != nil {
-		fmt.Println("Error creating course:", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	fmt.Println("Created course:", course)
-	fmt.Println("Created modules:", modules)
-	templates["create_course.html"].ExecuteTemplate(w, "created_course_response.html", nil)
+	return createCourseRequest{title, description, moduleTitles, moduleDescriptions}, nil
 }
 
-func editCourseHandler(w http.ResponseWriter, r *http.Request, dbClient *DbClient) {
-	fmt.Println("Editing course")
+
+func handleCreateCourse(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
+	req, err := parseCreateCourseRequest(r)
+	if err != nil {
+		return err
+	}
+	_, _, err = ctx.dbClient.CreateCourse(req.title, req.description, req.moduleTitles, req.moduleDescriptions)
+	if err != nil {
+		return err
+	}
+	return ctx.renderer.RenderCourseCreated(w)
+}
+
+// Edit course page
+
+func handleEditCoursePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
 	courseId, err := strconv.Atoi(r.PathValue("courseId"))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return err
+	}
+	course, err := ctx.dbClient.GetCourse(courseId)
+	if err != nil {
+		return err
+	}
+	return ctx.renderer.RenderEditCoursePage(w, course)
+}
+
+type editCourseRequest struct {
+	courseId           int
+	title              string
+	description        string
+	moduleIds          []int
+	moduleTitles       []string
+	moduleDescriptions []string
+}
+
+func parseEditCourseRequest(r *http.Request) (editCourseRequest, error) {
+	courseId, err := strconv.Atoi(r.PathValue("courseId"))
+	if err != nil {
+		return editCourseRequest{}, err
 	}
 	err = r.ParseForm()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return editCourseRequest{}, err
 	}
 	title := r.Form.Get("title")
 	description := r.Form.Get("description")
@@ -151,116 +181,102 @@ func editCourseHandler(w http.ResponseWriter, r *http.Request, dbClient *DbClien
 	for i, moduleIdStr := range moduleIdStrs {
 		moduleIdInt, err := strconv.Atoi(moduleIdStr)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+			return editCourseRequest{}, err
 		}
 		moduleIds[i] = moduleIdInt
 	}
 	moduleTitles := r.Form["module-title[]"]
 	moduleDescriptions := r.Form["module-description[]"]
-	course, modules, err := dbClient.EditCourse(courseId, title, description, moduleIds, moduleTitles, moduleDescriptions)
-	if err != nil {
-		fmt.Println("Error editing course:", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	fmt.Println("Edited course:", course)
-	fmt.Println("Edited modules:", modules)
-	templates["create_course.html"].ExecuteTemplate(w, "edited_course_response.html", nil)
+	return editCourseRequest{courseId, title, description, moduleIds, moduleTitles, moduleDescriptions}, nil
 }
 
-func createCoursePageHandler(w http.ResponseWriter, r *http.Request) {
-	templates["create_course.html"].ExecuteTemplate(w, "page.html", EmptyCourse())
+func handleEditCourse(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
+	req, err := parseEditCourseRequest(r)
+	if err != nil {
+		return err
+	}
+	_, _, err = ctx.dbClient.EditCourse(req.courseId, req.title, req.description, req.moduleIds, req.moduleTitles, req.moduleDescriptions)
+	if err != nil {
+		return err
+	}
+	return ctx.renderer.RenderCourseCreated(w)
 }
 
-func editCoursePageHandler(w http.ResponseWriter, r *http.Request, dbClient *DbClient) {
-	courseId, err := strconv.Atoi(r.PathValue("courseId"))
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	course, err := dbClient.GetCourse(courseId)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	fmt.Println("Editing course:", course)
-	fmt.Println("Course modules:", course.Modules)
-	templates["create_course.html"].ExecuteTemplate(w, "page.html", course)
-}
+// Add element generic template
+// These are used in multiple pages, for adding modules, questions, choices.
 
 // These two handlers seem kinda dumb, i.e. they could just be done in javascript,
 // but I'm just going to do things the pure HTMX way for now to see how it goes.
 
 // Simply returns another small chunk of HTML to add new elements
-func addElementHandler(w http.ResponseWriter, r *http.Request) {
-	var data interface{}
-	switch r.PathValue("element") {
-		case "module":
-			data = EmptyModule()
-			break
-		case "question":
-			data = EmptyQuestion()
-			break
-		case "choice":
-			data = EmptyChoice()
-			break
+func handleAddElement(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
+	element := r.PathValue("element")
+	var err error
+	if element == "module" {
+		err = ctx.renderer.RenderNewModule(w, EmptyModule())
+	} else if element == "question" {
+		err = ctx.renderer.RenderNewQuestion(w, EmptyQuestion())
+	} else if element == "choice" {
+		err = ctx.renderer.RenderNewChoice(w, EmptyChoice())
+	} else {
+		err = fmt.Errorf("Unknown element: %s", element)
 	}
-	templates["add_element.html"].ExecuteTemplate(w, "add_element.html", data)
-
+	return err
 }
 
-func deleteElementHandler(w http.ResponseWriter, r *http.Request) {
+func handleDeleteElement(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
 	// No op
+	return nil
 }
 
-func deleteModuleHandler(w http.ResponseWriter, r *http.Request, dbClient *DbClient) {
+func handleDeleteModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
 	moduleId, err := strconv.Atoi(r.PathValue("moduleId"))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return err
 	}
-	err = dbClient.DeleteModule(moduleId)
+	err = ctx.dbClient.DeleteModule(moduleId)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return err
 	}
+	// Nothing to render
+	return nil
 }
 
-func editModulePageHandler(w http.ResponseWriter, r *http.Request, dbClient *DbClient) {
-	// Get courseId and moduleId from "/course/:courseId/module/:moduleId/edit"
+// Edit module page
 
+func handleEditModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
+	// Get courseId and moduleId from "/course/:courseId/module/:moduleId/edit"
 	courseId, err := strconv.Atoi(r.PathValue("courseId"))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return err
 	}
 	moduleId, err := strconv.Atoi(r.PathValue("moduleId"))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return err
 	}
-
-	uiModule, err := dbClient.GetEditModule(courseId, moduleId)
-
-	err = templates["edit_module.html"].ExecuteTemplate(w, "page.html", uiModule)
+	uiEditModule, err := ctx.dbClient.GetEditModule(courseId, moduleId)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return err
 	}
+	return ctx.renderer.RenderEditModulePage(w, uiEditModule)
 }
 
-func editModuleHandler(w http.ResponseWriter, r *http.Request, dbClient *DbClient) {
-	fmt.Println("Editing module")
+type editModuleRequest struct {
+	moduleId int
+	title    string
+	description string
+	questions []string
+	choicesByQuestion [][]string
+}
+
+func parseEditModuleRequest(r *http.Request) (editModuleRequest, error) {
 	moduleId, err := strconv.Atoi(r.PathValue("moduleId"))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return editModuleRequest{}, err
 	}
 	err = r.ParseForm()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return editModuleRequest{}, err
 	}
 	title := r.Form.Get("title")
 	description := r.Form.Get("description")
@@ -285,54 +301,40 @@ func editModuleHandler(w http.ResponseWriter, r *http.Request, dbClient *DbClien
 		uiQuestions[i] = question
 		uiChoicesByQuestion[i] = uiChoices
 	}
-
-	// Validation
 	for i, question := range uiQuestions {
 		if question == "" {
-			http.Error(w, "Questions cannot be empty", http.StatusBadRequest)
-			return
+			return editModuleRequest{}, fmt.Errorf("Questions  cannot be empty")
 		}
 		if len(uiChoicesByQuestion[i]) == 0 {
-			http.Error(w, "Questions must have at least one choice", http.StatusBadRequest)
-			return
+			return editModuleRequest{}, fmt.Errorf("Questions must have at least one choice")
 		}
 		for _, choice := range uiChoicesByQuestion[i] {
 			if choice == "" {
-				http.Error(w, "Choices cannot be empty", http.StatusBadRequest)
-				return
+				return editModuleRequest{}, fmt.Errorf("Choices cannot be empty")
 			}
 		}
 	}
+	return editModuleRequest{moduleId, title, description, uiQuestions, uiChoicesByQuestion}, nil
+}
 
-	err = dbClient.EditModule(moduleId, title, description, uiQuestions, uiChoicesByQuestion)
+func handleEditModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
+	req, err := parseEditModuleRequest(r)
 	if err != nil {
-		fmt.Println("Error editing module:", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return err
 	}
-	fmt.Println("Updated module")
-	templates["edit_module.html"].ExecuteTemplate(w, "edited_module_response.html", nil)
+	err = ctx.dbClient.EditModule(req.moduleId, req.title, req.description, req.questions, req.choicesByQuestion)
+	if err != nil {
+		return err
+	}
+	return ctx.renderer.RenderModuleEdited(w)
 }
 
-func homePageHandler(w http.ResponseWriter, r *http.Request) {
+// Home page
+
+func handleHomePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
 	if r.URL.Path != "/" {
-		http.NotFound(w, r)
-		return
+		// TODO: We should return 404 here
+		return fmt.Errorf("Not found")
 	}
-	templates["index.html"].ExecuteTemplate(w, "page.html", nil)
-}
-
-func initRouter(dbClient *DbClient) *http.ServeMux {
-	mux := http.NewServeMux()
-	mux.Handle("/course/create", NewHandlerMap().Get(createCoursePageHandler).Post(withDbClient(dbClient, createCourseHandler)))
-	mux.Handle("/course/{courseId}/edit", NewHandlerMap().Get(withDbClient(dbClient, editCoursePageHandler)).Put(withDbClient(dbClient, editCourseHandler)))
-	mux.Handle("/ui/{element}", NewHandlerMap().Get(addElementHandler).Delete(deleteElementHandler))
-	// This is kinda a weird place to put the deleteModuleHandler because it's on a different page
-	// (the edit course page) but it's fine for now.
-	mux.Handle("/course/{courseId}/module/{moduleId}/edit", NewHandlerMap().Get(withDbClient(dbClient, editModulePageHandler)).Put(withDbClient(dbClient, editModuleHandler)).Delete(withDbClient(dbClient, deleteModuleHandler)))
-	mux.Handle("/course", NewHandlerMap().Get(withDbClient(dbClient, coursePageHandler)))
-	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
-	mux.Handle("/style/", http.StripPrefix("/style/", http.FileServer(http.Dir("style"))))
-	mux.Handle("/", NewHandlerMap().Get(homePageHandler))
-	return mux
+	return ctx.renderer.RenderHomePage(w)
 }
