@@ -124,7 +124,6 @@ func (c *DbClient) EditCourse(courseId int, title string, description string, mo
 
 // Course struct for feeding into a template to be rendered
 type UiCourse struct {
-	New         bool
 	Id          int
 	Title       string
 	Description string
@@ -132,7 +131,7 @@ type UiCourse struct {
 }
 
 func EmptyCourse() UiCourse {
-	return UiCourse{false, -1, "", "", []UiModule{}}
+	return UiCourse{-1, "", "", []UiModule{}}
 }
 
 type UiModule struct {

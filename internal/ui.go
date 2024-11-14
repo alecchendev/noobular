@@ -51,8 +51,18 @@ func initTemplates() map[string]*template.Template {
 	}
 }
 
-func (r *Renderer) RenderCoursePage(w http.ResponseWriter, courses []UiCourse) error {
-	return r.templates["courses.html"].ExecuteTemplate(w, "page.html", courses)
+type CoursePageArgs struct {
+	NewCourseId int
+	Editor      bool
+	Courses     []UiCourse
+}
+
+func (r *Renderer) RenderTeacherCoursePage(w http.ResponseWriter, courses []UiCourse, newCourseId int) error {
+	return r.templates["courses.html"].ExecuteTemplate(w, "page.html", CoursePageArgs{newCourseId, true, courses})
+}
+
+func (r *Renderer) RenderStudentCoursePage(w http.ResponseWriter, courses []UiCourse) error {
+	return r.templates["courses.html"].ExecuteTemplate(w, "page.html", CoursePageArgs{0, false, courses})
 }
 
 func (r *Renderer) RenderCreateCoursePage(w http.ResponseWriter) error {

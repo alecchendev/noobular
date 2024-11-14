@@ -24,6 +24,7 @@ func initRouter(dbClient *DbClient) *http.ServeMux {
 	// (the edit course page) but it's fine for now.
 	mux.Handle("/course/{courseId}/module/{moduleId}/edit", NewHandlerMap(dbClient).Get(handleEditModulePage).Put(handleEditModule).Delete(handleDeleteModule))
 	mux.Handle("/course", NewHandlerMap(dbClient).Get(handleCoursesPage))
+	mux.Handle("/student/course", NewHandlerMap(dbClient).Get(handleStudentCoursesPage))
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 	mux.Handle("/style/", http.StripPrefix("/style/", http.FileServer(http.Dir("style"))))
 	mux.Handle("/", NewHandlerMap(dbClient).Get(handleHomePage))
@@ -111,12 +112,15 @@ func handleCoursesPage(w http.ResponseWriter, r *http.Request, ctx HandlerContex
 	if err != nil {
 		return err
 	}
-	for i, course := range courses {
-		if course.Id == newCourseId {
-			courses[i].New = true
-		}
+	return ctx.renderer.RenderTeacherCoursePage(w, courses, newCourseId)
+}
+
+func handleStudentCoursesPage(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
+	courses, err := ctx.dbClient.GetCourses()
+	if err != nil {
+		return err
 	}
-	return ctx.renderer.RenderCoursePage(w, courses)
+	return ctx.renderer.RenderStudentCoursePage(w, courses)
 }
 
 // Create course page

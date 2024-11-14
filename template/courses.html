@@ -83,14 +83,16 @@ html {
 {{ define "content" }}
 <h1>My Courses</h1>
 <div class="courses">
-	{{range $course := . }}
-	{{ if $course.New }}
+	{{range $course := .Courses }}
+	{{ if eq $course.Id $.NewCourseId }}
 	<p>Course created! 🎊</p>
 	{{ end }}
 	<div id="course-{{$course.Id}}" class="course">
 		<div class="course-title-edit-container">
 			<h2 class="course-title">{{.Title}}</h2>
+			{{ if $.Editor }}
 			<a class="edit-course-link" href="/course/{{$course.Id}}/edit">Edit</a>
+			{{ end }}
 		</div>
 		<p>{{.Description}}</p>
 		<input type="checkbox"
@@ -105,7 +107,9 @@ html {
 			<div id="{{$course.Id}}-module-{{.Id}}" class="module">
 				<div class="edit-module">
 					<h3 class="module-title">{{.Title}}</h3>
+					{{ if $.Editor }}
 					<a class="edit-module-link" href="/course/{{$course.Id}}/module/{{.Id}}/edit">Edit</a>
+					{{ end }}
 				</div>
 				<p>{{.Description}}</p>
 			</div>
