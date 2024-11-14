@@ -23,6 +23,10 @@ textarea:focus, input:focus{
 	outline: none;
 }
 
+button {
+	font-size: 1.2rem;
+}
+
 button:hover {
 	cursor: pointer;
 }

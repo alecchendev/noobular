@@ -109,6 +109,8 @@ html {
 					<h3 class="module-title">{{.Title}}</h3>
 					{{ if $.Editor }}
 					<a class="edit-module-link" href="/course/{{$course.Id}}/module/{{.Id}}/edit">Edit</a>
+					{{ else }}
+					<a class="edit-module-link" href="/student/course/{{$course.Id}}/module/{{.Id}}/question/0">Start</a>
 					{{ end }}
 				</div>
 				<p>{{.Description}}</p>

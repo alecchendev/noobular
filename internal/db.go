@@ -243,7 +243,7 @@ func (c *DbClient) GetCourse(courseId int) (UiCourse, error) {
 }
 
 const getModuleQuery = `
-select m.id, m.title, m.description
+select m.id, m.course_id, m.title, m.description
 from modules m
 where m.id = ?
 `
@@ -323,7 +323,7 @@ func (c *DbClient) GetEditModule(courseId int, moduleId int) (UiEditModule, erro
 		return UiEditModule{}, err
 	}
 	moduleRow := c.db.QueryRow(getModuleQuery, moduleId)
-	err = moduleRow.Scan(&module.ModuleId, &module.ModuleTitle, &module.ModuleDesc)
+	err = moduleRow.Scan(&module.ModuleId, &module.CourseId, &module.ModuleTitle, &module.ModuleDesc)
 	if err != nil {
 		return UiEditModule{}, err
 	}
@@ -425,6 +425,64 @@ func (c *DbClient) EditModule(moduleId int, title string, description string, qu
 		return err
 	}
 	return nil
+}
+
+const getQuestionCountQuery = `
+select count(*)
+from questions q
+where q.module_id = ?;
+`
+
+const getQuestionQuery = `
+select q.id, q.question_text
+from questions q
+where q.module_id = ?
+limit 1 offset ?;
+`
+
+func (c *DbClient) GetModuleQuestion(moduleId int, questionIdx int) (UiModule, UiQuestion, int, error) {
+	moduleRow := c.db.QueryRow(getModuleQuery, moduleId);
+	var module UiModule
+	err := moduleRow.Scan(&module.Id, &module.CourseId, &module.Title, &module.Description)
+	if err != nil {
+		return UiModule{}, UiQuestion{}, 0, err
+	}
+
+	questionCountRow := c.db.QueryRow(getQuestionCountQuery, moduleId)
+	var questionCount int
+	err = questionCountRow.Scan(&questionCount)
+	if err != nil {
+		return UiModule{}, UiQuestion{}, 0, err
+	}
+	if questionIdx >= questionCount {
+		return UiModule{}, UiQuestion{}, 0, fmt.Errorf("question index out of bounds")
+	}
+
+	questionRow := c.db.QueryRow(getQuestionQuery, moduleId, questionIdx)
+	var question UiQuestion
+	err = questionRow.Scan(&question.Id, &question.QuestionText)
+	if err != nil {
+		return UiModule{}, UiQuestion{}, 0, err
+	}
+
+	choiceRows, err := c.db.Query(getChoicesQuery, question.Id)
+	if err != nil {
+		return UiModule{}, UiQuestion{}, 0, err
+	}
+	defer choiceRows.Close()
+	for choiceRows.Next() {
+		var choice UiChoice
+		err := choiceRows.Scan(&choice.Id, &choice.ChoiceText)
+		if err != nil {
+			return UiModule{}, UiQuestion{}, 0, err
+		}
+		question.Choices = append(question.Choices, choice)
+	}
+	if err := choiceRows.Err(); err != nil {
+		return UiModule{}, UiQuestion{}, 0, err
+	}
+
+	return module, question, questionCount, nil
 }
 
 func (c *DbClient) DeleteModule(moduleId int) error {

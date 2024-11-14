@@ -34,6 +34,13 @@ func initTemplates() map[string]*template.Template {
 		"EmptyChoice": func() UiChoice {
 			return EmptyChoice()
 		},
+		"NumRange": func(n int) []int {
+			nums := make([]int, n)
+			for i := 0; i < n; i++ {
+				nums[i] = i
+			}
+			return nums
+		},
 	}
 	return map[string]*template.Template{
 		// Pages
@@ -46,6 +53,8 @@ func initTemplates() map[string]*template.Template {
 		"edit_module.html": template.Must(template.New("").Funcs(funcMap).ParseFiles(
 			"template/page.html", "template/edit_module.html", "template/add_element.html",
 			"template/edited_module_response.html")),
+		"take_module.html": template.Must(template.New("").Funcs(funcMap).ParseFiles(
+			"template/page.html", "template/take_module.html")),
 		// Standalone partials
 		"add_element.html": template.Must(template.New("").Funcs(funcMap).ParseFiles("template/add_element.html")),
 	}
@@ -55,6 +64,10 @@ type CoursePageArgs struct {
 	NewCourseId int
 	Editor      bool
 	Courses     []UiCourse
+}
+
+func (r *Renderer) RenderHomePage(w http.ResponseWriter) error {
+	return r.templates["index.html"].ExecuteTemplate(w, "page.html", nil)
 }
 
 func (r *Renderer) RenderTeacherCoursePage(w http.ResponseWriter, courses []UiCourse, newCourseId int) error {
@@ -101,6 +114,13 @@ func (r *Renderer) RenderModuleEdited(w http.ResponseWriter) error {
 	return r.templates["edit_module.html"].ExecuteTemplate(w, "edited_module_response.html", nil)
 }
 
-func (r *Renderer) RenderHomePage(w http.ResponseWriter) error {
-	return r.templates["index.html"].ExecuteTemplate(w, "page.html", nil)
+type UiTakeModule struct {
+	Module UiModule
+	QuestionCount int
+	QuestionIndex int
+	Question UiQuestion
+}
+
+func (r *Renderer) RenderTakeModulePage(w http.ResponseWriter, module UiTakeModule) error {
+	return r.templates["take_module.html"].ExecuteTemplate(w, "page.html", module)
 }

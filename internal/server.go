@@ -25,6 +25,7 @@ func initRouter(dbClient *DbClient) *http.ServeMux {
 	mux.Handle("/course/{courseId}/module/{moduleId}/edit", NewHandlerMap(dbClient).Get(handleEditModulePage).Put(handleEditModule).Delete(handleDeleteModule))
 	mux.Handle("/course", NewHandlerMap(dbClient).Get(handleCoursesPage))
 	mux.Handle("/student/course", NewHandlerMap(dbClient).Get(handleStudentCoursesPage))
+	mux.Handle("/student/course/{courseId}/module/{moduleId}/question/{questionIdx}", NewHandlerMap(dbClient).Get(handleTakeModulePage))
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 	mux.Handle("/style/", http.StripPrefix("/style/", http.FileServer(http.Dir("style"))))
 	mux.Handle("/", NewHandlerMap(dbClient).Get(handleHomePage))
@@ -99,6 +100,16 @@ func (hm HandlerMap) Put(handler HandlerMapHandler) HandlerMap {
 func (hm HandlerMap) Delete(handler HandlerMapHandler) HandlerMap {
 	hm.handlers["DELETE"] = handler
 	return hm
+}
+
+// Home page
+
+func handleHomePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
+	if r.URL.Path != "/" {
+		// TODO: We should return 404 here
+		return fmt.Errorf("Not found")
+	}
+	return ctx.renderer.RenderHomePage(w)
 }
 
 // Courses page
@@ -334,6 +345,11 @@ func parseEditModuleRequest(r *http.Request) (editModuleRequest, error) {
 			}
 		}
 	}
+	// TODO: maybe remove this. This is just so I can restrict what I have to consider
+	// rendering in the UI for now.
+	if len(uiQuestions) > 12 {
+		return editModuleRequest{}, fmt.Errorf("Modules cannot have more than 12 questions")
+	}
 	return editModuleRequest{moduleId, title, description, uiQuestions, uiChoicesByQuestion}, nil
 }
 
@@ -349,12 +365,31 @@ func handleEditModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 	return ctx.renderer.RenderModuleEdited(w)
 }
 
-// Home page
+// Take course page
 
-func handleHomePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
-	if r.URL.Path != "/" {
-		// TODO: We should return 404 here
-		return fmt.Errorf("Not found")
+// Take module page
+
+func handleTakeModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
+	// courseId, err := strconv.Atoi(r.PathValue("courseId"))
+	// if err != nil {
+	// 	return err
+	// }
+	moduleId, err := strconv.Atoi(r.PathValue("moduleId"))
+	if err != nil {
+		return err
 	}
-	return ctx.renderer.RenderHomePage(w)
+	questionIdx, err := strconv.Atoi(r.PathValue("questionIdx"))
+	if err != nil {
+		return err
+	}
+	// TODO: add restrictions, i.e. you cannot take a question before a previous one
+	module, question, questionCount, err := ctx.dbClient.GetModuleQuestion(moduleId, questionIdx)
+	return ctx.renderer.RenderTakeModulePage(w, UiTakeModule{
+		Module: module,
+		QuestionCount: questionCount,
+		QuestionIndex: questionIdx,
+		Question: question,
+	})
 }
+
+// Render individual module (for switching)
