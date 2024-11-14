@@ -70,11 +70,11 @@ button {
 <form
     {{ if $edit }}
     hx-put="/course/{{ .Id }}/edit"
+    hx-target="#response-message"
+    hx-swap="outerHTML"
     {{ else }}
     hx-post="/course/create"
     {{ end }}
-    hx-target="#response-message"
-    hx-swap="outerHTML"
 >
     <input type="text" id="course-title" name="title" placeholder="Course name" value="{{ .Title }}" autofocus required>
 

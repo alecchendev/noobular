@@ -17,7 +17,7 @@ func NewServer(dbClient *DbClient, port int) *http.Server {
 
 func initRouter(dbClient *DbClient) *http.ServeMux {
 	mux := http.NewServeMux()
-	mux.Handle("/course/create", NewHandlerMap(dbClient).Get(createCoursePageHandler).Post(handleCreateCourse))
+	mux.Handle("/course/create", NewHandlerMap(dbClient).Get(handleCreateCoursePage).Post(handleCreateCourse))
 	mux.Handle("/course/{courseId}/edit", NewHandlerMap(dbClient).Get(handleEditCoursePage).Put(handleEditCourse))
 	mux.Handle("/ui/{element}", NewHandlerMap(dbClient).Get(handleAddElement).Delete(handleDeleteElement))
 	// This is kinda a weird place to put the deleteModuleHandler because it's on a different page
@@ -103,16 +103,25 @@ func (hm HandlerMap) Delete(handler HandlerMapHandler) HandlerMap {
 // Courses page
 
 func handleCoursesPage(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
+	newCourseId, err := strconv.Atoi(r.URL.Query().Get("newCourse"))
+	if err != nil {
+		newCourseId = -1
+	}
 	courses, err := ctx.dbClient.GetCourses()
 	if err != nil {
 		return err
+	}
+	for i, course := range courses {
+		if course.Id == newCourseId {
+			courses[i].New = true
+		}
 	}
 	return ctx.renderer.RenderCoursePage(w, courses)
 }
 
 // Create course page
 
-func createCoursePageHandler(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
+func handleCreateCoursePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
 	return ctx.renderer.RenderCreateCoursePage(w)
 }
 
@@ -141,11 +150,12 @@ func handleCreateCourse(w http.ResponseWriter, r *http.Request, ctx HandlerConte
 	if err != nil {
 		return err
 	}
-	_, _, err = ctx.dbClient.CreateCourse(req.title, req.description, req.moduleTitles, req.moduleDescriptions)
+	course, _, err := ctx.dbClient.CreateCourse(req.title, req.description, req.moduleTitles, req.moduleDescriptions)
 	if err != nil {
 		return err
 	}
-	return ctx.renderer.RenderCourseCreated(w)
+	w.Header().Add("HX-Redirect", fmt.Sprintf("/course#course-%d?newCourse=%d", course.Id, course.Id))
+	return nil
 }
 
 // Edit course page
