@@ -99,6 +99,7 @@ func (c *DbClient) EditCourse(courseId int, title string, description string, mo
 		moduleId := moduleIds[i]
 		moduleTitle := moduleTitles[i]
 		moduleDescription := moduleDescriptions[i]
+		// -1 means this is a new module
 		if moduleId == -1 {
 			res, err = c.db.Exec(insertModuleQuery, courseId, moduleTitle, moduleDescription)
 			if err != nil {
@@ -151,6 +152,10 @@ func (m UiModule) ElementType() string {
 
 func (m UiModule) ElementText() string {
 	return m.Title
+}
+
+func (m UiModule) IsEmpty() bool {
+	return m.Id == -1
 }
 
 const getCourseQuery = `
@@ -284,6 +289,10 @@ func (q UiQuestion) ElementText() string {
 	return q.QuestionText
 }
 
+func (q UiQuestion) IsEmpty() bool {
+	return q.Id == -1
+}
+
 type UiChoice struct {
 	Id         int
 	ChoiceText string
@@ -299,6 +308,10 @@ func (c UiChoice) ElementType() string {
 
 func (c UiChoice) ElementText() string {
 	return c.ChoiceText
+}
+
+func (c UiChoice) IsEmpty() bool {
+	return c.Id == -1
 }
 
 func (c *DbClient) GetEditModule(courseId int, moduleId int) (UiEditModule, error) {
