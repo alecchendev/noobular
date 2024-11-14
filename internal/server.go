@@ -158,7 +158,7 @@ func handleCreateCourse(w http.ResponseWriter, r *http.Request, ctx HandlerConte
 	if err != nil {
 		return err
 	}
-	w.Header().Add("HX-Redirect", fmt.Sprintf("/course#course-%d?newCourse=%d", course.Id, course.Id))
+	w.Header().Add("HX-Redirect", fmt.Sprintf("/course?newCourse=%d#course-%d", course.Id, course.Id))
 	return nil
 }
 

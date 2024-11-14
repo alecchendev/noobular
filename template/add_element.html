@@ -85,7 +85,11 @@
 <div class="element-container">
 	<div class="element-title-delete-container">
 		<input type="text" class="element-title" name="module-title[]" placeholder="Module name" value="{{ .ElementText }}" required autofocus>
-		{{ template "delete_module_button" . }}
+		{{ if .IsEmpty }}
+			{{ template "delete_element_button" . }}
+		{{ else }}
+			{{ template "delete_module_button" . }}
+		{{ end }}
 	</div>
 
 	<input type="text" name="module-id[]" value="{{ .Id }}" hidden>
