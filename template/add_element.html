@@ -57,23 +57,49 @@
 	resize: none;
 }
 {{ end }}
+
+<!-- Delete Buttons -->
+
+{{ define "delete_element_button" }}
+<button type="button"
+	class="delete-element"
+	hx-delete="/ui/{{ .ElementType }}"
+	hx-target="closest .element-container"
+	hx-swap="outerHTML"
+	><img src="/static/cancel.png" alt="Delete" class="cancel"></button>
+{{ end }}
+
+{{ define "delete_module_button" }}
+<button type="button"
+	class="delete-element"
+	hx-delete="/course/{{ .CourseId }}/module/{{ .Id }}/edit"
+	hx-confirm="Note: Deleting this module will also delete all its questions. Are you sure you want to delete this module?"
+	hx-target="closest .element-container"
+	hx-swap="outerHTML"
+	><img src="/static/cancel.png" alt="Delete" class="cancel"></button>
+{{ end }}
+
+<!-- Add elements -->
+
+{{ define "add_module" }}
+<div class="element-container">
+	<div class="element-title-delete-container">
+		<input type="text" class="element-title" name="module-title[]" placeholder="Module name" value="{{ .ElementText }}" required>
+		{{ template "delete_module_button" . }}
+	</div>
+
+	<input type="text" name="module-id[]" value="{{ .Id }}" hidden>
+	<textarea class="element-description" name="module-description[]" placeholder="Module description" required>{{ .Description }}</textarea>
+</div>
+{{ end }}
+
+{{ define "add_question" }}
 <div class="element-container">
 	<div class="element-title-delete-container">
 		<input type="text" class="element-title" name="{{ .ElementType }}-title[]" placeholder="{{ TitleCase .ElementType }}" value="{{ .ElementText }}" required>
-		<button type="button"
-			class="delete-element"
-			{{ if and (eq .ElementType "module") (not .IsEmpty) }}
-				hx-delete="/course/{{ .CourseId }}/module/{{ .Id }}/edit"
-				hx-confirm="Note: Deleting this module will also delete all its questions. Are you sure you want to delete this module?"
-			{{ else }}
-				hx-delete="/ui/{{ .ElementType }}"
-			{{ end }}
-			hx-target="closest .element-container"
-			hx-swap="outerHTML"
-			><img src="/static/cancel.png" alt="Delete" class="cancel"></button>
+		{{ template "delete_element_button" . }}
 	</div>
 
-	{{ if eq .ElementType "question" }}
 	<div id="choices-container">
 		<div class="choices">
 			{{ range $choice := .Choices }}
@@ -86,10 +112,24 @@
 		<button id="add-element-button" type="button" hx-get="/ui/choice" hx-target="previous" hx-swap="beforeend">Add Choice</button>
 		<input type="text" name="choice-title[]" value="end-choice" hidden/>
 	</div>
-	{{ end }}
-
-	{{ if eq .ElementType "module" }}
-	<input type="text" name="module-id[]" value="{{ .Id }}" hidden>
-	<textarea class="element-description" name="{{ .ElementType }}-description[]" placeholder="{{ TitleCase .ElementType }} description" required>{{ .Description }}</textarea>
-	{{ end }}
 </div>
+{{ end }}
+
+{{ define "add_choice" }}
+<div class="element-container">
+	<div class="element-title-delete-container">
+		<input type="text" class="element-title" name="choice-title[]" placeholder="Choice" value="{{ .ElementText }}" required>
+		{{ template "delete_element_button" . }}
+	</div>
+</div>
+{{ end }}
+
+<!-- Actual add_module.html content -->
+
+{{ if eq .ElementType "module" }}
+	{{ template "add_module" . }}
+{{ else if eq .ElementType "question" }}
+	{{ template "add_question" . }}
+{{ else if eq .ElementType "choice" }}
+	{{ template "add_choice" . }}
+{{ end }}
