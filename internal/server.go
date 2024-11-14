@@ -2,6 +2,7 @@ package internal
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 )
@@ -49,16 +50,21 @@ type HandlerMap struct {
 }
 
 func (hm HandlerMap) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	err := r.ParseForm()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	log.Println(r.Method, r.URL.Path, r.Form)
 	if hm.reloadTemplates {
 		// Reload templates so we don't have to restart the server
 		// to see changes
 		hm.ctx.renderer.refreshTemplates()
 	}
-	// TODO: log the request
 	if handler, ok := hm.handlers[r.Method]; ok {
 		err := handler(w, r, hm.ctx)
 		if err != nil {
-			// TODO: Log the error
+			log.Println(err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 		return
