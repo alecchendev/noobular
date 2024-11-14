@@ -38,11 +38,21 @@ func (c *DbClient) Close() {
 	c.db.Close()
 }
 
+const insertCourseQuery = `
+insert into courses(title, description)
+values(?, ?);
+`
+
+const insertModuleQuery = `
+insert into modules(course_id, title, description)
+values(?, ?, ?);
+`
+
 func (c *DbClient) CreateCourse(title string, description string, moduleTitles []string, moduleDescriptions []string) (Course, []Module, error) {
 	if len(moduleTitles) != len(moduleDescriptions) {
 		return Course{}, []Module{}, fmt.Errorf("moduleTitles and moduleDescriptions must have the same length")
 	}
-	res, err := c.db.Exec("insert into courses(title, description) values(?, ?)", title, description)
+	res, err := c.db.Exec(insertCourseQuery, title, description)
 	if err != nil {
 		return Course{}, []Module{}, err
 	}
@@ -55,7 +65,7 @@ func (c *DbClient) CreateCourse(title string, description string, moduleTitles [
 	for i := 0; i < len(moduleTitles); i++ {
 		moduleTitle := moduleTitles[i]
 		moduleDescription := moduleDescriptions[i]
-		res, err = c.db.Exec("insert into modules(course_id, title, description) values(?, ?, ?)", courseId, moduleTitle, moduleDescription)
+		res, err = c.db.Exec(insertModuleQuery, courseId, moduleTitle, moduleDescription)
 		if err != nil {
 			return Course{}, []Module{}, err
 		}
@@ -69,11 +79,17 @@ func (c *DbClient) CreateCourse(title string, description string, moduleTitles [
 	return course, modules, nil
 }
 
+const updateCourseQuery = `
+update courses
+set title = ?, description = ?
+where id = ?;
+`
+
 func (c *DbClient) EditCourse(courseId int, title string, description string, moduleIds []int, moduleTitles []string, moduleDescriptions []string) (Course, []Module, error) {
 	if len(moduleTitles) != len(moduleDescriptions) || len(moduleTitles) != len(moduleIds) {
 		return Course{}, []Module{}, fmt.Errorf("moduleTitles, moduleDescriptions, and moduleIds must have the same length, got titles: %d, descs: %d, ids: %d", len(moduleTitles), len(moduleDescriptions), len(moduleIds))
 	}
-	res, err := c.db.Exec("update courses set title = ?, description = ? where id = ?;", title, description, courseId)
+	res, err := c.db.Exec(updateCourseQuery, title, description, courseId)
 	if err != nil {
 		return Course{}, []Module{}, err
 	}
@@ -84,7 +100,7 @@ func (c *DbClient) EditCourse(courseId int, title string, description string, mo
 		moduleTitle := moduleTitles[i]
 		moduleDescription := moduleDescriptions[i]
 		if moduleId == -1 {
-			res, err = c.db.Exec("insert into modules(course_id, title, description) values(?, ?, ?)", courseId, moduleTitle, moduleDescription)
+			res, err = c.db.Exec(insertModuleQuery, courseId, moduleTitle, moduleDescription)
 			if err != nil {
 				return Course{}, []Module{}, err
 			}
@@ -94,7 +110,7 @@ func (c *DbClient) EditCourse(courseId int, title string, description string, mo
 			}
 			moduleId = int(moduleIdInt64)
 		} else {
-			_, err = c.db.Exec("update modules set title = ?, description = ? where id = ?;", moduleTitle, moduleDescription, moduleId)
+			_, err = c.db.Exec(updateModuleQuery, moduleTitle, moduleDescription, moduleId)
 			if err != nil {
 				return Course{}, []Module{}, err
 			}
@@ -137,97 +153,83 @@ func (m UiModule) ElementText() string {
 	return m.Title
 }
 
-type GetCourseRow struct {
-	CourseId    int
-	CourseTitle string
-	CourseDesc  string
-	ModuleId    sql.NullInt64
-	ModuleTitle sql.NullString
-	ModuleDesc  sql.NullString
-}
-
-func (row GetCourseRow) NewCourse() UiCourse {
-	return UiCourse{
-		Id:          row.CourseId,
-		Title:       row.CourseTitle,
-		Description: row.CourseDesc,
-		Modules:     []UiModule{},
-	}
-}
-
-func (row GetCourseRow) NewModule() UiModule {
-	return UiModule{
-		Id:          int(row.ModuleId.Int64),
-		CourseId:    row.CourseId,
-		Title:       row.ModuleTitle.String,
-		Description: row.ModuleDesc.String,
-	}
-}
+const getCourseQuery = `
+select c.id, c.title, c.description
+from courses c
+where c.id = ?;
+`
 
 const getCoursesQuery = `
-select c.id, c.title, c.description, m.id, m.title, m.description
+select c.id, c.title, c.description
 from courses c
-left join modules m on c.id = m.course_id
-order by c.id, m.id;
+order by c.id;
+`
+
+const getModulesQuery = `
+select m.id, m.course_id, m.title, m.description
+from modules m
+where m.course_id = ?
+order by m.id;
 `
 
 func (c *DbClient) GetCourses() ([]UiCourse, error) {
-	rows, err := c.db.Query(getCoursesQuery)
+	courseRows, err := c.db.Query(getCoursesQuery)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer courseRows.Close()
 
 	var courses []UiCourse
-	for rows.Next() {
-		var row GetCourseRow
-		err := rows.Scan(&row.CourseId, &row.CourseTitle, &row.CourseDesc, &row.ModuleId, &row.ModuleTitle, &row.ModuleDesc)
+	for courseRows.Next() {
+		var course UiCourse
+		err := courseRows.Scan(&course.Id, &course.Title, &course.Description)
 		if err != nil {
 			return nil, err
 		}
-		if len(courses) == 0 || courses[len(courses)-1].Id != row.CourseId {
-			courses = append(courses, row.NewCourse())
+
+		moduleRows, err := c.db.Query(getModulesQuery, course.Id)
+		if err != nil {
+			return nil, err
 		}
-		if row.ModuleId.Valid {
-			courses[len(courses)-1].Modules = append(courses[len(courses)-1].Modules, row.NewModule())
+		defer moduleRows.Close()
+		for moduleRows.Next() {
+			var module UiModule
+			err := moduleRows.Scan(&module.Id, &module.CourseId, &module.Title, &module.Description)
+			if err != nil {
+				return nil, err
+			}
+			course.Modules = append(course.Modules, module)
+		}
+		if err := moduleRows.Err(); err != nil {
+			return nil, err
 		}
 
+		courses = append(courses, course)
 	}
-	if err := rows.Err(); err != nil {
+	if err := courseRows.Err(); err != nil {
 		return nil, err
 	}
 	return courses, nil
 }
 
-const getCourseQuery = `
-select c.id, c.title, c.description, m.id, m.title, m.description
-from courses c
-left join modules m on c.id = m.course_id
-where c.id = ?
-order by m.id;
-`
-
 func (c *DbClient) GetCourse(courseId int) (UiCourse, error) {
-	rows, err := c.db.Query(getCourseQuery, courseId)
+	row := c.db.QueryRow(getCourseQuery, courseId)
+	var course UiCourse
+	err := row.Scan(&course.Id, &course.Title, &course.Description)
 	if err != nil {
 		return UiCourse{}, err
 	}
-	defer rows.Close()
-	var course UiCourse = UiCourse{}
-	uninitialized := true
+	rows, err := c.db.Query(getModulesQuery, courseId)
+	if err != nil {
+		return UiCourse{}, err
+	}
 	for rows.Next() {
-		var row GetCourseRow
-		err := rows.Scan(&row.CourseId, &row.CourseTitle, &row.CourseDesc, &row.ModuleId, &row.ModuleTitle, &row.ModuleDesc)
+		var module UiModule
+		err := rows.Scan(&module.Id, &module.CourseId, &module.Title, &module.Description)
 		if err != nil {
 			return UiCourse{}, err
 		}
-		if uninitialized {
-			course = row.NewCourse()
-			uninitialized = false
-		}
-		if row.ModuleId.Valid {
-			course.Modules = append(course.Modules, row.NewModule())
-		}
+		course.Modules = append(course.Modules, module)
 	}
 	if err := rows.Err(); err != nil {
 		return UiCourse{}, err
@@ -235,14 +237,24 @@ func (c *DbClient) GetCourse(courseId int) (UiCourse, error) {
 	return course, nil
 }
 
-const getEditModuleQuery = `
-select c.id, c.title, m.id, m.title, m.description, q.id, q.question_text, ch.id, ch.choice_text
-from courses c
-left join modules m on c.id = m.course_id
-left join questions q on m.id = q.module_id
-left join choices ch on q.id = ch.question_id
-where c.id = ? and m.id = ?
-order by c.id, m.id, q.id, ch.id;
+const getModuleQuery = `
+select m.id, m.title, m.description
+from modules m
+where m.id = ?
+`
+
+const getQuestionsQuery = `
+select q.id, q.question_text
+from questions q
+where q.module_id = ?
+order by q.id;
+`
+
+const getChoicesQuery = `
+select ch.id, ch.choice_text
+from choices ch
+where ch.question_id = ?
+order by ch.id;
 `
 
 type UiEditModule struct {
@@ -290,77 +302,94 @@ func (c UiChoice) ElementText() string {
 }
 
 func (c *DbClient) GetEditModule(courseId int, moduleId int) (UiEditModule, error) {
-	rows, err := c.db.Query(getEditModuleQuery, courseId, moduleId)
+	courseRow := c.db.QueryRow(getCourseQuery, courseId)
+	var module UiEditModule
+	var courseDescription string // stub
+	err := courseRow.Scan(&module.CourseId, &module.CourseTitle, &courseDescription)
 	if err != nil {
 		return UiEditModule{}, err
 	}
-	defer rows.Close()
+	moduleRow := c.db.QueryRow(getModuleQuery, moduleId)
+	err = moduleRow.Scan(&module.ModuleId, &module.ModuleTitle, &module.ModuleDesc)
+	if err != nil {
+		return UiEditModule{}, err
+	}
 
-	var uiModule UiEditModule
-	firstRow := true
-	for rows.Next() {
-		var row struct {
-			CourseId     int
-			CourseTitle  string
-			ModuleId     int
-			ModuleTitle  string
-			ModuleDesc   string
-			QuestionId   sql.NullInt64
-			QuestionText sql.NullString
-			ChoiceId     sql.NullInt64
-			ChoiceText   sql.NullString
-		}
-		err := rows.Scan(&row.CourseId, &row.CourseTitle, &row.ModuleId, &row.ModuleTitle, &row.ModuleDesc, &row.QuestionId, &row.QuestionText, &row.ChoiceId, &row.ChoiceText)
+	questionRows, err := c.db.Query(getQuestionsQuery, moduleId)
+	if err != nil {
+		return UiEditModule{}, err
+	}
+	defer questionRows.Close()
+	for questionRows.Next() {
+		var question UiQuestion
+		err := questionRows.Scan(&question.Id, &question.QuestionText)
 		if err != nil {
 			return UiEditModule{}, err
 		}
-		if firstRow {
-			uiModule.CourseId = row.CourseId
-			uiModule.CourseTitle = row.CourseTitle
-			uiModule.ModuleId = row.ModuleId
-			uiModule.ModuleTitle = row.ModuleTitle
-			uiModule.ModuleDesc = row.ModuleDesc
-			uiModule.Questions = []UiQuestion{}
-			firstRow = false
+
+		choiceRows, err := c.db.Query(getChoicesQuery, question.Id)
+		if err != nil {
+			return UiEditModule{}, err
 		}
-		if row.QuestionId.Valid && (len(uiModule.Questions) == 0 || uiModule.Questions[len(uiModule.Questions)-1].Id != int(row.QuestionId.Int64)) {
-			uiModule.Questions = append(uiModule.Questions, UiQuestion{
-				Id:           int(row.QuestionId.Int64),
-				QuestionText: row.QuestionText.String,
-				Choices:      []UiChoice{},
-			})
+		defer choiceRows.Close()
+		for choiceRows.Next() {
+			var choice UiChoice
+			err := choiceRows.Scan(&choice.Id, &choice.ChoiceText)
+			if err != nil {
+				return UiEditModule{}, err
+			}
+			question.Choices = append(question.Choices, choice)
 		}
-		if row.ChoiceId.Valid {
-			uiModule.Questions[len(uiModule.Questions)-1].Choices = append(uiModule.Questions[len(uiModule.Questions)-1].Choices, UiChoice{
-				Id:         int(row.ChoiceId.Int64),
-				ChoiceText: row.ChoiceText.String,
-			})
+		if err := choiceRows.Err(); err != nil {
+			return UiEditModule{}, err
 		}
+		module.Questions = append(module.Questions, question)
 	}
-	if err := rows.Err(); err != nil {
+	if err := questionRows.Err(); err != nil {
 		return UiEditModule{}, err
 	}
-	return uiModule, nil
+	return module, nil
 }
+
+const updateModuleQuery = `
+update modules
+set title = ?, description = ?
+where id = ?;
+`
+
+const deleteQuestionsQuery = `
+delete from questions
+where module_id = ?;
+`
+
+const insertQuestionQuery = `
+insert into questions(module_id, question_text)
+values(?, ?);
+`
+
+const insertChoiceQuery = `
+insert into choices(question_id, choice_text)
+values(?, ?);
+`
 
 func (c *DbClient) EditModule(moduleId int, title string, description string, questions []string, choices [][]string) error {
 	tx, err := c.db.Begin()
 	if err != nil {
 		return err
 	}
-	_, err = tx.Exec("update modules set title = ?, description = ? where id = ?;", title, description, moduleId)
+	_, err = tx.Exec(updateModuleQuery, title, description, moduleId)
 	if err != nil {
 		tx.Rollback()
 		return err
 	}
 	// Delete all questions and choices for this module (deleting quesitons cascades to choices)
-	_, err = tx.Exec("delete from questions where module_id = ?;", moduleId)
+	_, err = tx.Exec(deleteQuestionsQuery, moduleId)
 	if err != nil {
 		tx.Rollback()
 		return err
 	}
 	for i, question := range questions {
-		res, err := tx.Exec("insert into questions(module_id, question_text) values(?, ?);", moduleId, question)
+		res, err := tx.Exec(insertQuestionQuery, moduleId, question)
 		if err != nil {
 			tx.Rollback()
 			return err
@@ -371,7 +400,7 @@ func (c *DbClient) EditModule(moduleId int, title string, description string, qu
 			return err
 		}
 		for _, choice := range choices[i] {
-			_, err = tx.Exec("insert into choices(question_id, choice_text) values(?, ?);", questionId, choice)
+			_, err = tx.Exec(insertChoiceQuery, questionId, choice)
 			if err != nil {
 				tx.Rollback()
 				return err
