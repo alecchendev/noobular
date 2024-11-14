@@ -84,7 +84,7 @@
 {{ define "add_module" }}
 <div class="element-container">
 	<div class="element-title-delete-container">
-		<input type="text" class="element-title" name="module-title[]" placeholder="Module name" value="{{ .ElementText }}" required>
+		<input type="text" class="element-title" name="module-title[]" placeholder="Module name" value="{{ .ElementText }}" required autofocus>
 		{{ template "delete_module_button" . }}
 	</div>
 
@@ -96,7 +96,7 @@
 {{ define "add_question" }}
 <div class="element-container">
 	<div class="element-title-delete-container">
-		<input type="text" class="element-title" name="{{ .ElementType }}-title[]" placeholder="{{ TitleCase .ElementType }}" value="{{ .ElementText }}" required>
+		<input type="text" class="element-title" name="{{ .ElementType }}-title[]" placeholder="{{ TitleCase .ElementType }}" value="{{ .ElementText }}" required autofocus>
 		{{ template "delete_element_button" . }}
 	</div>
 
@@ -118,7 +118,7 @@
 {{ define "add_choice" }}
 <div class="element-container">
 	<div class="element-title-delete-container">
-		<input type="text" class="element-title" name="choice-title[]" placeholder="Choice" value="{{ .ElementText }}" required>
+		<input type="text" class="element-title" name="choice-title[]" placeholder="Choice" value="{{ .ElementText }}" required autofocus>
 		{{ template "delete_element_button" . }}
 	</div>
 </div>
