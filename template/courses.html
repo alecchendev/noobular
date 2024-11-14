@@ -5,6 +5,14 @@
 	flex-direction: column;
 }
 
+.course {
+	margin-bottom: 1rem;
+}
+
+.course-title {
+	margin-bottom: 0.5rem;
+}
+
 .course-title-edit-container {
 	display: flex;
 	justify-content: space-between;
@@ -74,7 +82,7 @@
 	{{range $course := . }}
 	<div class="course">
 		<div class="course-title-edit-container">
-			<h2>{{.Title}}</h2>
+			<h2 class="course-title">{{.Title}}</h2>
 			<a class="edit-course-link" href="/course/{{$course.Id}}/edit">Edit</a>
 		</div>
 		<p>{{.Description}}</p>
