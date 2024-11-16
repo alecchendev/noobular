@@ -199,21 +199,17 @@ func (c *DbClient) GetModules(courseId int) ([]UiModule, error) {
 	return modules, nil
 }
 
-func (c *DbClient) GetCourses() ([]UiCourse, error) {
+func (c *DbClient) GetCourses() ([]Course, error) {
 	courseRows, err := c.db.Query(getCoursesQuery)
 	if err != nil {
 		return nil, err
 	}
 	defer courseRows.Close()
 
-	var courses []UiCourse
+	var courses []Course
 	for courseRows.Next() {
-		var course UiCourse
+		var course Course
 		err := courseRows.Scan(&course.Id, &course.Title, &course.Description)
-		if err != nil {
-			return nil, err
-		}
-		course.Modules, err = c.GetModules(course.Id)
 		if err != nil {
 			return nil, err
 		}
@@ -225,16 +221,12 @@ func (c *DbClient) GetCourses() ([]UiCourse, error) {
 	return courses, nil
 }
 
-func (c *DbClient) GetCourse(courseId int) (UiCourse, error) {
+func (c *DbClient) GetCourse(courseId int) (Course, error) {
 	row := c.db.QueryRow(getCourseQuery, courseId)
-	var course UiCourse
+	var course Course
 	err := row.Scan(&course.Id, &course.Title, &course.Description)
 	if err != nil {
-		return UiCourse{}, err
-	}
-	course.Modules, err = c.GetModules(courseId)
-	if err != nil {
-		return UiCourse{}, err
+		return Course{}, err
 	}
 	return course, nil
 }

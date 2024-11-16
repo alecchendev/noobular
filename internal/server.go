@@ -52,7 +52,7 @@ type HandlerMapHandler func(http.ResponseWriter, *http.Request, HandlerContext) 
 
 type HandlerMap struct {
 	handlers        map[string]HandlerMapHandler
-	ctx		HandlerContext
+	ctx             HandlerContext
 	reloadTemplates bool
 }
 
@@ -128,24 +128,40 @@ func handleHomePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext) 
 
 // Courses page
 
+func getCourses(dbClient *DbClient) ([]UiCourse, error) {
+	courses, err := dbClient.GetCourses()
+	if err != nil {
+		return nil, err
+	}
+	uiCourses := make([]UiCourse, len(courses))
+	for i, course := range courses {
+		modules, err := dbClient.GetModules(course.Id)
+		if err != nil {
+			return nil, err
+		}
+		uiCourses[i] = UiCourse{course.Id, course.Title, course.Description, modules}
+	}
+	return uiCourses, nil
+}
+
 func handleCoursesPage(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
 	newCourseId, err := strconv.Atoi(r.URL.Query().Get("newCourse"))
 	if err != nil {
 		newCourseId = -1
 	}
-	courses, err := ctx.dbClient.GetCourses()
+	uiCourses, err := getCourses(ctx.dbClient)
 	if err != nil {
 		return err
 	}
-	return ctx.renderer.RenderTeacherCoursePage(w, courses, newCourseId)
+	return ctx.renderer.RenderTeacherCoursePage(w, uiCourses, newCourseId)
 }
 
 func handleStudentCoursesPage(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
-	courses, err := ctx.dbClient.GetCourses()
+	uiCourses, err := getCourses(ctx.dbClient)
 	if err != nil {
 		return err
 	}
-	return ctx.renderer.RenderStudentCoursePage(w, courses)
+	return ctx.renderer.RenderStudentCoursePage(w, uiCourses)
 }
 
 // Create course page
@@ -173,7 +189,6 @@ func parseCreateCourseRequest(r *http.Request) (createCourseRequest, error) {
 	return createCourseRequest{title, description, moduleTitles, moduleDescriptions}, nil
 }
 
-
 func handleCreateCourse(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
 	req, err := parseCreateCourseRequest(r)
 	if err != nil {
@@ -198,7 +213,11 @@ func handleEditCoursePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	if err != nil {
 		return err
 	}
-	return ctx.renderer.RenderEditCoursePage(w, course)
+	modules, err := ctx.dbClient.GetModules(courseId)
+	if err != nil {
+		return err
+	}
+	return ctx.renderer.RenderEditCoursePage(w, UiCourse{course.Id, course.Title, course.Description, modules})
 }
 
 type editCourseRequest struct {
@@ -313,10 +332,10 @@ func handleEditModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 }
 
 type editModuleRequest struct {
-	moduleId int
-	title    string
-	description string
-	questions []string
+	moduleId          int
+	title             string
+	description       string
+	questions         []string
 	choicesByQuestion [][]string
 	correctChoiceIdxs []int
 }
@@ -468,16 +487,14 @@ func handleTakeModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 		}
 	}
 	return ctx.renderer.RenderTakeModulePage(w, UiTakeModule{
-		Module: module,
-		QuestionCount: questionCount,
-		QuestionIndex: questionIdx,
-		ChosenChoiceId: choiceId,
+		Module:          module,
+		QuestionCount:   questionCount,
+		QuestionIndex:   questionIdx,
+		ChosenChoiceId:  choiceId,
 		CorrectChoiceId: correctChoiceId,
-		Question: question,
+		Question:        question,
 	})
 }
-
-
 
 func handleAnswerQuestion(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
 	// courseId, err := strconv.Atoi(r.PathValue("courseId"))
@@ -526,11 +543,11 @@ func handleAnswerQuestion(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	}
 
 	return ctx.renderer.RenderQuestionSubmitted(w, UiSubmittedAnswer{
-		Module: module,
-		QuestionIndex: questionIdx,
-		ChosenChoiceId: choiceId,
+		Module:          module,
+		QuestionIndex:   questionIdx,
+		ChosenChoiceId:  choiceId,
 		CorrectChoiceId: correctChoiceId,
-		Question: question,
+		Question:        question,
 	})
 }
 
