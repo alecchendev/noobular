@@ -114,7 +114,9 @@
 			{{ end }}
 		</div>
 		<button id="add-element-button" type="button" hx-get="/ui/choice" hx-target="previous" hx-swap="beforeend">Add Choice</button>
+		<!-- Hidden input element to help backend differentiate choices between questions -->
 		<input type="text" name="choice-title[]" value="end-choice" hidden/>
+		<input type="text" name="choice-idx[]" value="end-choice" hidden/>
 	</div>
 </div>
 {{ end }}
@@ -124,6 +126,12 @@
 	<div class="element-title-delete-container">
 		<input type="text" class="element-title" name="choice-title[]" placeholder="Choice" value="{{ .ElementText }}" required autofocus>
 		{{ template "delete_element_button" . }}
+	</div>
+	<!-- Hidden input element to help backend differentiate choices for correct idx -->
+	<input type="text" name="choice-idx[]" value="{{ .Idx }}" hidden>
+	<div class="correct-container">
+		<input type="radio" name="correct-choice[]" value="{{ .Idx }}" id="correct-choice-{{ .Idx }}" {{ if .IsCorrect }}checked{{ end }}>
+		<label for="correct-choice-{{ .Idx }}">Correct</label>
 	</div>
 </div>
 {{ end }}

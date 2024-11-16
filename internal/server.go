@@ -298,6 +298,7 @@ type editModuleRequest struct {
 	description string
 	questions []string
 	choicesByQuestion [][]string
+	correctChoiceIdxs []int
 }
 
 func parseEditModuleRequest(r *http.Request) (editModuleRequest, error) {
@@ -309,15 +310,22 @@ func parseEditModuleRequest(r *http.Request) (editModuleRequest, error) {
 	if err != nil {
 		return editModuleRequest{}, err
 	}
+	log.Println("Form:", r.Form)
 	title := r.Form.Get("title")
 	description := r.Form.Get("description")
 	questions := r.Form["question-title[]"]
 	choices := r.Form["choice-title[]"]
+	// These match choices 1-1 (including having "end-choice")
+	// They are a random number generated to be roughly unique for this choice.
+	choiceUiIdxs := r.Form["choice-idx[]"]
+	// This holds the choiceUiIdx of the correct choice for each question.
+	correctChoiceIdxs := r.Form["correct-choice[]"]
 	// Choices are separated by "end-choice" in the form
 	// i.e. we expect r.Form["choice-title[]"] to look something like:
 	// ["choice1", "choice2", "end-choice", "choice3", "choice4", "end-choice"]
 	uiQuestions := make([]string, len(questions))
 	uiChoicesByQuestion := make([][]string, len(questions))
+	correctChoicesByQuestion := make([]int, len(questions))
 	choiceIdx := 0
 	for i, question := range questions {
 		uiChoices := make([]string, 0)
@@ -328,6 +336,9 @@ func parseEditModuleRequest(r *http.Request) (editModuleRequest, error) {
 				break
 			}
 			uiChoices = append(uiChoices, choice)
+			if choiceUiIdxs[choiceIdx] == correctChoiceIdxs[i] {
+				correctChoicesByQuestion[i] = len(uiChoices) - 1
+			}
 		}
 		uiQuestions[i] = question
 		uiChoicesByQuestion[i] = uiChoices
@@ -350,7 +361,7 @@ func parseEditModuleRequest(r *http.Request) (editModuleRequest, error) {
 	if len(uiQuestions) > 12 {
 		return editModuleRequest{}, fmt.Errorf("Modules cannot have more than 12 questions")
 	}
-	return editModuleRequest{moduleId, title, description, uiQuestions, uiChoicesByQuestion}, nil
+	return editModuleRequest{moduleId, title, description, uiQuestions, uiChoicesByQuestion, correctChoicesByQuestion}, nil
 }
 
 func handleEditModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
@@ -358,7 +369,7 @@ func handleEditModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 	if err != nil {
 		return err
 	}
-	err = ctx.dbClient.EditModule(req.moduleId, req.title, req.description, req.questions, req.choicesByQuestion)
+	err = ctx.dbClient.EditModule(req.moduleId, req.title, req.description, req.questions, req.choicesByQuestion, req.correctChoiceIdxs)
 	if err != nil {
 		return err
 	}

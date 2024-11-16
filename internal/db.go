@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"math/rand/v2"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -256,7 +257,7 @@ order by q.id;
 `
 
 const getChoicesQuery = `
-select ch.id, ch.choice_text
+select ch.id, ch.choice_text, ch.correct
 from choices ch
 where ch.question_id = ?
 order by ch.id;
@@ -295,11 +296,15 @@ func (q UiQuestion) IsEmpty() bool {
 
 type UiChoice struct {
 	Id         int
+	/// A random idx just to differentiate choices in the UI
+	/// so that label elements can be associated with certain choices.
+	Idx        int
 	ChoiceText string
+	IsCorrect  bool
 }
 
 func EmptyChoice() UiChoice {
-	return UiChoice{-1, ""}
+	return UiChoice{-1, rand.Int(), "", false}
 }
 
 func (c UiChoice) ElementType() string {
@@ -346,8 +351,8 @@ func (c *DbClient) GetEditModule(courseId int, moduleId int) (UiEditModule, erro
 		}
 		defer choiceRows.Close()
 		for choiceRows.Next() {
-			var choice UiChoice
-			err := choiceRows.Scan(&choice.Id, &choice.ChoiceText)
+			choice := EmptyChoice()
+			err := choiceRows.Scan(&choice.Id, &choice.ChoiceText, &choice.IsCorrect)
 			if err != nil {
 				return UiEditModule{}, err
 			}
@@ -381,11 +386,11 @@ values(?, ?);
 `
 
 const insertChoiceQuery = `
-insert into choices(question_id, choice_text)
-values(?, ?);
+insert into choices(question_id, choice_text, correct)
+values(?, ?, ?);
 `
 
-func (c *DbClient) EditModule(moduleId int, title string, description string, questions []string, choices [][]string) error {
+func (c *DbClient) EditModule(moduleId int, title string, description string, questions []string, choices [][]string, correctChoiceIdxs []int) error {
 	tx, err := c.db.Begin()
 	if err != nil {
 		return err
@@ -412,8 +417,8 @@ func (c *DbClient) EditModule(moduleId int, title string, description string, qu
 			tx.Rollback()
 			return err
 		}
-		for _, choice := range choices[i] {
-			_, err = tx.Exec(insertChoiceQuery, questionId, choice)
+		for choiceIdx, choice := range choices[i] {
+			_, err = tx.Exec(insertChoiceQuery, questionId, choice, choiceIdx == correctChoiceIdxs[i])
 			if err != nil {
 				tx.Rollback()
 				return err
@@ -441,7 +446,7 @@ limit 1 offset ?;
 `
 
 func (c *DbClient) GetModuleQuestion(moduleId int, questionIdx int) (UiModule, UiQuestion, int, error) {
-	moduleRow := c.db.QueryRow(getModuleQuery, moduleId);
+	moduleRow := c.db.QueryRow(getModuleQuery, moduleId)
 	var module UiModule
 	err := moduleRow.Scan(&module.Id, &module.CourseId, &module.Title, &module.Description)
 	if err != nil {
@@ -472,7 +477,7 @@ func (c *DbClient) GetModuleQuestion(moduleId int, questionIdx int) (UiModule, U
 	defer choiceRows.Close()
 	for choiceRows.Next() {
 		var choice UiChoice
-		err := choiceRows.Scan(&choice.Id, &choice.ChoiceText)
+		err := choiceRows.Scan(&choice.Id, &choice.ChoiceText, &choice.IsCorrect)
 		if err != nil {
 			return UiModule{}, UiQuestion{}, 0, err
 		}
@@ -525,6 +530,7 @@ create table if not exists choices (
 	id integer primary key autoincrement,
 	question_id integer not null,
 	choice_text text not null,
+	correct bool not null,
 	foreign key (question_id) references questions(id) on delete cascade
 );
 `
