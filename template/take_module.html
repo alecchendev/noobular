@@ -181,10 +181,18 @@
 	<h3>Explanation</h3>
 	<p>...TODO...</p>
 </div>
+
+{{ if eq (Increment $.QuestionIndex) $.QuestionCount }}
+<a href="/student/course">
+<button id="submit-button">Done</button>
+</a>
+{{ else }}
 <button
 	id="submit-button"
 	hx-get="/student/course/{{ $.Module.CourseId }}/module/{{ $.Module.Id }}/question/{{ Increment $.QuestionIndex }}"
 	hx-target="body"
 	hx-swap="innerHTML"
 >Next</button>
+{{ end }}
+
 {{ end }}
