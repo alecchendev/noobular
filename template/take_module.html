@@ -47,6 +47,10 @@
 	display: flex;
 	flex-direction: column;
 	justify-content: center;
+	border: none;
+	background-color: transparent;
+	margin: 0;
+	padding: 0;
 }
 
 .progress-bar-button:hover {
@@ -100,12 +104,13 @@
 <div class="header">
 	<div class="progress-bar">
 		{{ range $i := NumRange .QuestionCount }}
-			<!-- TODO: this should not be a full page reload -->
-			<a
-				class="progress-bar-button"
-				href="/student/course/{{ $.Module.CourseId }}/module/{{ $.Module.Id }}/question/{{ $i }}"
-			>
 			<button 
+				class="progress-bar-button"
+				hx-get="/student/course/{{ $.Module.CourseId }}/module/{{ $.Module.Id }}/question/{{ $i }}"
+				hx-target="body"
+				hx-swap="innerHTML"
+			>
+			<div
 				{{ if lt $i $.QuestionIndex }}
 				class="progress-bar-button-span green-bg"
 				{{ else if eq $i $.QuestionIndex }}
@@ -113,8 +118,9 @@
 				{{ else }}
 				class="progress-bar-button-span gray-bg"
 				{{ end }}
-			></button>
-			</a>
+			>
+			</div>
+			</button>
 		{{ end }}
 	</div>
 </div>
