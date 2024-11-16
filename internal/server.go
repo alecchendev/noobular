@@ -21,6 +21,7 @@ func initRouter(dbClient *DbClient) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.Handle("/course/create", NewHandlerMap(dbClient).Get(handleCreateCoursePage).Post(handleCreateCourse))
 	mux.Handle("/course/{courseId}/edit", NewHandlerMap(dbClient).Get(handleEditCoursePage).Put(handleEditCourse))
+	mux.Handle("/ui/{questionIdx}/choice", NewHandlerMap(dbClient).Get(handleAddChoice))
 	mux.Handle("/ui/{element}", NewHandlerMap(dbClient).Get(handleAddElement).Delete(handleDeleteElement))
 	// This is kinda a weird place to put the deleteModuleHandler because it's on a different page
 	// (the edit course page) but it's fine for now.
@@ -258,12 +259,18 @@ func handleAddElement(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 		err = ctx.renderer.RenderNewModule(w, EmptyModule())
 	} else if element == "question" {
 		err = ctx.renderer.RenderNewQuestion(w, EmptyQuestion())
-	} else if element == "choice" {
-		err = ctx.renderer.RenderNewChoice(w, EmptyChoice())
 	} else {
 		err = fmt.Errorf("Unknown element: %s", element)
 	}
 	return err
+}
+
+func handleAddChoice(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
+	questionIdx, err := strconv.Atoi(r.PathValue("questionIdx"))
+	if err != nil {
+		return err
+	}
+	return ctx.renderer.RenderNewChoice(w, EmptyChoice(questionIdx))
 }
 
 func handleDeleteElement(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
@@ -325,12 +332,14 @@ func parseEditModuleRequest(r *http.Request) (editModuleRequest, error) {
 	title := r.Form.Get("title")
 	description := r.Form.Get("description")
 	questions := r.Form["question-title[]"]
+	questionIdxs := r.Form["question-idx[]"]
+	if len(questions) != len(questionIdxs) {
+		return editModuleRequest{}, fmt.Errorf("Each question must have an index")
+	}
 	choices := r.Form["choice-title[]"]
 	// These match choices 1-1 (including having "end-choice")
 	// They are a random number generated to be roughly unique for this choice.
 	choiceUiIdxs := r.Form["choice-idx[]"]
-	// This holds the choiceUiIdx of the correct choice for each question.
-	correctChoiceIdxs := r.Form["correct-choice[]"]
 	// Choices are separated by "end-choice" in the form
 	// i.e. we expect r.Form["choice-title[]"] to look something like:
 	// ["choice1", "choice2", "end-choice", "choice3", "choice4", "end-choice"]
@@ -340,6 +349,11 @@ func parseEditModuleRequest(r *http.Request) (editModuleRequest, error) {
 	choiceIdx := 0
 	for i, question := range questions {
 		uiChoices := make([]string, 0)
+		// This holds the choiceUiIdx of the correct choice for each question.
+		correctChoiceIdx := r.Form.Get(fmt.Sprintf("correct-choice-%s", questionIdxs[i]))
+		if correctChoiceIdx == "" {
+			return editModuleRequest{}, fmt.Errorf("Each question must have a correct choice")
+		}
 		for ; choiceIdx < len(choices); choiceIdx++ {
 			choice := choices[choiceIdx]
 			if choice == "end-choice" {
@@ -347,7 +361,7 @@ func parseEditModuleRequest(r *http.Request) (editModuleRequest, error) {
 				break
 			}
 			uiChoices = append(uiChoices, choice)
-			if choiceUiIdxs[choiceIdx] == correctChoiceIdxs[i] {
+			if choiceUiIdxs[choiceIdx] == correctChoiceIdx {
 				correctChoicesByQuestion[i] = len(uiChoices) - 1
 			}
 		}
@@ -356,7 +370,7 @@ func parseEditModuleRequest(r *http.Request) (editModuleRequest, error) {
 	}
 	for i, question := range uiQuestions {
 		if question == "" {
-			return editModuleRequest{}, fmt.Errorf("Questions  cannot be empty")
+			return editModuleRequest{}, fmt.Errorf("Questions cannot be empty")
 		}
 		if len(uiChoicesByQuestion[i]) == 0 {
 			return editModuleRequest{}, fmt.Errorf("Questions must have at least one choice")
@@ -406,6 +420,9 @@ func handleTakeModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	}
 	// TODO: add restrictions, i.e. you cannot take a question before a previous one
 	module, question, questionCount, err := ctx.dbClient.GetModuleQuestion(moduleId, questionIdx)
+	if err != nil {
+		return err
+	}
 	return ctx.renderer.RenderTakeModulePage(w, UiTakeModule{
 		Module: module,
 		QuestionCount: questionCount,

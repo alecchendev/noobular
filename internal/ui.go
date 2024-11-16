@@ -31,8 +31,8 @@ func initTemplates() map[string]*template.Template {
 		"EmptyQuestion": func() UiQuestion {
 			return EmptyQuestion()
 		},
-		"EmptyChoice": func() UiChoice {
-			return EmptyChoice()
+		"EmptyChoice": func(questionIdx int) UiChoice {
+			return EmptyChoice(questionIdx)
 		},
 		"NumRange": func(n int) []int {
 			nums := make([]int, n)

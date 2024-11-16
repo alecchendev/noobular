@@ -103,6 +103,7 @@
 		<input type="text" class="element-title" name="{{ .ElementType }}-title[]" placeholder="{{ TitleCase .ElementType }}" value="{{ .ElementText }}" required autofocus>
 		{{ template "delete_element_button" . }}
 	</div>
+	<input type="text" name="question-idx[]" value="{{ .Idx }}" hidden>
 
 	<div id="choices-container">
 		<div class="choices">
@@ -110,10 +111,10 @@
 				{{ template "add_element.html" $choice }}
 			{{ end }}
 			{{ if eq 0 (len .Choices) }}
-				{{ template "add_element.html" EmptyChoice }}
+				{{ template "add_element.html" EmptyChoice .Idx }}
 			{{ end }}
 		</div>
-		<button id="add-element-button" type="button" hx-get="/ui/choice" hx-target="previous" hx-swap="beforeend">Add Choice</button>
+		<button id="add-element-button" type="button" hx-get="/ui/{{ .Idx }}/choice" hx-target="previous" hx-swap="beforeend">Add Choice</button>
 		<!-- Hidden input element to help backend differentiate choices between questions -->
 		<input type="text" name="choice-title[]" value="end-choice" hidden/>
 		<input type="text" name="choice-idx[]" value="end-choice" hidden/>
@@ -130,7 +131,7 @@
 	<!-- Hidden input element to help backend differentiate choices for correct idx -->
 	<input type="text" name="choice-idx[]" value="{{ .Idx }}" hidden>
 	<div class="correct-container">
-		<input type="radio" name="correct-choice[]" value="{{ .Idx }}" id="correct-choice-{{ .Idx }}" {{ if .IsCorrect }}checked{{ end }}>
+		<input type="radio" name="correct-choice-{{ .QuestionIdx }}" value="{{ .Idx }}" id="correct-choice-{{ .Idx }}" {{ if .IsCorrect }}checked{{ end }} required>
 		<label for="correct-choice-{{ .Idx }}">Correct</label>
 	</div>
 </div>

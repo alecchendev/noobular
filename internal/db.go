@@ -274,12 +274,14 @@ type UiEditModule struct {
 
 type UiQuestion struct {
 	Id           int
+	// This is a random integer created to differentiate questions in the UI.
+	Idx          int
 	QuestionText string
 	Choices      []UiChoice
 }
 
 func EmptyQuestion() UiQuestion {
-	return UiQuestion{-1, "", []UiChoice{}}
+	return UiQuestion{-1, rand.Int(), "", []UiChoice{}}
 }
 
 func (q UiQuestion) ElementType() string {
@@ -296,6 +298,8 @@ func (q UiQuestion) IsEmpty() bool {
 
 type UiChoice struct {
 	Id         int
+	// This is a random integer created to differentiate questions in the UI.
+	QuestionIdx int
 	/// A random idx just to differentiate choices in the UI
 	/// so that label elements can be associated with certain choices.
 	Idx        int
@@ -303,8 +307,8 @@ type UiChoice struct {
 	IsCorrect  bool
 }
 
-func EmptyChoice() UiChoice {
-	return UiChoice{-1, rand.Int(), "", false}
+func EmptyChoice(questionId int) UiChoice {
+	return UiChoice{-1, questionId, rand.Int(), "", false}
 }
 
 func (c UiChoice) ElementType() string {
@@ -339,7 +343,7 @@ func (c *DbClient) GetEditModule(courseId int, moduleId int) (UiEditModule, erro
 	}
 	defer questionRows.Close()
 	for questionRows.Next() {
-		var question UiQuestion
+		question := EmptyQuestion()
 		err := questionRows.Scan(&question.Id, &question.QuestionText)
 		if err != nil {
 			return UiEditModule{}, err
@@ -351,7 +355,7 @@ func (c *DbClient) GetEditModule(courseId int, moduleId int) (UiEditModule, erro
 		}
 		defer choiceRows.Close()
 		for choiceRows.Next() {
-			choice := EmptyChoice()
+			choice := EmptyChoice(question.Idx)
 			err := choiceRows.Scan(&choice.Id, &choice.ChoiceText, &choice.IsCorrect)
 			if err != nil {
 				return UiEditModule{}, err
@@ -464,7 +468,7 @@ func (c *DbClient) GetModuleQuestion(moduleId int, questionIdx int) (UiModule, U
 	}
 
 	questionRow := c.db.QueryRow(getQuestionQuery, moduleId, questionIdx)
-	var question UiQuestion
+	question := EmptyQuestion()
 	err = questionRow.Scan(&question.Id, &question.QuestionText)
 	if err != nil {
 		return UiModule{}, UiQuestion{}, 0, err
@@ -476,7 +480,7 @@ func (c *DbClient) GetModuleQuestion(moduleId int, questionIdx int) (UiModule, U
 	}
 	defer choiceRows.Close()
 	for choiceRows.Next() {
-		var choice UiChoice
+		choice := EmptyChoice(question.Idx)
 		err := choiceRows.Scan(&choice.Id, &choice.ChoiceText, &choice.IsCorrect)
 		if err != nil {
 			return UiModule{}, UiQuestion{}, 0, err
