@@ -5,6 +5,8 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+
+	"github.com/google/uuid"
 )
 
 func NewServer(dbClient *DbClient, port int) *http.Server {
@@ -52,12 +54,20 @@ type HandlerMap struct {
 }
 
 func (hm HandlerMap) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	var requestIdOpt uuid.NullUUID
+	requestIdOpt.UnmarshalText([]byte(r.Header.Get("X-Request-Id")))
+	var requestId uuid.UUID
+	if requestIdOpt.Valid {
+		requestId = requestIdOpt.UUID
+	} else {
+		requestId = uuid.New()
+	}
 	err := r.ParseForm()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	log.Println(r.Method, r.URL.Path, r.Form)
+	log.Println(requestId, r.Method, r.URL.Path, r.Form)
 	if hm.reloadTemplates {
 		// Reload templates so we don't have to restart the server
 		// to see changes
@@ -66,11 +76,12 @@ func (hm HandlerMap) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if handler, ok := hm.handlers[r.Method]; ok {
 		err := handler(w, r, hm.ctx)
 		if err != nil {
-			log.Println(err)
+			log.Println(requestId, err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 		return
 	}
+	log.Printf("%s Method %s not allowed for path %s", requestId, r.Method, r.URL.Path)
 	http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 }
 
