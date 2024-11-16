@@ -207,8 +207,22 @@ from courses c
 order by c.id;
 `
 
-func (c *DbClient) GetCourses() ([]Course, error) {
-	courseRows, err := c.db.Query(getCoursesQuery)
+const getCoursesWithModulesWithQuestionsQuery = `
+select distinct c.id, c.title, c.description
+from courses c
+join modules m on c.id = m.course_id
+join questions q on m.id = q.module_id
+order by c.id;
+`
+
+func (c *DbClient) GetCourses(forStudent bool) ([]Course, error) {
+	var query string
+	if forStudent {
+		query = getCoursesWithModulesWithQuestionsQuery
+	} else {
+		query = getCoursesQuery
+	}
+	courseRows, err := c.db.Query(query)
 	if err != nil {
 		return nil, err
 	}

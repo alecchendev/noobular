@@ -128,41 +128,38 @@ func handleHomePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext) 
 
 // Courses page
 
+func getCourses(dbClient *DbClient, forStudent bool) ([]UiCourse, error) {
+	courses, err := dbClient.GetCourses(forStudent)
+	if err != nil {
+		return nil, err
+	}
+	uiCourses := make([]UiCourse, len(courses))
+	for i, course := range courses {
+		modules, err := dbClient.GetModules(course.Id, forStudent)
+		if err != nil {
+			return nil, err
+		}
+		uiCourses[i] = UiCourse{course.Id, course.Title, course.Description, modules}
+	}
+	return uiCourses, nil
+}
+
 func handleCoursesPage(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
 	newCourseId, err := strconv.Atoi(r.URL.Query().Get("newCourse"))
 	if err != nil {
 		newCourseId = -1
 	}
-	courses, err := ctx.dbClient.GetCourses()
+	uiCourses, err := getCourses(ctx.dbClient, false)
 	if err != nil {
 		return err
-	}
-	uiCourses := make([]UiCourse, len(courses))
-	for i, course := range courses {
-		modules, err := ctx.dbClient.GetModules(course.Id, false)
-		if err != nil {
-			return err
-		}
-		uiCourses[i] = UiCourse{course.Id, course.Title, course.Description, modules}
 	}
 	return ctx.renderer.RenderTeacherCoursePage(w, uiCourses, newCourseId)
 }
 
 func handleStudentCoursesPage(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
-	courses, err := ctx.dbClient.GetCourses()
+	uiCourses, err := getCourses(ctx.dbClient, true)
 	if err != nil {
 		return err
-	}
-	uiCourses := make([]UiCourse, 0, len(courses))
-	for _, course := range courses {
-		modules, err := ctx.dbClient.GetModules(course.Id, true)
-		if err != nil {
-			return err
-		}
-		if len(modules) == 0 {
-			continue
-		}
-		uiCourses = append(uiCourses, UiCourse{course.Id, course.Title, course.Description, modules})
 	}
 	return ctx.renderer.RenderStudentCoursePage(w, uiCourses)
 }
