@@ -69,6 +69,12 @@ type CoursePageArgs struct {
 	Courses     []UiCourse
 }
 
+type CoursePageArgsStudent struct {
+	NewCourseId int
+	Editor      bool
+	Courses     []UiCourseStudent
+}
+
 func (r *Renderer) RenderHomePage(w http.ResponseWriter) error {
 	return r.templates["index.html"].ExecuteTemplate(w, "page.html", nil)
 }
@@ -77,8 +83,8 @@ func (r *Renderer) RenderTeacherCoursePage(w http.ResponseWriter, courses []UiCo
 	return r.templates["courses.html"].ExecuteTemplate(w, "page.html", CoursePageArgs{newCourseId, true, courses})
 }
 
-func (r *Renderer) RenderStudentCoursePage(w http.ResponseWriter, courses []UiCourse) error {
-	return r.templates["courses.html"].ExecuteTemplate(w, "page.html", CoursePageArgs{0, false, courses})
+func (r *Renderer) RenderStudentCoursePage(w http.ResponseWriter, courses []UiCourseStudent) error {
+	return r.templates["courses.html"].ExecuteTemplate(w, "page.html", CoursePageArgsStudent{0, false, courses})
 }
 
 func (r *Renderer) RenderCreateCoursePage(w http.ResponseWriter) error {
@@ -121,7 +127,7 @@ type UiTakeModule struct {
 	Module          UiModule
 	QuestionCount   int
 	QuestionIndex   int
-	ChosenChoiceId int
+	ChosenChoiceId  int
 	CorrectChoiceId int
 	Question        UiQuestion
 }
@@ -132,6 +138,7 @@ func (r *Renderer) RenderTakeModulePage(w http.ResponseWriter, module UiTakeModu
 
 type UiSubmittedAnswer struct {
 	Module          UiModule
+	QuestionCount   int
 	QuestionIndex   int
 	ChosenChoiceId  int
 	CorrectChoiceId int

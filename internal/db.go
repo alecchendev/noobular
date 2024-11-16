@@ -135,12 +135,22 @@ func EmptyCourse() UiCourse {
 	return UiCourse{-1, "", "", []UiModule{}}
 }
 
-type UiModule struct {
-	Id int
-	// Now that I added this field it's the same as Module......
-	CourseId    int
+type UiCourseStudent struct {
+	Id          int
 	Title       string
 	Description string
+	Modules     []UiModuleStudent
+}
+
+type UiModule struct {
+	Id                        int
+	CourseId                  int
+	Title                     string
+	Description               string
+}
+
+func NewUiModule(m Module) UiModule {
+	return UiModule{m.Id, m.CourseId, m.Title, m.Description}
 }
 
 func EmptyModule() UiModule {
@@ -159,6 +169,15 @@ func (m UiModule) IsEmpty() bool {
 	return m.Id == -1
 }
 
+type UiModuleStudent struct {
+	Id                        int
+	CourseId                  int
+	Title                     string
+	Description               string
+	QuestionCount             int
+	NextUnansweredQuestionIdx int
+}
+
 const getModulesQuery = `
 select m.id, m.course_id, m.title, m.description
 from modules m
@@ -167,14 +186,14 @@ order by m.id;
 `
 
 const getModulesWithQuestionsQuery = `
-select m.id, m.course_id, m.title, m.description
+select distinct m.id, m.course_id, m.title, m.description
 from modules m
 join questions q on m.id = q.module_id
 where m.course_id = ?
 order by m.id;
 `
 
-func (c *DbClient) GetModules(courseId int, requireHasQuestions bool) ([]UiModule, error) {
+func (c *DbClient) GetModules(courseId int, requireHasQuestions bool) ([]Module, error) {
 	var query string
 	if requireHasQuestions {
 		query = getModulesWithQuestionsQuery
@@ -186,9 +205,9 @@ func (c *DbClient) GetModules(courseId int, requireHasQuestions bool) ([]UiModul
 		return nil, err
 	}
 	defer moduleRows.Close()
-	modules := []UiModule{}
+	modules := []Module{}
 	for moduleRows.Next() {
-		var module UiModule
+		var module Module
 		err := moduleRows.Scan(&module.Id, &module.CourseId, &module.Title, &module.Description)
 		if err != nil {
 			return nil, err
@@ -289,7 +308,7 @@ type UiEditModule struct {
 }
 
 type UiQuestion struct {
-	Id           int
+	Id int
 	// This is a random integer created to differentiate questions in the UI.
 	Idx          int
 	QuestionText string
@@ -313,7 +332,7 @@ func (q UiQuestion) IsEmpty() bool {
 }
 
 type UiChoice struct {
-	Id         int
+	Id int
 	// This is a random integer created to differentiate questions in the UI.
 	QuestionIdx int
 	/// A random idx just to differentiate choices in the UI
@@ -523,8 +542,8 @@ from answers a
 where a.question_id = ?;
 `
 
-/// Returns the choice id of the answer for the question if it exists.
-/// Returns -1 if there is no answer for the question.
+// Returns the choice id of the answer for the question if it exists.
+// Returns -1 if there is no answer for the question.
 func (c *DbClient) GetAnswer(questionId int) (int, error) {
 	row := c.db.QueryRow(getAnswerQuery, questionId)
 	var choiceId int
@@ -561,7 +580,7 @@ func (c *DbClient) GetNextUnansweredQuestionIdx(moduleId int) (int, error) {
 	}
 	defer rows.Close()
 	questionIdx := 0
-	var questionId int // not used
+	var questionId int      // not used
 	var questionText string // not used
 	for rows.Next() {
 		err := rows.Scan(&questionId, &questionText)

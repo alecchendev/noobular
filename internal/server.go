@@ -28,7 +28,6 @@ func initRouter(dbClient *DbClient) *http.ServeMux {
 	mux.Handle("/course/{courseId}/module/{moduleId}/edit", NewHandlerMap(dbClient).Get(handleEditModulePage).Put(handleEditModule).Delete(handleDeleteModule))
 	mux.Handle("/course", NewHandlerMap(dbClient).Get(handleCoursesPage))
 	mux.Handle("/student/course", NewHandlerMap(dbClient).Get(handleStudentCoursesPage))
-	mux.Handle("/student/course/{courseId}/module/{moduleId}/start", NewHandlerMap(dbClient).Get(handleStartModulePage))
 	mux.Handle("/student/course/{courseId}/module/{moduleId}/question/{questionIdx}", NewHandlerMap(dbClient).Get(handleTakeModulePage))
 	mux.Handle("/student/course/{courseId}/module/{moduleId}/question/{questionIdx}/answer", NewHandlerMap(dbClient).Post(handleAnswerQuestion))
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
@@ -128,38 +127,61 @@ func handleHomePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext) 
 
 // Courses page
 
-func getCourses(dbClient *DbClient, forStudent bool) ([]UiCourse, error) {
-	courses, err := dbClient.GetCourses(forStudent)
-	if err != nil {
-		return nil, err
-	}
-	uiCourses := make([]UiCourse, len(courses))
-	for i, course := range courses {
-		modules, err := dbClient.GetModules(course.Id, forStudent)
-		if err != nil {
-			return nil, err
-		}
-		uiCourses[i] = UiCourse{course.Id, course.Title, course.Description, modules}
-	}
-	return uiCourses, nil
-}
-
 func handleCoursesPage(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
 	newCourseId, err := strconv.Atoi(r.URL.Query().Get("newCourse"))
 	if err != nil {
 		newCourseId = -1
 	}
-	uiCourses, err := getCourses(ctx.dbClient, false)
+	courses, err := ctx.dbClient.GetCourses(false)
 	if err != nil {
 		return err
+	}
+	uiCourses := make([]UiCourse, len(courses))
+	for i, course := range courses {
+		modules, err := ctx.dbClient.GetModules(course.Id, false)
+		if err != nil {
+			return err
+		}
+		uiModules := make([]UiModule, len(modules))
+		for j, module := range modules {
+			uiModules[j] = NewUiModule(module)
+		}
+		uiCourses[i] = UiCourse{course.Id, course.Title, course.Description, uiModules}
 	}
 	return ctx.renderer.RenderTeacherCoursePage(w, uiCourses, newCourseId)
 }
 
 func handleStudentCoursesPage(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
-	uiCourses, err := getCourses(ctx.dbClient, true)
+	courses, err := ctx.dbClient.GetCourses(true)
 	if err != nil {
 		return err
+	}
+	uiCourses := make([]UiCourseStudent, len(courses))
+	for i, course := range courses {
+		modules, err := ctx.dbClient.GetModules(course.Id, true)
+		if err != nil {
+			return err
+		}
+		uiModules := make([]UiModuleStudent, len(modules))
+		for j, module := range modules {
+			questionCount, err := ctx.dbClient.GetQuestionCount(module.Id)
+			if err != nil {
+				return err
+			}
+			nextUnansweredQuestionIdx, err := ctx.dbClient.GetNextUnansweredQuestionIdx(module.Id)
+			if err != nil {
+				return err
+			}
+			uiModules[j] = UiModuleStudent{
+				module.Id,
+				module.CourseId,
+				module.Title,
+				module.Description,
+				questionCount,
+				nextUnansweredQuestionIdx,
+			}
+		}
+		uiCourses[i] = UiCourseStudent{course.Id, course.Title, course.Description, uiModules}
 	}
 	return ctx.renderer.RenderStudentCoursePage(w, uiCourses)
 }
@@ -217,7 +239,11 @@ func handleEditCoursePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	if err != nil {
 		return err
 	}
-	return ctx.renderer.RenderEditCoursePage(w, UiCourse{course.Id, course.Title, course.Description, modules})
+	uiModules := make([]UiModule, len(modules))
+	for i, module := range modules {
+		uiModules[i] = NewUiModule(module)
+	}
+	return ctx.renderer.RenderEditCoursePage(w, UiCourse{course.Id, course.Title, course.Description, uiModules})
 }
 
 type editCourseRequest struct {
@@ -426,30 +452,6 @@ func handleEditModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 
 // Take module page
 
-func handleStartModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
-	courseId, err := strconv.Atoi(r.PathValue("courseId"))
-	if err != nil {
-		return err
-	}
-	moduleId, err := strconv.Atoi(r.PathValue("moduleId"))
-	if err != nil {
-		return err
-	}
-	questionCount, err := ctx.dbClient.GetQuestionCount(moduleId)
-	if err != nil {
-		return err
-	}
-	unansweredQuestionIdx, err := ctx.dbClient.GetNextUnansweredQuestionIdx(moduleId)
-	if err != nil {
-		return err
-	}
-	if unansweredQuestionIdx >= questionCount {
-		return fmt.Errorf("All questions have been answered for module %d", moduleId)
-	}
-	http.Redirect(w, r, fmt.Sprintf("/student/course/%d/module/%d/question/%d", courseId, moduleId, unansweredQuestionIdx), http.StatusSeeOther)
-	return nil
-}
-
 func handleTakeModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
 	// courseId, err := strconv.Atoi(r.PathValue("courseId"))
 	// if err != nil {
@@ -541,9 +543,14 @@ func handleAnswerQuestion(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	if correctChoiceId == -1 {
 		return fmt.Errorf("Question %d has no correct choice", question.Id)
 	}
+	questionCount, err := ctx.dbClient.GetQuestionCount(moduleId)
+	if err != nil {
+		return err
+	}
 
 	return ctx.renderer.RenderQuestionSubmitted(w, UiSubmittedAnswer{
 		Module:          module,
+		QuestionCount:   questionCount,
 		QuestionIndex:   questionIdx,
 		ChosenChoiceId:  choiceId,
 		CorrectChoiceId: correctChoiceId,
