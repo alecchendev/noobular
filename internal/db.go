@@ -178,6 +178,27 @@ where m.course_id = ?
 order by m.id;
 `
 
+func (c *DbClient) GetModules(courseId int) ([]UiModule, error) {
+	moduleRows, err := c.db.Query(getModulesQuery, courseId)
+	if err != nil {
+		return nil, err
+	}
+	defer moduleRows.Close()
+	modules := []UiModule{}
+	for moduleRows.Next() {
+		var module UiModule
+		err := moduleRows.Scan(&module.Id, &module.CourseId, &module.Title, &module.Description)
+		if err != nil {
+			return nil, err
+		}
+		modules = append(modules, module)
+	}
+	if err := moduleRows.Err(); err != nil {
+		return nil, err
+	}
+	return modules, nil
+}
+
 func (c *DbClient) GetCourses() ([]UiCourse, error) {
 	courseRows, err := c.db.Query(getCoursesQuery)
 	if err != nil {
@@ -192,24 +213,10 @@ func (c *DbClient) GetCourses() ([]UiCourse, error) {
 		if err != nil {
 			return nil, err
 		}
-
-		moduleRows, err := c.db.Query(getModulesQuery, course.Id)
+		course.Modules, err = c.GetModules(course.Id)
 		if err != nil {
 			return nil, err
 		}
-		defer moduleRows.Close()
-		for moduleRows.Next() {
-			var module UiModule
-			err := moduleRows.Scan(&module.Id, &module.CourseId, &module.Title, &module.Description)
-			if err != nil {
-				return nil, err
-			}
-			course.Modules = append(course.Modules, module)
-		}
-		if err := moduleRows.Err(); err != nil {
-			return nil, err
-		}
-
 		courses = append(courses, course)
 	}
 	if err := courseRows.Err(); err != nil {
@@ -225,19 +232,8 @@ func (c *DbClient) GetCourse(courseId int) (UiCourse, error) {
 	if err != nil {
 		return UiCourse{}, err
 	}
-	rows, err := c.db.Query(getModulesQuery, courseId)
+	course.Modules, err = c.GetModules(courseId)
 	if err != nil {
-		return UiCourse{}, err
-	}
-	for rows.Next() {
-		var module UiModule
-		err := rows.Scan(&module.Id, &module.CourseId, &module.Title, &module.Description)
-		if err != nil {
-			return UiCourse{}, err
-		}
-		course.Modules = append(course.Modules, module)
-	}
-	if err := rows.Err(); err != nil {
 		return UiCourse{}, err
 	}
 	return course, nil
