@@ -289,7 +289,7 @@ func handleEditCourse(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 	if err != nil {
 		return err
 	}
-	return ctx.renderer.RenderCourseCreated(w)
+	return ctx.renderer.RenderCourseEdited(w)
 }
 
 // Add element generic template
