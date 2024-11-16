@@ -41,6 +41,9 @@ func initTemplates() map[string]*template.Template {
 			}
 			return nums
 		},
+		"Increment": func(i int) int {
+			return i + 1
+		},
 	}
 	return map[string]*template.Template{
 		// Pages
@@ -115,12 +118,24 @@ func (r *Renderer) RenderModuleEdited(w http.ResponseWriter) error {
 }
 
 type UiTakeModule struct {
-	Module UiModule
+	Module        UiModule
 	QuestionCount int
 	QuestionIndex int
-	Question UiQuestion
+	Question      UiQuestion
 }
 
 func (r *Renderer) RenderTakeModulePage(w http.ResponseWriter, module UiTakeModule) error {
 	return r.templates["take_module.html"].ExecuteTemplate(w, "page.html", module)
+}
+
+type UiSubmittedAnswer struct {
+	Module          UiModule
+	QuestionIndex   int
+	ChosenChoiceId  int
+	CorrectChoiceId int
+	Question        UiQuestion
+}
+
+func (r *Renderer) RenderQuestionSubmitted(w http.ResponseWriter, module UiSubmittedAnswer) error {
+	return r.templates["take_module.html"].ExecuteTemplate(w, "question_submitted", module)
 }

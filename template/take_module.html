@@ -86,6 +86,14 @@
     background-color: #0055aa;
 }
 
+.red {
+	color: #ff4d4f;
+}
+
+.green {
+	color: #34d058;
+}
+
 {{ end }}
 {{ define "content" }}
 
@@ -111,18 +119,62 @@
 	</div>
 </div>
 
+{{ template "question_form" . }}
+
+{{ end }}
+
+{{ define "question_form" }}
+<form
+	id="question-form"
+	hx-post="/student/course/{{ .Module.CourseId }}/module/{{ .Module.Id }}/question/{{ .QuestionIndex }}/answer"
+	hx-target="#question-form"
+	hx-swap="outerHTML"
+>
+	<div class="question">
+		<h2>{{ .Question.QuestionText }}</h2>
+		<div class="choices">
+		{{ range $choice := .Question.Choices }}
+			<div class="choice">
+				<input type="radio" id="{{ $choice.Id }}" name="choice" value="{{ $choice.Id }}" required>
+				<label for="{{ $choice.Id }}">{{ $choice.ChoiceText }}</label>
+			</div>
+		{{ end }}
+		</div>
+		<button id="submit-button" type="submit">Submit</button>
+	</div>
+</form>
+{{ end }}
+
+{{ define "question_submitted" }}
 <div class="question">
 	<h2>{{ .Question.QuestionText }}</h2>
 	<div class="choices">
 	{{ range $choice := .Question.Choices }}
 		<div class="choice">
-			<input type="radio" id="{{ $choice.Id }}" name="choice" value="{{ $choice.Id }}">
-			<label for="{{ $choice.Id }}">{{ $choice.ChoiceText }}</label>
+			<input type="radio" id="{{ $choice.Id }}" name="choice" value="{{ $choice.Id }}" disabled>
+			<label for="{{ $choice.Id }}">
+				{{ $choice.ChoiceText }}
+				{{ if eq $choice.Id $.ChosenChoiceId }} (Chosen){{ end }}
+				{{ if $choice.IsCorrect }} (Correct){{ end }}
+			</label>
 		</div>
 	{{ end }}
 	</div>
+
+	{{ if eq .ChosenChoiceId .CorrectChoiceId }}
+		<h3 class="green">Correct!</h3>
+	{{ else }}
+		<h3 class="red">Incorrect.</h3>
+	{{ end }}
+
+	<!-- TODO: an explanation of the correct answer -->
+	<h3>Explanation</h3>
+	<p>...TODO...</p>
 </div>
-
-<button id="submit-button">Submit</button>
-
+<button
+	id="submit-button"
+	hx-get="/student/course/{{ $.Module.CourseId }}/module/{{ $.Module.Id }}/question/{{ Increment $.QuestionIndex }}"
+	hx-target="body"
+	hx-swap="innerHTML"
+>Next</button>
 {{ end }}

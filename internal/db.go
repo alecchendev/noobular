@@ -502,6 +502,21 @@ func (c *DbClient) DeleteModule(moduleId int) error {
 	return nil
 }
 
+const storeAnswerQuery = `
+update answers
+set choice_id = ?
+where question_id = ?;
+
+insert into answers(question_id, choice_id)
+select ?, ?
+where not exists (select 1 from answers where question_id = ?);
+`
+
+func (c *DbClient) StoreAnswer(questionId int, choiceId int) error {
+	_, err := c.db.Exec(storeAnswerQuery, choiceId, questionId, questionId, choiceId, questionId)
+	return err
+}
+
 const createCourseTable = `
 create table if not exists courses (
 	id integer primary key autoincrement,
@@ -539,12 +554,21 @@ create table if not exists choices (
 );
 `
 
+const createAnswerTable = `
+create table if not exists answers (
+	id integer primary key autoincrement,
+	question_id integer not null,
+	choice_id integer not null,
+	foreign key (question_id) references questions(id) on delete cascade
+);
+`
+
 func initDb(db *sql.DB) {
 	tx, err := db.Begin()
 	if err != nil {
 		log.Fatal(err)
 	}
-	stmts := []string{createCourseTable, createModuleTable, createQuestionTable, createChoiceTable}
+	stmts := []string{createCourseTable, createModuleTable, createQuestionTable, createChoiceTable, createAnswerTable}
 	for _, stmt := range stmts {
 		_, err := tx.Exec(stmt)
 		if err != nil {

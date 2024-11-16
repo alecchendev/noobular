@@ -29,6 +29,7 @@ func initRouter(dbClient *DbClient) *http.ServeMux {
 	mux.Handle("/course", NewHandlerMap(dbClient).Get(handleCoursesPage))
 	mux.Handle("/student/course", NewHandlerMap(dbClient).Get(handleStudentCoursesPage))
 	mux.Handle("/student/course/{courseId}/module/{moduleId}/question/{questionIdx}", NewHandlerMap(dbClient).Get(handleTakeModulePage))
+	mux.Handle("/student/course/{courseId}/module/{moduleId}/question/{questionIdx}/answer", NewHandlerMap(dbClient).Post(handleAnswerQuestion))
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 	mux.Handle("/style/", http.StripPrefix("/style/", http.FileServer(http.Dir("style"))))
 	mux.Handle("/", NewHandlerMap(dbClient).Get(handleHomePage))
@@ -427,6 +428,63 @@ func handleTakeModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 		Module: module,
 		QuestionCount: questionCount,
 		QuestionIndex: questionIdx,
+		Question: question,
+	})
+}
+
+
+
+func handleAnswerQuestion(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
+	// courseId, err := strconv.Atoi(r.PathValue("courseId"))
+	// if err != nil {
+	// 	return err
+	// }
+	moduleId, err := strconv.Atoi(r.PathValue("moduleId"))
+	if err != nil {
+		return err
+	}
+	questionIdx, err := strconv.Atoi(r.PathValue("questionIdx"))
+	if err != nil {
+		return err
+	}
+	err = r.ParseForm()
+	if err != nil {
+		return err
+	}
+	choiceId, err := strconv.Atoi(r.Form.Get("choice"))
+	if err != nil {
+		return err
+	}
+	log.Println("Module:", moduleId)
+	log.Println("QuestionIdx:", questionIdx)
+	module, question, _, err := ctx.dbClient.GetModuleQuestion(moduleId, questionIdx)
+	if err != nil {
+		return err
+	}
+	log.Println("Question:", question.Id)
+	log.Println("Choice:", choiceId)
+
+	err = ctx.dbClient.StoreAnswer(question.Id, choiceId)
+	if err != nil {
+		return err
+	}
+
+	correctChoiceId := -1
+	for _, choice := range question.Choices {
+		if choice.IsCorrect {
+			correctChoiceId = choice.Id
+			break
+		}
+	}
+	if correctChoiceId == -1 {
+		return fmt.Errorf("Question %d has no correct choice", question.Id)
+	}
+
+	return ctx.renderer.RenderQuestionSubmitted(w, UiSubmittedAnswer{
+		Module: module,
+		QuestionIndex: questionIdx,
+		ChosenChoiceId: choiceId,
+		CorrectChoiceId: correctChoiceId,
 		Question: question,
 	})
 }
