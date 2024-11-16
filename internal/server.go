@@ -28,6 +28,7 @@ func initRouter(dbClient *DbClient) *http.ServeMux {
 	mux.Handle("/course/{courseId}/module/{moduleId}/edit", NewHandlerMap(dbClient).Get(handleEditModulePage).Put(handleEditModule).Delete(handleDeleteModule))
 	mux.Handle("/course", NewHandlerMap(dbClient).Get(handleCoursesPage))
 	mux.Handle("/student/course", NewHandlerMap(dbClient).Get(handleStudentCoursesPage))
+	mux.Handle("/student/course/{courseId}/module/{moduleId}/start", NewHandlerMap(dbClient).Get(handleStartModulePage))
 	mux.Handle("/student/course/{courseId}/module/{moduleId}/question/{questionIdx}", NewHandlerMap(dbClient).Get(handleTakeModulePage))
 	mux.Handle("/student/course/{courseId}/module/{moduleId}/question/{questionIdx}/answer", NewHandlerMap(dbClient).Post(handleAnswerQuestion))
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
@@ -406,6 +407,30 @@ func handleEditModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 
 // Take module page
 
+func handleStartModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
+	courseId, err := strconv.Atoi(r.PathValue("courseId"))
+	if err != nil {
+		return err
+	}
+	moduleId, err := strconv.Atoi(r.PathValue("moduleId"))
+	if err != nil {
+		return err
+	}
+	questionCount, err := ctx.dbClient.GetQuestionCount(moduleId)
+	if err != nil {
+		return err
+	}
+	unansweredQuestionIdx, err := ctx.dbClient.GetNextUnansweredQuestionIdx(moduleId)
+	if err != nil {
+		return err
+	}
+	if unansweredQuestionIdx >= questionCount {
+		return fmt.Errorf("All questions have been answered for module %d", moduleId)
+	}
+	http.Redirect(w, r, fmt.Sprintf("/student/course/%d/module/%d/question/%d", courseId, moduleId, unansweredQuestionIdx), http.StatusSeeOther)
+	return nil
+}
+
 func handleTakeModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
 	// courseId, err := strconv.Atoi(r.PathValue("courseId"))
 	// if err != nil {
@@ -420,7 +445,14 @@ func handleTakeModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 		return err
 	}
 	// TODO: add restrictions, i.e. you cannot take a question before a previous one
-	module, question, questionCount, err := ctx.dbClient.GetModuleQuestion(moduleId, questionIdx)
+	questionCount, err := ctx.dbClient.GetQuestionCount(moduleId)
+	if err != nil {
+		return err
+	}
+	if questionIdx >= questionCount {
+		return fmt.Errorf("Question index %d is out of bounds (>=%d) for module %d", questionIdx, questionCount, moduleId)
+	}
+	module, question, err := ctx.dbClient.GetModuleQuestion(moduleId, questionIdx)
 	if err != nil {
 		return err
 	}
@@ -470,7 +502,7 @@ func handleAnswerQuestion(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	}
 	log.Println("Module:", moduleId)
 	log.Println("QuestionIdx:", questionIdx)
-	module, question, _, err := ctx.dbClient.GetModuleQuestion(moduleId, questionIdx)
+	module, question, err := ctx.dbClient.GetModuleQuestion(moduleId, questionIdx)
 	if err != nil {
 		return err
 	}

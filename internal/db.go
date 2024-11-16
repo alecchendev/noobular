@@ -436,12 +436,6 @@ func (c *DbClient) EditModule(moduleId int, title string, description string, qu
 	return nil
 }
 
-const getQuestionCountQuery = `
-select count(*)
-from questions q
-where q.module_id = ?;
-`
-
 const getQuestionQuery = `
 select q.id, q.question_text
 from questions q
@@ -449,49 +443,39 @@ where q.module_id = ?
 limit 1 offset ?;
 `
 
-func (c *DbClient) GetModuleQuestion(moduleId int, questionIdx int) (UiModule, UiQuestion, int, error) {
+func (c *DbClient) GetModuleQuestion(moduleId int, questionIdx int) (UiModule, UiQuestion, error) {
 	moduleRow := c.db.QueryRow(getModuleQuery, moduleId)
 	var module UiModule
 	err := moduleRow.Scan(&module.Id, &module.CourseId, &module.Title, &module.Description)
 	if err != nil {
-		return UiModule{}, UiQuestion{}, 0, err
-	}
-
-	questionCountRow := c.db.QueryRow(getQuestionCountQuery, moduleId)
-	var questionCount int
-	err = questionCountRow.Scan(&questionCount)
-	if err != nil {
-		return UiModule{}, UiQuestion{}, 0, err
-	}
-	if questionIdx >= questionCount {
-		return UiModule{}, UiQuestion{}, 0, fmt.Errorf("question index out of bounds")
+		return UiModule{}, UiQuestion{}, err
 	}
 
 	questionRow := c.db.QueryRow(getQuestionQuery, moduleId, questionIdx)
 	question := EmptyQuestion()
 	err = questionRow.Scan(&question.Id, &question.QuestionText)
 	if err != nil {
-		return UiModule{}, UiQuestion{}, 0, err
+		return UiModule{}, UiQuestion{}, err
 	}
 
 	choiceRows, err := c.db.Query(getChoicesQuery, question.Id)
 	if err != nil {
-		return UiModule{}, UiQuestion{}, 0, err
+		return UiModule{}, UiQuestion{}, err
 	}
 	defer choiceRows.Close()
 	for choiceRows.Next() {
 		choice := EmptyChoice(question.Idx)
 		err := choiceRows.Scan(&choice.Id, &choice.ChoiceText, &choice.IsCorrect)
 		if err != nil {
-			return UiModule{}, UiQuestion{}, 0, err
+			return UiModule{}, UiQuestion{}, err
 		}
 		question.Choices = append(question.Choices, choice)
 	}
 	if err := choiceRows.Err(); err != nil {
-		return UiModule{}, UiQuestion{}, 0, err
+		return UiModule{}, UiQuestion{}, err
 	}
 
-	return module, question, questionCount, nil
+	return module, question, nil
 }
 
 func (c *DbClient) DeleteModule(moduleId int) error {
@@ -538,6 +522,50 @@ func (c *DbClient) GetAnswer(questionId int) (int, error) {
 	return choiceId, nil
 }
 
+const getQuestionCountQuery = `
+select count(*)
+from questions q
+where q.module_id = ?;
+`
+
+func (c *DbClient) GetQuestionCount(moduleId int) (int, error) {
+	row := c.db.QueryRow(getQuestionCountQuery, moduleId)
+	var questionCount int
+	err := row.Scan(&questionCount)
+	if err != nil {
+		return 0, err
+	}
+	return questionCount, nil
+}
+
+func (c *DbClient) GetNextUnansweredQuestionIdx(moduleId int) (int, error) {
+	rows, err := c.db.Query(getQuestionsQuery, moduleId)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+	questionIdx := 0
+	var questionId int // not used
+	var questionText string // not used
+	for rows.Next() {
+		err := rows.Scan(&questionId, &questionText)
+		if err != nil {
+			return 0, err
+		}
+		answer, err := c.GetAnswer(questionId)
+		if err != nil {
+			return 0, err
+		}
+		if answer == -1 {
+			return questionIdx, nil
+		}
+		questionIdx += 1
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	return questionIdx, nil
+}
 
 const createCourseTable = `
 create table if not exists courses (
