@@ -159,18 +159,6 @@ func (m UiModule) IsEmpty() bool {
 	return m.Id == -1
 }
 
-const getCourseQuery = `
-select c.id, c.title, c.description
-from courses c
-where c.id = ?;
-`
-
-const getCoursesQuery = `
-select c.id, c.title, c.description
-from courses c
-order by c.id;
-`
-
 const getModulesQuery = `
 select m.id, m.course_id, m.title, m.description
 from modules m
@@ -178,8 +166,22 @@ where m.course_id = ?
 order by m.id;
 `
 
-func (c *DbClient) GetModules(courseId int) ([]UiModule, error) {
-	moduleRows, err := c.db.Query(getModulesQuery, courseId)
+const getModulesWithQuestionsQuery = `
+select m.id, m.course_id, m.title, m.description
+from modules m
+join questions q on m.id = q.module_id
+where m.course_id = ?
+order by m.id;
+`
+
+func (c *DbClient) GetModules(courseId int, requireHasQuestions bool) ([]UiModule, error) {
+	var query string
+	if requireHasQuestions {
+		query = getModulesWithQuestionsQuery
+	} else {
+		query = getModulesQuery
+	}
+	moduleRows, err := c.db.Query(query, courseId)
 	if err != nil {
 		return nil, err
 	}
@@ -198,6 +200,12 @@ func (c *DbClient) GetModules(courseId int) ([]UiModule, error) {
 	}
 	return modules, nil
 }
+
+const getCoursesQuery = `
+select c.id, c.title, c.description
+from courses c
+order by c.id;
+`
 
 func (c *DbClient) GetCourses() ([]Course, error) {
 	courseRows, err := c.db.Query(getCoursesQuery)
@@ -220,6 +228,12 @@ func (c *DbClient) GetCourses() ([]Course, error) {
 	}
 	return courses, nil
 }
+
+const getCourseQuery = `
+select c.id, c.title, c.description
+from courses c
+where c.id = ?;
+`
 
 func (c *DbClient) GetCourse(courseId int) (Course, error) {
 	row := c.db.QueryRow(getCourseQuery, courseId)
