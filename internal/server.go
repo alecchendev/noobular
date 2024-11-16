@@ -424,10 +424,23 @@ func handleTakeModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	if err != nil {
 		return err
 	}
+	choiceId, err := ctx.dbClient.GetAnswer(question.Id)
+	if err != nil {
+		return err
+	}
+	correctChoiceId := -1
+	for _, choice := range question.Choices {
+		if choice.IsCorrect {
+			correctChoiceId = choice.Id
+			break
+		}
+	}
 	return ctx.renderer.RenderTakeModulePage(w, UiTakeModule{
 		Module: module,
 		QuestionCount: questionCount,
 		QuestionIndex: questionIdx,
+		ChosenChoiceId: choiceId,
+		CorrectChoiceId: correctChoiceId,
 		Question: question,
 	})
 }

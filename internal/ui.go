@@ -118,10 +118,12 @@ func (r *Renderer) RenderModuleEdited(w http.ResponseWriter) error {
 }
 
 type UiTakeModule struct {
-	Module        UiModule
-	QuestionCount int
-	QuestionIndex int
-	Question      UiQuestion
+	Module          UiModule
+	QuestionCount   int
+	QuestionIndex   int
+	ChosenChoiceId int
+	CorrectChoiceId int
+	Question        UiQuestion
 }
 
 func (r *Renderer) RenderTakeModulePage(w http.ResponseWriter, module UiTakeModule) error {

@@ -125,7 +125,11 @@
 	</div>
 </div>
 
-{{ template "question_form" . }}
+{{ if eq .ChosenChoiceId -1 }}
+	{{ template "question_form" . }}
+{{ else }}
+	{{ template "question_submitted" . }}
+{{ end }}
 
 {{ end }}
 

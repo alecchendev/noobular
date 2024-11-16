@@ -517,6 +517,28 @@ func (c *DbClient) StoreAnswer(questionId int, choiceId int) error {
 	return err
 }
 
+const getAnswerQuery = `
+select a.choice_id
+from answers a
+where a.question_id = ?;
+`
+
+/// Returns the choice id of the answer for the question if it exists.
+/// Returns -1 if there is no answer for the question.
+func (c *DbClient) GetAnswer(questionId int) (int, error) {
+	row := c.db.QueryRow(getAnswerQuery, questionId)
+	var choiceId int
+	err := row.Scan(&choiceId)
+	if err == sql.ErrNoRows {
+		return -1, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	return choiceId, nil
+}
+
+
 const createCourseTable = `
 create table if not exists courses (
 	id integer primary key autoincrement,
