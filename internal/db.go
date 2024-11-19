@@ -313,10 +313,11 @@ type UiQuestion struct {
 	Idx          int
 	QuestionText string
 	Choices      []UiChoice
+	Explanation  string
 }
 
 func EmptyQuestion() UiQuestion {
-	return UiQuestion{-1, rand.Int(), "", []UiChoice{}}
+	return UiQuestion{-1, rand.Int(), "", []UiChoice{}, ""}
 }
 
 func (q UiQuestion) ElementType() string {
@@ -400,6 +401,18 @@ func (c *DbClient) GetEditModule(courseId int, moduleId int) (UiEditModule, erro
 		if err := choiceRows.Err(); err != nil {
 			return UiEditModule{}, err
 		}
+
+		explanationRow := c.db.QueryRow(getExplanationContentQuery, question.Id)
+		var contentId int64
+		var content string
+		err = explanationRow.Scan(&contentId, &content)
+		if err != nil && err != sql.ErrNoRows {
+			return UiEditModule{}, err
+		}
+		if err == nil {
+			question.Explanation = content
+		}
+
 		module.Questions = append(module.Questions, question)
 	}
 	if err := questionRows.Err(); err != nil {
@@ -429,7 +442,30 @@ insert into choices(question_id, choice_text, correct)
 values(?, ?, ?);
 `
 
-func (c *DbClient) EditModule(moduleId int, title string, description string, questions []string, choices [][]string, correctChoiceIdxs []int) error {
+const getExplanationContentQuery = `
+select c.id, c.content
+from explanations e
+join content c on e.content_id = c.id
+where e.question_id = ?;
+`
+
+const insertContentQuery = `
+insert into content(content)
+values(?);
+`
+
+const updateContentQuery = `
+update content
+set content = ?
+where id = ?;
+`
+
+const insertExplanationQuery = `
+insert into explanations(question_id, content_id)
+values(?, ?);
+`
+
+func (c *DbClient) EditModule(moduleId int, title string, description string, questions []string, choices [][]string, correctChoiceIdxs []int, explanations []string) error {
 	tx, err := c.db.Begin()
 	if err != nil {
 		return err
@@ -459,6 +495,42 @@ func (c *DbClient) EditModule(moduleId int, title string, description string, qu
 		for choiceIdx, choice := range choices[i] {
 			_, err = tx.Exec(insertChoiceQuery, questionId, choice, choiceIdx == correctChoiceIdxs[i])
 			if err != nil {
+				tx.Rollback()
+				return err
+			}
+		}
+		explanation := tx.QueryRow(getExplanationContentQuery, questionId)
+		var contentId int64
+		var content string
+		err = explanation.Scan(&contentId, &content)
+		if err != nil && err != sql.ErrNoRows {
+			tx.Rollback()
+			return err
+		} else if err == sql.ErrNoRows && explanations[i] != "" {
+			res, err := tx.Exec(insertContentQuery, explanations[i])
+			if err != nil {
+				log.Println("Error getting explanation:", err)
+				tx.Rollback()
+				return err
+			}
+			contentId, err = res.LastInsertId()
+			if err != nil {
+				log.Println("Error getting explanation2:", err)
+				tx.Rollback()
+				return err
+			}
+			log.Println("got here", contentId)
+			_, err = tx.Exec(insertExplanationQuery, questionId, contentId)
+			if err != nil {
+				log.Println("Error getting explanation3:", err)
+				tx.Rollback()
+				return err
+			}
+		} else {
+			log.Println("got here2")
+			_, err = tx.Exec(updateContentQuery, explanations[i], contentId)
+			if err != nil {
+				log.Println("Error getting explanation3:", err)
 				tx.Rollback()
 				return err
 			}
@@ -508,6 +580,17 @@ func (c *DbClient) GetModuleQuestion(moduleId int, questionIdx int) (UiModule, U
 	}
 	if err := choiceRows.Err(); err != nil {
 		return UiModule{}, UiQuestion{}, err
+	}
+
+	explanationRow := c.db.QueryRow(getExplanationContentQuery, question.Id)
+	var contentId int64
+	var content string
+	err = explanationRow.Scan(&contentId, &content)
+	if err != nil && err != sql.ErrNoRows {
+		return UiModule{}, UiQuestion{}, err
+	}
+	if err == nil {
+		question.Explanation = content
 	}
 
 	return module, question, nil
@@ -648,12 +731,37 @@ create table if not exists answers (
 );
 `
 
+const createContentTable = `
+create table if not exists content (
+	id integer primary key autoincrement,
+	content text not null
+);
+`
+
+const createExplanationTable = `
+create table if not exists explanations (
+	id integer primary key autoincrement,
+	question_id integer not null,
+	content_id integer not null,
+	foreign key (question_id) references questions(id) on delete cascade,
+	foreign key (content_id) references content(id) on delete cascade
+);
+`
+
 func initDb(db *sql.DB) {
 	tx, err := db.Begin()
 	if err != nil {
 		log.Fatal(err)
 	}
-	stmts := []string{createCourseTable, createModuleTable, createQuestionTable, createChoiceTable, createAnswerTable}
+	stmts := []string{
+		createCourseTable,
+		createModuleTable,
+		createQuestionTable,
+		createChoiceTable,
+		createAnswerTable,
+		createContentTable,
+		createExplanationTable,
+	}
 	for _, stmt := range stmts {
 		_, err := tx.Exec(stmt)
 		if err != nil {

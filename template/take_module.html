@@ -76,6 +76,10 @@
 	align-items: center;
 }
 
+.explanation * {
+	width: 100%;
+}
+
 #submit-button {
     margin-top: 1rem;
     width: 150px;
@@ -177,9 +181,12 @@
 		<h3 class="red">Incorrect.</h3>
 	{{ end }}
 
-	<!-- TODO: an explanation of the correct answer -->
-	<h3>Explanation</h3>
-	<p>...TODO...</p>
+	{{ if not (eq .Explanation "") }}
+		<h3>Explanation</h3>
+		<div class="explanation">
+			{{ .Explanation }}
+		</div>
+	{{ end }}
 </div>
 
 {{ if eq (Increment $.QuestionIndex) $.QuestionCount }}

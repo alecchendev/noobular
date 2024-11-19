@@ -56,6 +56,23 @@
 	font-size: 1rem;
 	resize: none;
 }
+
+.explanation-container {
+	display: flex;
+	width: 100%;
+	padding-left: 1.2rem;
+}
+
+.explanation {
+	font-size: 1rem;
+	margin: 1rem 0;
+	resize: none;
+	width: 100%;
+	border: 1px solid #e0e0e0;
+	border-radius: 10px;
+	height: 250px;
+	padding: 0.5rem;
+}
 {{ end }}
 
 <!-- Delete Buttons -->
@@ -100,7 +117,7 @@
 {{ define "add_question" }}
 <div class="element-container">
 	<div class="element-title-delete-container">
-		<input type="text" class="element-title" name="{{ .ElementType }}-title[]" placeholder="{{ TitleCase .ElementType }}" value="{{ .ElementText }}" required autofocus>
+		<input type="text" class="element-title" name="question-title[]" placeholder="Question" value="{{ .ElementText }}" required autofocus>
 		{{ template "delete_element_button" . }}
 	</div>
 	<input type="text" name="question-idx[]" value="{{ .Idx }}" hidden>
@@ -118,6 +135,10 @@
 		<!-- Hidden input element to help backend differentiate choices between questions -->
 		<input type="text" name="choice-title[]" value="end-choice" hidden/>
 		<input type="text" name="choice-idx[]" value="end-choice" hidden/>
+	</div>
+
+	<div class="explanation-container">
+		<textarea class="explanation" name="question-explanation[]" placeholder="Explanation">{{ .Explanation }}</textarea>
 	</div>
 </div>
 {{ end }}

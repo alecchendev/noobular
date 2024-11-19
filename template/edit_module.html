@@ -62,6 +62,7 @@ button {
 	<a href="/course">Courses</a> &gt; <a href="/course/{{ .CourseId }}/edit">{{ .CourseTitle }}</a> &gt; {{ .ModuleTitle }}
 </div>
 <h1>Edit Module</h1>
+<p>Note: Explanations expect <a href="https://commonmark.org/help/">markdown</a>.</p>
 <form
     hx-put="/course/{{ .CourseId }}/module/{{ .ModuleId }}/edit"
     hx-target="#response-message"

@@ -1,12 +1,15 @@
 package internal
 
 import (
+	"bytes"
 	"fmt"
+	"html/template"
 	"log"
 	"net/http"
 	"strconv"
 
 	"github.com/google/uuid"
+	"github.com/yuin/goldmark"
 )
 
 func NewServer(dbClient *DbClient, port int) *http.Server {
@@ -364,6 +367,7 @@ type editModuleRequest struct {
 	questions         []string
 	choicesByQuestion [][]string
 	correctChoiceIdxs []int
+	explanations      []string
 }
 
 func parseEditModuleRequest(r *http.Request) (editModuleRequest, error) {
@@ -383,6 +387,7 @@ func parseEditModuleRequest(r *http.Request) (editModuleRequest, error) {
 	if len(questions) != len(questionIdxs) {
 		return editModuleRequest{}, fmt.Errorf("Each question must have an index")
 	}
+	explanations := r.Form["question-explanation[]"]
 	choices := r.Form["choice-title[]"]
 	// These match choices 1-1 (including having "end-choice")
 	// They are a random number generated to be roughly unique for this choice.
@@ -433,7 +438,7 @@ func parseEditModuleRequest(r *http.Request) (editModuleRequest, error) {
 	if len(uiQuestions) > 12 {
 		return editModuleRequest{}, fmt.Errorf("Modules cannot have more than 12 questions")
 	}
-	return editModuleRequest{moduleId, title, description, uiQuestions, uiChoicesByQuestion, correctChoicesByQuestion}, nil
+	return editModuleRequest{moduleId, title, description, uiQuestions, uiChoicesByQuestion, correctChoicesByQuestion, explanations}, nil
 }
 
 func handleEditModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
@@ -441,7 +446,7 @@ func handleEditModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 	if err != nil {
 		return err
 	}
-	err = ctx.dbClient.EditModule(req.moduleId, req.title, req.description, req.questions, req.choicesByQuestion, req.correctChoiceIdxs)
+	err = ctx.dbClient.EditModule(req.moduleId, req.title, req.description, req.questions, req.choicesByQuestion, req.correctChoiceIdxs, req.explanations)
 	if err != nil {
 		return err
 	}
@@ -488,6 +493,12 @@ func handleTakeModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 			break
 		}
 	}
+	var buf bytes.Buffer
+	if err := goldmark.Convert([]byte(question.Explanation), &buf); err != nil {
+		return err
+	}
+	explanation := template.HTML(buf.String())
+	// TODO: use a sanitizer like blue monday?
 	return ctx.renderer.RenderTakeModulePage(w, UiTakeModule{
 		Module:          module,
 		QuestionCount:   questionCount,
@@ -495,6 +506,7 @@ func handleTakeModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 		ChosenChoiceId:  choiceId,
 		CorrectChoiceId: correctChoiceId,
 		Question:        question,
+		Explanation:     explanation,
 	})
 }
 
@@ -527,6 +539,7 @@ func handleAnswerQuestion(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	}
 	log.Println("Question:", question.Id)
 	log.Println("Choice:", choiceId)
+	log.Println("Explanation:", question.Explanation)
 
 	err = ctx.dbClient.StoreAnswer(question.Id, choiceId)
 	if err != nil {
@@ -548,6 +561,13 @@ func handleAnswerQuestion(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 		return err
 	}
 
+	var buf bytes.Buffer
+	if err := goldmark.Convert([]byte(question.Explanation), &buf); err != nil {
+		return err
+	}
+	explanation := template.HTML(buf.String())
+	// TODO: use a sanitizer like blue monday?
+
 	return ctx.renderer.RenderQuestionSubmitted(w, UiSubmittedAnswer{
 		Module:          module,
 		QuestionCount:   questionCount,
@@ -555,6 +575,7 @@ func handleAnswerQuestion(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 		ChosenChoiceId:  choiceId,
 		CorrectChoiceId: correctChoiceId,
 		Question:        question,
+		Explanation:     explanation,
 	})
 }
 

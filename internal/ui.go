@@ -130,6 +130,7 @@ type UiTakeModule struct {
 	ChosenChoiceId  int
 	CorrectChoiceId int
 	Question        UiQuestion
+	Explanation     template.HTML
 }
 
 func (r *Renderer) RenderTakeModulePage(w http.ResponseWriter, module UiTakeModule) error {
@@ -143,6 +144,7 @@ type UiSubmittedAnswer struct {
 	ChosenChoiceId  int
 	CorrectChoiceId int
 	Question        UiQuestion
+	Explanation     template.HTML
 }
 
 func (r *Renderer) RenderQuestionSubmitted(w http.ResponseWriter, module UiSubmittedAnswer) error {
