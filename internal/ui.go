@@ -137,6 +137,11 @@ func (r *Renderer) RenderTakeModulePage(w http.ResponseWriter, module UiTakeModu
 	return r.templates["take_module.html"].ExecuteTemplate(w, "page.html", module)
 }
 
+// Renders just the content, i.e. the header + content, not the full page.
+func (r *Renderer) RenderTakeModule(w http.ResponseWriter, module UiTakeModule) error {
+	return r.templates["take_module.html"].ExecuteTemplate(w, "content", module)
+}
+
 type UiSubmittedAnswer struct {
 	Module          UiModule
 	QuestionCount   int

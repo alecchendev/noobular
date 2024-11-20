@@ -32,6 +32,7 @@ func initRouter(dbClient *DbClient) *http.ServeMux {
 	mux.Handle("/course", NewHandlerMap(dbClient).Get(handleCoursesPage))
 	mux.Handle("/student/course", NewHandlerMap(dbClient).Get(handleStudentCoursesPage))
 	mux.Handle("/student/course/{courseId}/module/{moduleId}/question/{questionIdx}", NewHandlerMap(dbClient).Get(handleTakeModulePage))
+	mux.Handle("/student/course/{courseId}/module/{moduleId}/question/{questionIdx}/piece", NewHandlerMap(dbClient).Get(handleTakeModule))
 	mux.Handle("/student/course/{courseId}/module/{moduleId}/question/{questionIdx}/answer", NewHandlerMap(dbClient).Post(handleAnswerQuestion))
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 	mux.Handle("/style/", http.StripPrefix("/style/", http.FileServer(http.Dir("style"))))
@@ -453,38 +454,36 @@ func handleEditModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 	return ctx.renderer.RenderModuleEdited(w)
 }
 
-// Take course page
-
 // Take module page
 
-func handleTakeModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
+func getTakeModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext) (UiTakeModule, error) {
 	// courseId, err := strconv.Atoi(r.PathValue("courseId"))
 	// if err != nil {
-	// 	return err
+		// return UiTakeModule{}, err
 	// }
 	moduleId, err := strconv.Atoi(r.PathValue("moduleId"))
 	if err != nil {
-		return err
+		return UiTakeModule{}, err
 	}
 	questionIdx, err := strconv.Atoi(r.PathValue("questionIdx"))
 	if err != nil {
-		return err
+		return UiTakeModule{}, err
 	}
 	// TODO: add restrictions, i.e. you cannot take a question before a previous one
 	questionCount, err := ctx.dbClient.GetQuestionCount(moduleId)
 	if err != nil {
-		return err
+		return UiTakeModule{}, err
 	}
 	if questionIdx >= questionCount {
-		return fmt.Errorf("Question index %d is out of bounds (>=%d) for module %d", questionIdx, questionCount, moduleId)
+		return UiTakeModule{}, fmt.Errorf("Question index %d is out of bounds (>=%d) for module %d", questionIdx, questionCount, moduleId)
 	}
 	module, question, err := ctx.dbClient.GetModuleQuestion(moduleId, questionIdx)
 	if err != nil {
-		return err
+		return UiTakeModule{}, err
 	}
 	choiceId, err := ctx.dbClient.GetAnswer(question.Id)
 	if err != nil {
-		return err
+		return UiTakeModule{}, err
 	}
 	correctChoiceId := -1
 	for _, choice := range question.Choices {
@@ -495,11 +494,11 @@ func handleTakeModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	}
 	var buf bytes.Buffer
 	if err := goldmark.Convert([]byte(question.Explanation), &buf); err != nil {
-		return err
+		return UiTakeModule{}, err
 	}
 	explanation := template.HTML(buf.String())
 	// TODO: use a sanitizer like blue monday?
-	return ctx.renderer.RenderTakeModulePage(w, UiTakeModule{
+	return UiTakeModule{
 		Module:          module,
 		QuestionCount:   questionCount,
 		QuestionIndex:   questionIdx,
@@ -507,7 +506,23 @@ func handleTakeModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 		CorrectChoiceId: correctChoiceId,
 		Question:        question,
 		Explanation:     explanation,
-	})
+	}, nil
+}
+
+func handleTakeModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
+	module, err := getTakeModule(w, r, ctx)
+	if err != nil {
+		return err
+	}
+	return ctx.renderer.RenderTakeModulePage(w, module)
+}
+
+func handleTakeModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
+	module, err := getTakeModule(w, r, ctx)
+	if err != nil {
+		return err
+	}
+	return ctx.renderer.RenderTakeModule(w, module)
 }
 
 func handleAnswerQuestion(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {

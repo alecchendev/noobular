@@ -1,7 +1,7 @@
 {{ define "title" }}Module: {{ .Module.Title }}{{ end }}
 {{ define "style" }}
 
-.header {
+#header {
 	display: flex;
 	flex-direction: row;
 	justify-content: center;
@@ -105,7 +105,7 @@
 {{ end }}
 {{ define "content" }}
 
-<div class="header">
+<div id="header">
 	<div class="progress-bar">
 		{{ range $i := NumRange .QuestionCount }}
 			<button 
@@ -196,10 +196,12 @@
 {{ else }}
 <button
 	id="submit-button"
-	hx-get="/student/course/{{ $.Module.CourseId }}/module/{{ $.Module.Id }}/question/{{ Increment $.QuestionIndex }}"
-	hx-target="body"
-	hx-swap="innerHTML"
+	hx-get="/student/course/{{ $.Module.CourseId }}/module/{{ $.Module.Id }}/question/{{ Increment $.QuestionIndex }}/piece"
+	hx-target="#submit-button"
+	hx-swap="outerHTML"
+	hx-select-oob="#header"
 >Next</button>
+<!-- TODO scroll to new content on load -->
 {{ end }}
 
 {{ end }}
