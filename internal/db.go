@@ -143,10 +143,10 @@ type UiCourseStudent struct {
 }
 
 type UiModule struct {
-	Id                        int
-	CourseId                  int
-	Title                     string
-	Description               string
+	Id          int
+	CourseId    int
+	Title       string
+	Description string
 }
 
 func NewUiModule(m Module) UiModule {
@@ -185,18 +185,18 @@ where m.course_id = ?
 order by m.id;
 `
 
-const getModulesWithQuestionsQuery = `
+const getModulesWithBlocksQuery = `
 select distinct m.id, m.course_id, m.title, m.description
 from modules m
-join questions q on m.id = q.module_id
+join blocks b on m.id = b.module_id
 where m.course_id = ?
 order by m.id;
 `
 
-func (c *DbClient) GetModules(courseId int, requireHasQuestions bool) ([]Module, error) {
+func (c *DbClient) GetModules(courseId int, requireHasBlocks bool) ([]Module, error) {
 	var query string
-	if requireHasQuestions {
-		query = getModulesWithQuestionsQuery
+	if requireHasBlocks {
+		query = getModulesWithBlocksQuery
 	} else {
 		query = getModulesQuery
 	}
@@ -226,18 +226,18 @@ from courses c
 order by c.id;
 `
 
-const getCoursesWithModulesWithQuestionsQuery = `
+const getCoursesWithModulesWithBlocksQuery = `
 select distinct c.id, c.title, c.description
 from courses c
 join modules m on c.id = m.course_id
-join questions q on m.id = q.module_id
+join blocks b on m.id = b.module_id
 order by c.id;
 `
 
 func (c *DbClient) GetCourses(forStudent bool) ([]Course, error) {
 	var query string
 	if forStudent {
-		query = getCoursesWithModulesWithQuestionsQuery
+		query = getCoursesWithModulesWithBlocksQuery
 	} else {
 		query = getCoursesQuery
 	}
@@ -287,7 +287,8 @@ where m.id = ?
 const getQuestionsQuery = `
 select q.id, q.question_text
 from questions q
-where q.module_id = ?
+join blocks b on q.block_id = b.id
+where b.module_id = ?
 order by q.id;
 `
 
@@ -427,13 +428,18 @@ set title = ?, description = ?
 where id = ?;
 `
 
-const deleteQuestionsQuery = `
-delete from questions
+const insertBlockQuery = `
+insert into blocks(module_id, block_index, block_type)
+values(?, ?, ?);
+`
+
+const deleteBlocksQuery = `
+delete from blocks
 where module_id = ?;
 `
 
 const insertQuestionQuery = `
-insert into questions(module_id, question_text)
+insert into questions(block_id, question_text)
 values(?, ?);
 `
 
@@ -465,6 +471,13 @@ insert into explanations(question_id, content_id)
 values(?, ?);
 `
 
+type BlockType string
+
+const (
+	QuestionBlockType BlockType = "question"
+	ContentBlockType  BlockType = "content"
+)
+
 func (c *DbClient) EditModule(moduleId int, title string, description string, questions []string, choices [][]string, correctChoiceIdxs []int, explanations []string) error {
 	tx, err := c.db.Begin()
 	if err != nil {
@@ -475,14 +488,20 @@ func (c *DbClient) EditModule(moduleId int, title string, description string, qu
 		tx.Rollback()
 		return err
 	}
-	// Delete all questions and choices for this module (deleting quesitons cascades to choices)
-	_, err = tx.Exec(deleteQuestionsQuery, moduleId)
+	// Delete all content pieces, and questions and choices for this module (deleting questions cascades to choices)
+	_, err = tx.Exec(deleteBlocksQuery, moduleId)
 	if err != nil {
 		tx.Rollback()
 		return err
 	}
 	for i, question := range questions {
-		res, err := tx.Exec(insertQuestionQuery, moduleId, question)
+		res, err := tx.Exec(insertBlockQuery, moduleId, i, QuestionBlockType)
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
+		blockId, err := res.LastInsertId()
+		res, err = tx.Exec(insertQuestionQuery, blockId, question)
 		if err != nil {
 			tx.Rollback()
 			return err
@@ -509,20 +528,16 @@ func (c *DbClient) EditModule(moduleId int, title string, description string, qu
 		} else if err == sql.ErrNoRows && explanations[i] != "" {
 			res, err := tx.Exec(insertContentQuery, explanations[i])
 			if err != nil {
-				log.Println("Error getting explanation:", err)
 				tx.Rollback()
 				return err
 			}
 			contentId, err = res.LastInsertId()
 			if err != nil {
-				log.Println("Error getting explanation2:", err)
 				tx.Rollback()
 				return err
 			}
-			log.Println("got here", contentId)
 			_, err = tx.Exec(insertExplanationQuery, questionId, contentId)
 			if err != nil {
-				log.Println("Error getting explanation3:", err)
 				tx.Rollback()
 				return err
 			}
@@ -530,7 +545,6 @@ func (c *DbClient) EditModule(moduleId int, title string, description string, qu
 			log.Println("got here2")
 			_, err = tx.Exec(updateContentQuery, explanations[i], contentId)
 			if err != nil {
-				log.Println("Error getting explanation3:", err)
 				tx.Rollback()
 				return err
 			}
@@ -546,7 +560,8 @@ func (c *DbClient) EditModule(moduleId int, title string, description string, qu
 const getQuestionQuery = `
 select q.id, q.question_text
 from questions q
-where q.module_id = ?
+join blocks b on q.block_id = b.id
+where b.module_id = ?
 limit 1 offset ?;
 `
 
@@ -643,7 +658,8 @@ func (c *DbClient) GetAnswer(questionId int) (int, error) {
 const getQuestionCountQuery = `
 select count(*)
 from questions q
-where q.module_id = ?;
+join blocks b on q.block_id = b.id
+where b.module_id = ?;
 `
 
 func (c *DbClient) GetQuestionCount(moduleId int) (int, error) {
@@ -703,12 +719,23 @@ create table if not exists modules (
 );
 `
 
+// Blocks are pieces of a module, either a question or piece of content.
+const createBlockTable = `
+create table if not exists blocks (
+	id integer primary key autoincrement,
+	module_id integer not null,
+	block_index integer not null,
+	block_type text not null,
+	foreign key (module_id) references modules(id) on delete cascade
+);
+`
+
 const createQuestionTable = `
 create table if not exists questions (
 	id integer primary key autoincrement,
-	module_id integer not null,
+	block_id integer not null,
 	question_text text not null,
-	foreign key (module_id) references modules(id) on delete cascade
+	foreign key (block_id) references blocks(id) on delete cascade
 );
 `
 
@@ -728,6 +755,16 @@ create table if not exists answers (
 	question_id integer not null,
 	choice_id integer not null,
 	foreign key (question_id) references questions(id) on delete cascade
+);
+`
+
+const createContentBlockTable = `
+create table if not exists content_blocks (
+	id integer primary key autoincrement,
+	block_id integer not null,
+	content_id integer not null,
+	foreign key (block_id) references blocks(id) on delete cascade,
+	foreign key (content_id) references content(id) on delete cascade
 );
 `
 
@@ -756,9 +793,11 @@ func initDb(db *sql.DB) {
 	stmts := []string{
 		createCourseTable,
 		createModuleTable,
+		createBlockTable,
 		createQuestionTable,
 		createChoiceTable,
 		createAnswerTable,
+		createContentBlockTable,
 		createContentTable,
 		createExplanationTable,
 	}
