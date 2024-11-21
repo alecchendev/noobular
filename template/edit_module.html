@@ -21,7 +21,7 @@ form {
     resize: none;
 }
 
-#questions {
+#submodules {
     display: flex;
     flex-direction: column;
 }
@@ -32,6 +32,12 @@ form {
     background-color: #f0f0f0;
     border: none;
     border-radius: 10px;
+}
+
+#add-submodule-buttons {
+	display: flex;
+	flex-direction: row;
+	gap: 1rem;
 }
 
 button {
@@ -62,7 +68,7 @@ button {
 	<a href="/course">Courses</a> &gt; <a href="/course/{{ .CourseId }}/edit">{{ .CourseTitle }}</a> &gt; {{ .ModuleTitle }}
 </div>
 <h1>Edit Module</h1>
-<p>Note: Explanations expect <a href="https://commonmark.org/help/">markdown</a>.</p>
+<p>Note: Content blocks and question explanations expect <a href="https://commonmark.org/help/">markdown</a>.</p>
 <form
     hx-put="/course/{{ .CourseId }}/module/{{ .ModuleId }}/edit"
     hx-target="#response-message"
@@ -72,19 +78,19 @@ button {
 
 <textarea id="module-description" name="description" placeholder="Module description" required>{{ .ModuleDesc }}</textarea>
 
-    <h2>Questions</h2>
-
-
-    <div id="questions">
-	    {{ range $question := .Questions }}
-		{{ template "add_element.html" $question }}
-	    {{ end }}
-
-	    {{ if eq 0 (len .Questions) }}
-	    {{ template "add_element.html" EmptyQuestion }}
+    <div id="submodules">
+	    {{ range $block := .Blocks }}
+		{{ if eq $block.BlockType "content" }}
+		    {{ template "add_element.html" $block.Content }}
+		{{ else }}{{ if eq $block.BlockType "question" }}
+		    {{ template "add_element.html" $block.Question }}
+		{{ end }}{{ end }}
 	    {{ end }}
     </div>
-    <button id="add-element-button" type="button" hx-get="/ui/question" hx-target="#questions" hx-swap="beforeend">Add Question</button>
+    <div id="add-submodule-buttons">
+	<button id="add-element-button" type="button" hx-get="/ui/question" hx-target="#submodules" hx-swap="beforeend">Add Question</button>
+	<button id="add-element-button" type="button" hx-get="/ui/content" hx-target="#submodules" hx-swap="beforeend">Add Content</button>
+    </div>
 
     <button id="submit-button" type="submit">Submit</button>
 </form>

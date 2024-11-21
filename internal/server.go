@@ -310,6 +310,8 @@ func handleAddElement(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 		err = ctx.renderer.RenderNewModule(w, EmptyModule())
 	} else if element == "question" {
 		err = ctx.renderer.RenderNewQuestion(w, EmptyQuestion())
+	} else if element == "content" {
+		err = ctx.renderer.RenderNewContent(w, EmptyContent())
 	} else {
 		err = fmt.Errorf("Unknown element: %s", element)
 	}
@@ -365,6 +367,8 @@ type editModuleRequest struct {
 	moduleId          int
 	title             string
 	description       string
+	blockTypes        []string
+	contents          []string
 	questions         []string
 	choicesByQuestion [][]string
 	correctChoiceIdxs []int
@@ -383,6 +387,8 @@ func parseEditModuleRequest(r *http.Request) (editModuleRequest, error) {
 	log.Println("Form:", r.Form)
 	title := r.Form.Get("title")
 	description := r.Form.Get("description")
+	blockTypes := r.Form["block-type[]"]
+	contents := r.Form["content-text[]"]
 	questions := r.Form["question-title[]"]
 	questionIdxs := r.Form["question-idx[]"]
 	if len(questions) != len(questionIdxs) {
@@ -434,12 +440,27 @@ func parseEditModuleRequest(r *http.Request) (editModuleRequest, error) {
 			}
 		}
 	}
+	for _, content := range contents {
+		if content == "" {
+			return editModuleRequest{}, fmt.Errorf("Contents cannot be empty")
+		}
+	}
 	// TODO: maybe remove this. This is just so I can restrict what I have to consider
 	// rendering in the UI for now.
 	if len(uiQuestions) > 12 {
 		return editModuleRequest{}, fmt.Errorf("Modules cannot have more than 12 questions")
 	}
-	return editModuleRequest{moduleId, title, description, uiQuestions, uiChoicesByQuestion, correctChoicesByQuestion, explanations}, nil
+	return editModuleRequest{
+		moduleId,
+		title,
+		description,
+		blockTypes,
+		contents,
+		uiQuestions,
+		uiChoicesByQuestion,
+		correctChoicesByQuestion,
+		explanations,
+	}, nil
 }
 
 func handleEditModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
@@ -447,7 +468,7 @@ func handleEditModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 	if err != nil {
 		return err
 	}
-	err = ctx.dbClient.EditModule(req.moduleId, req.title, req.description, req.questions, req.choicesByQuestion, req.correctChoiceIdxs, req.explanations)
+	err = ctx.dbClient.EditModule(req.moduleId, req.title, req.description, req.blockTypes, req.contents, req.questions, req.choicesByQuestion, req.correctChoiceIdxs, req.explanations)
 	if err != nil {
 		return err
 	}
@@ -459,7 +480,7 @@ func handleEditModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 func getTakeModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext) (UiTakeModule, error) {
 	// courseId, err := strconv.Atoi(r.PathValue("courseId"))
 	// if err != nil {
-		// return UiTakeModule{}, err
+	// return UiTakeModule{}, err
 	// }
 	moduleId, err := strconv.Atoi(r.PathValue("moduleId"))
 	if err != nil {

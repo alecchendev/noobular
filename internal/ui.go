@@ -2,6 +2,7 @@ package internal
 
 import (
 	"html/template"
+	"math/rand/v2"
 	"net/http"
 	"strings"
 )
@@ -109,6 +110,33 @@ func (r *Renderer) RenderNewModule(w http.ResponseWriter, module UiModule) error
 
 func (r *Renderer) RenderNewQuestion(w http.ResponseWriter, question UiQuestion) error {
 	return r.templates["add_element.html"].ExecuteTemplate(w, "add_element.html", question)
+}
+
+type UiContent struct {
+	Id int
+	// This is a random integer created to differentiate questions in the UI.
+	Idx          int
+	Content string
+}
+
+func EmptyContent() UiContent {
+	return UiContent{-1, rand.Int(), ""}
+}
+
+func (c UiContent) ElementType() string {
+	return "content"
+}
+
+func (c UiContent) ElementText() string {
+	return c.Content
+}
+
+func (c UiContent) IsEmpty() bool {
+	return c.Id == -1
+}
+
+func (r *Renderer) RenderNewContent(w http.ResponseWriter, content UiContent) error {
+	return r.templates["add_element.html"].ExecuteTemplate(w, "add_element.html", content)
 }
 
 func (r *Renderer) RenderNewChoice(w http.ResponseWriter, choice UiChoice) error {

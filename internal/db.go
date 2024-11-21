@@ -284,6 +284,26 @@ from modules m
 where m.id = ?
 `
 
+const getBlocksQuery = `
+select b.id, b.block_index, b.block_type
+from blocks b
+where b.module_id = ?
+order by b.block_index;
+`
+
+const getContentForBlockQuery = `
+select c.content
+from content c
+join content_blocks cb on c.id = cb.content_id
+where cb.block_id = ?;
+`
+
+const getQuestionForBlockQuery = `
+select q.id, q.question_text
+from questions q
+where q.block_id = ?;
+`
+
 const getQuestionsQuery = `
 select q.id, q.question_text
 from questions q
@@ -305,8 +325,15 @@ type UiEditModule struct {
 	ModuleId    int
 	ModuleTitle string
 	ModuleDesc  string
-	Questions   []UiQuestion
+	Blocks      []UiBlock
 }
+
+type UiBlock struct {
+	BlockType BlockType
+	Content  UiContent
+	Question UiQuestion
+}
+
 
 type UiQuestion struct {
 	Id int
@@ -374,49 +401,73 @@ func (c *DbClient) GetEditModule(courseId int, moduleId int) (UiEditModule, erro
 		return UiEditModule{}, err
 	}
 
-	questionRows, err := c.db.Query(getQuestionsQuery, moduleId)
+	blockRows, err := c.db.Query(getBlocksQuery, moduleId)
 	if err != nil {
 		return UiEditModule{}, err
 	}
-	defer questionRows.Close()
-	for questionRows.Next() {
-		question := EmptyQuestion()
-		err := questionRows.Scan(&question.Id, &question.QuestionText)
+	defer blockRows.Close()
+	for blockRows.Next() {
+		var blockId int
+		var blockIndex int
+		var blockType string
+		err := blockRows.Scan(&blockId, &blockIndex, &blockType)
 		if err != nil {
 			return UiEditModule{}, err
 		}
-
-		choiceRows, err := c.db.Query(getChoicesQuery, question.Id)
-		if err != nil {
-			return UiEditModule{}, err
-		}
-		defer choiceRows.Close()
-		for choiceRows.Next() {
-			choice := EmptyChoice(question.Idx)
-			err := choiceRows.Scan(&choice.Id, &choice.ChoiceText, &choice.IsCorrect)
+		block := UiBlock{}
+		block.BlockType = BlockType(blockType)
+		if blockType == string(ContentBlockType) {
+			contentRow := c.db.QueryRow(getContentForBlockQuery, blockId)
+			contentBlock := EmptyContent()
+			err := contentRow.Scan(&contentBlock.Content)
+			if err == sql.ErrNoRows {
+				contentBlock.Content = ""
+			} else if err != nil {
+				return UiEditModule{}, err
+			}
+			block.Content = contentBlock
+		} else if blockType == string(QuestionBlockType) {
+			question := EmptyQuestion()
+			questionRow := c.db.QueryRow(getQuestionForBlockQuery, blockId)
+			err := questionRow.Scan(&question.Id, &question.QuestionText)
 			if err != nil {
 				return UiEditModule{}, err
 			}
-			question.Choices = append(question.Choices, choice)
-		}
-		if err := choiceRows.Err(); err != nil {
-			return UiEditModule{}, err
-		}
 
-		explanationRow := c.db.QueryRow(getExplanationContentQuery, question.Id)
-		var contentId int64
-		var content string
-		err = explanationRow.Scan(&contentId, &content)
-		if err != nil && err != sql.ErrNoRows {
-			return UiEditModule{}, err
-		}
-		if err == nil {
-			question.Explanation = content
-		}
+			choiceRows, err := c.db.Query(getChoicesQuery, question.Id)
+			if err != nil {
+				return UiEditModule{}, err
+			}
+			defer choiceRows.Close()
+			for choiceRows.Next() {
+				choice := EmptyChoice(question.Idx)
+				err := choiceRows.Scan(&choice.Id, &choice.ChoiceText, &choice.IsCorrect)
+				if err != nil {
+					return UiEditModule{}, err
+				}
+				question.Choices = append(question.Choices, choice)
+			}
+			if err := choiceRows.Err(); err != nil {
+				return UiEditModule{}, err
+			}
 
-		module.Questions = append(module.Questions, question)
+			explanationRow := c.db.QueryRow(getExplanationContentQuery, question.Id)
+			var contentId int64
+			var content string
+			err = explanationRow.Scan(&contentId, &content)
+			if err != nil && err != sql.ErrNoRows {
+				return UiEditModule{}, err
+			}
+			if err == nil {
+				question.Explanation = content
+			}
+			block.Question = question
+		} else {
+			return UiEditModule{}, fmt.Errorf("invalid block type: %s", blockType)
+		}
+		module.Blocks = append(module.Blocks, block)
 	}
-	if err := questionRows.Err(); err != nil {
+	if err := blockRows.Err(); err != nil {
 		return UiEditModule{}, err
 	}
 	return module, nil
@@ -431,6 +482,21 @@ where id = ?;
 const insertBlockQuery = `
 insert into blocks(module_id, block_index, block_type)
 values(?, ?, ?);
+`
+
+const deleteContentForModuleQuery = `
+with module_block_ids as (
+	select id from blocks where module_id = ?
+)
+delete from content
+where id in (
+    select content_id from content_blocks where block_id in module_block_ids
+)
+or id in (
+    select content_id from explanations where question_id in (
+        select id from questions where block_id in module_block_ids
+    )
+);
 `
 
 const deleteBlocksQuery = `
@@ -478,7 +544,7 @@ const (
 	ContentBlockType  BlockType = "content"
 )
 
-func (c *DbClient) EditModule(moduleId int, title string, description string, questions []string, choices [][]string, correctChoiceIdxs []int, explanations []string) error {
+func (c *DbClient) EditModule(moduleId int, title string, description string, blockTypes []string, contents []string, questions []string, choices [][]string, correctChoiceIdxs []int, explanations []string) error {
 	tx, err := c.db.Begin()
 	if err != nil {
 		return err
@@ -489,70 +555,111 @@ func (c *DbClient) EditModule(moduleId int, title string, description string, qu
 		return err
 	}
 	// Delete all content pieces, and questions and choices for this module (deleting questions cascades to choices)
+	_, err = tx.Exec(deleteContentForModuleQuery, moduleId)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
 	_, err = tx.Exec(deleteBlocksQuery, moduleId)
 	if err != nil {
 		tx.Rollback()
 		return err
 	}
-	for i, question := range questions {
-		res, err := tx.Exec(insertBlockQuery, moduleId, i, QuestionBlockType)
+	questionIdx := 0
+	contentIdx := 0
+	for i, blockType := range blockTypes {
+		res, err := tx.Exec(insertBlockQuery, moduleId, i, blockType)
 		if err != nil {
 			tx.Rollback()
 			return err
 		}
 		blockId, err := res.LastInsertId()
-		res, err = tx.Exec(insertQuestionQuery, blockId, question)
-		if err != nil {
-			tx.Rollback()
-			return err
-		}
-		questionId, err := res.LastInsertId()
-		if err != nil {
-			tx.Rollback()
-			return err
-		}
-		for choiceIdx, choice := range choices[i] {
-			_, err = tx.Exec(insertChoiceQuery, questionId, choice, choiceIdx == correctChoiceIdxs[i])
+		if blockType == string(ContentBlockType) {
+			err = c.InsertContentBlock(tx, blockId, contents[contentIdx])
 			if err != nil {
 				tx.Rollback()
 				return err
 			}
-		}
-		explanation := tx.QueryRow(getExplanationContentQuery, questionId)
-		var contentId int64
-		var content string
-		err = explanation.Scan(&contentId, &content)
-		if err != nil && err != sql.ErrNoRows {
-			tx.Rollback()
-			return err
-		} else if err == sql.ErrNoRows && explanations[i] != "" {
-			res, err := tx.Exec(insertContentQuery, explanations[i])
+			contentIdx += 1
+		} else if blockType == string(QuestionBlockType) {
+			err = c.InsertQuestion(tx, blockId, questions[questionIdx], choices[questionIdx], correctChoiceIdxs[questionIdx], explanations[questionIdx])
 			if err != nil {
 				tx.Rollback()
 				return err
 			}
-			contentId, err = res.LastInsertId()
-			if err != nil {
-				tx.Rollback()
-				return err
-			}
-			_, err = tx.Exec(insertExplanationQuery, questionId, contentId)
-			if err != nil {
-				tx.Rollback()
-				return err
-			}
+			questionIdx += 1
 		} else {
-			log.Println("got here2")
-			_, err = tx.Exec(updateContentQuery, explanations[i], contentId)
-			if err != nil {
-				tx.Rollback()
-				return err
-			}
+			return fmt.Errorf("invalid block type: %s", blockType)
 		}
 	}
 	err = tx.Commit()
 	if err != nil {
 		return err
+	}
+	return nil
+}
+
+const insertContentBlockQuery = `
+insert into content_blocks(block_id, content_id)
+values(?, ?);
+`
+
+func (c *DbClient) InsertContentBlock(tx *sql.Tx, blockId int64, content string) error {
+	res, err := tx.Exec(insertContentQuery, content)
+	if err != nil {
+		return err
+	}
+	contentId, err := res.LastInsertId()
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(insertContentBlockQuery, blockId, contentId)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// Need to rollback tx upon error one level up the stack because this function will not do that.
+func (c *DbClient) InsertQuestion(tx *sql.Tx, blockId int64, question string, choices []string, correctChoiceIdx int, explanation string) error {
+	res, err := tx.Exec(insertQuestionQuery, blockId, question)
+	if err != nil {
+		return err
+	}
+	questionId, err := res.LastInsertId()
+	if err != nil {
+		return err
+	}
+	for choiceIdx, choice := range choices {
+		_, err = tx.Exec(insertChoiceQuery, questionId, choice, choiceIdx == correctChoiceIdx)
+		if err != nil {
+			return err
+		}
+	}
+	existingExplanation := tx.QueryRow(getExplanationContentQuery, questionId)
+	var contentId int64
+	var content string
+	err = existingExplanation.Scan(&contentId, &content)
+	if err != nil && err != sql.ErrNoRows {
+		return err
+	} else if err == sql.ErrNoRows && explanation != "" {
+		res, err := tx.Exec(insertContentQuery, explanation)
+		if err != nil {
+			return err
+		}
+		contentId, err = res.LastInsertId()
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(insertExplanationQuery, questionId, contentId)
+		if err != nil {
+			return err
+		}
+	} else {
+		_, err = tx.Exec(updateContentQuery, explanation, contentId)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }

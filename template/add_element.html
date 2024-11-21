@@ -42,6 +42,10 @@
 	background-color: #f0f0f0;
 }
 
+.content-block-label {
+	margin: 0;
+}
+
 .choices {
 	display: flex;
 	flex-direction: column;
@@ -64,7 +68,7 @@
 	padding-left: 1.2rem;
 }
 
-.explanation {
+.explanation, .content-input {
 	font-size: 1rem;
 	margin: 1rem 0;
 	resize: none;
@@ -122,6 +126,7 @@
 		{{ template "delete_element_button" . }}
 	</div>
 	<input type="text" name="question-idx[]" value="{{ .Idx }}" hidden>
+	<input type="text" name="block-type[]" value="question" hidden>
 
 	<div id="choices-container">
 		<div class="choices">
@@ -141,6 +146,17 @@
 	<div class="explanation-container">
 		<textarea class="explanation" name="question-explanation[]" placeholder="Explanation">{{ .Explanation }}</textarea>
 	</div>
+</div>
+{{ end }}
+
+{{ define "add_content" }}
+<div class="element-container">
+	<div class="element-title-delete-container">
+		<h2 class="content-block-label">Content Block</h2>
+		{{ template "delete_element_button" . }}
+	</div>
+	<textarea class="content-input" name="content-text[]" placeholder="Content" required>{{ .Content }}</textarea>
+	<input type="text" name="block-type[]" value="content" hidden>
 </div>
 {{ end }}
 
@@ -165,6 +181,8 @@
 	{{ template "add_module" . }}
 {{ else if eq .ElementType "question" }}
 	{{ template "add_question" . }}
+{{ else if eq .ElementType "content" }}
+	{{ template "add_content" . }}
 {{ else if eq .ElementType "choice" }}
 	{{ template "add_choice" . }}
 {{ end }}
