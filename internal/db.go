@@ -744,60 +744,6 @@ func (c *DbClient) GetContentFromBlock(blockId int) (Content, error) {
 	return content, nil
 }
 
-const getQuestionQueryBleh = `
-select q.id, q.question_text
-from questions q
-join blocks b on q.block_id = b.id
-where b.module_id = ?
-limit 1 offset ?;
-`
-
-func (c *DbClient) GetModuleQuestion(moduleId int, questionIdx int) (UiModule, UiQuestion, error) {
-	moduleRow := c.db.QueryRow(getModuleQuery, moduleId)
-	var module UiModule
-	err := moduleRow.Scan(&module.Id, &module.CourseId, &module.Title, &module.Description)
-	if err != nil {
-		return UiModule{}, UiQuestion{}, err
-	}
-
-	questionRow := c.db.QueryRow(getQuestionQueryBleh, moduleId, questionIdx)
-	question := EmptyQuestion()
-	err = questionRow.Scan(&question.Id, &question.QuestionText)
-	if err != nil {
-		return UiModule{}, UiQuestion{}, err
-	}
-
-	choiceRows, err := c.db.Query(getChoicesQuery, question.Id)
-	if err != nil {
-		return UiModule{}, UiQuestion{}, err
-	}
-	defer choiceRows.Close()
-	for choiceRows.Next() {
-		choice := EmptyChoice(question.Idx)
-		err := choiceRows.Scan(&choice.Id, &choice.ChoiceText, &choice.IsCorrect)
-		if err != nil {
-			return UiModule{}, UiQuestion{}, err
-		}
-		question.Choices = append(question.Choices, choice)
-	}
-	if err := choiceRows.Err(); err != nil {
-		return UiModule{}, UiQuestion{}, err
-	}
-
-	explanationRow := c.db.QueryRow(getExplanationContentQuery, question.Id)
-	var contentId int64
-	var content string
-	err = explanationRow.Scan(&contentId, &content)
-	if err != nil && err != sql.ErrNoRows {
-		return UiModule{}, UiQuestion{}, err
-	}
-	if err == nil {
-		question.Explanation = content
-	}
-
-	return module, question, nil
-}
-
 func (c *DbClient) DeleteModule(moduleId int) error {
 	_, err := c.db.Exec("delete from modules where id = ?;", moduleId)
 	if err != nil {
