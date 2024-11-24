@@ -108,6 +108,7 @@
 <div id="header">
 	<div class="progress-bar">
 		{{ range $i := NumRange .QuestionCount }}
+			<!-- TODO: this is currently broken -->
 			<button 
 				class="progress-bar-button"
 				hx-get="/student/course/{{ $.Module.CourseId }}/module/{{ $.Module.Id }}/question/{{ $i }}"
@@ -129,18 +130,33 @@
 	</div>
 </div>
 
-{{ if eq .ChosenChoiceId -1 }}
-	{{ template "question_form" . }}
-{{ else }}
-	{{ template "question_submitted" . }}
+{{ if eq .BlockType "content" }}
+	{{ template "content_block" . }}
+{{ else if eq .BlockType "question" }}
+	{{ if eq .ChosenChoiceId -1 }}
+		{{ template "question_form" . }}
+	{{ else }}
+		{{ template "question_submitted" . }}
+	{{ end }}
 {{ end }}
 
+{{ end }}
+
+{{ define "content_block" }}
+<div class="question">
+	{{ if not (eq .Content "") }}
+		<div class="explanation">
+			{{ .Content }}
+		</div>
+	{{ end }}
+</div>
+{{ template "next_button" . }}
 {{ end }}
 
 {{ define "question_form" }}
 <form
 	id="question-form"
-	hx-post="/student/course/{{ .Module.CourseId }}/module/{{ .Module.Id }}/question/{{ .QuestionIndex }}/answer"
+	hx-post="/student/course/{{ .Module.CourseId }}/module/{{ .Module.Id }}/block/{{ .QuestionIndex }}/answer"
 	hx-target="#question-form"
 	hx-swap="outerHTML"
 >
@@ -189,19 +205,23 @@
 	{{ end }}
 </div>
 
+{{ template "next_button" . }}
+
+{{ end }}
+
+{{ define "next_button" }}
 {{ if eq (Increment $.QuestionIndex) $.QuestionCount }}
 <a href="/student/course">
 <button id="submit-button">Done</button>
 </a>
 {{ else }}
+<!-- TODO scroll to new content on load -->
 <button
 	id="submit-button"
-	hx-get="/student/course/{{ $.Module.CourseId }}/module/{{ $.Module.Id }}/question/{{ Increment $.QuestionIndex }}/piece"
+	hx-get="/student/course/{{ $.Module.CourseId }}/module/{{ $.Module.Id }}/block/{{ Increment $.QuestionIndex }}/piece"
 	hx-target="#submit-button"
 	hx-swap="outerHTML"
 	hx-select-oob="#header"
 >Next</button>
-<!-- TODO scroll to new content on load -->
 {{ end }}
-
 {{ end }}

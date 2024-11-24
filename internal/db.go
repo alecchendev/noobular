@@ -292,7 +292,7 @@ order by b.block_index;
 `
 
 const getContentForBlockQuery = `
-select c.content
+select c.id, c.content
 from content c
 join content_blocks cb on c.id = cb.content_id
 where cb.block_id = ?;
@@ -330,10 +330,9 @@ type UiEditModule struct {
 
 type UiBlock struct {
 	BlockType BlockType
-	Content  UiContent
-	Question UiQuestion
+	Content   UiContent
+	Question  UiQuestion
 }
-
 
 type UiQuestion struct {
 	Id int
@@ -342,6 +341,15 @@ type UiQuestion struct {
 	QuestionText string
 	Choices      []UiChoice
 	Explanation  string
+}
+
+func NewUiQuestion(q Question, choices []Choice, explanation Content) UiQuestion {
+	questionIdx := rand.Int()
+	uiChoices := make([]UiChoice, len(choices))
+	for i, choice := range choices {
+		uiChoices[i] = NewUiChoice(questionIdx, choice)
+	}
+	return UiQuestion{q.Id, questionIdx, q.QuestionText, uiChoices, explanation.Content}
 }
 
 func EmptyQuestion() UiQuestion {
@@ -371,8 +379,12 @@ type UiChoice struct {
 	IsCorrect  bool
 }
 
-func EmptyChoice(questionId int) UiChoice {
-	return UiChoice{-1, questionId, rand.Int(), "", false}
+func NewUiChoice(questionIdx int, c Choice) UiChoice {
+	return UiChoice{c.Id, questionIdx, rand.Int(), c.ChoiceText, c.Correct}
+}
+
+func EmptyChoice(questionIdx int) UiChoice {
+	return UiChoice{-1, questionIdx, rand.Int(), "", false}
 }
 
 func (c UiChoice) ElementType() string {
@@ -419,7 +431,7 @@ func (c *DbClient) GetEditModule(courseId int, moduleId int) (UiEditModule, erro
 		if blockType == string(ContentBlockType) {
 			contentRow := c.db.QueryRow(getContentForBlockQuery, blockId)
 			contentBlock := EmptyContent()
-			err := contentRow.Scan(&contentBlock.Content)
+			err := contentRow.Scan(&contentBlock.Id, &contentBlock.Content)
 			if err == sql.ErrNoRows {
 				contentBlock.Content = ""
 			} else if err != nil {
@@ -544,6 +556,20 @@ const (
 	ContentBlockType  BlockType = "content"
 )
 
+func UpdateModuleMetadata(tx *sql.Tx, moduleId int, title string, description string) error {
+	_, err := tx.Exec(updateModuleQuery, title, description, moduleId)
+	return err
+}
+
+func DeleteContentForModule(tx *sql.Tx, moduleId int) error {
+	_, err := tx.Exec(deleteContentForModuleQuery, moduleId)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(deleteBlocksQuery, moduleId)
+	return err
+}
+
 func (c *DbClient) EditModule(moduleId int, title string, description string, blockTypes []string, contents []string, questions []string, choices [][]string, correctChoiceIdxs []int, explanations []string) error {
 	tx, err := c.db.Begin()
 	if err != nil {
@@ -664,7 +690,126 @@ func (c *DbClient) InsertQuestion(tx *sql.Tx, blockId int64, question string, ch
 	return nil
 }
 
+const getBlockQuery = `
+select b.id, b.module_id, b.block_index, b.block_type
+from blocks b
+where b.block_index = ?
+and b.module_id = ?;
+`
+
+func (c *DbClient) GetModule(moduleId int) (Module, error) {
+	moduleRow := c.db.QueryRow(getModuleQuery, moduleId)
+	var module Module
+	err := moduleRow.Scan(&module.Id, &module.CourseId, &module.Title, &module.Description)
+	if err != nil {
+		return Module{}, err
+	}
+	return module, nil
+}
+
+type Block struct {
+	Id         int
+	ModuleId   int
+	BlockIndex int
+	BlockType  BlockType
+}
+
+func (c *DbClient) GetBlock(moduleId int, blockIdx int) (Block, error) {
+	blockRow := c.db.QueryRow(getBlockQuery, blockIdx, moduleId)
+	block := Block{}
+	err := blockRow.Scan(&block.Id, &block.ModuleId, &block.BlockIndex, &block.BlockType)
+	if err != nil {
+		return Block{}, err
+	}
+	return block, nil
+}
+
 const getQuestionQuery = `
+select q.id, q.block_id, q.question_text
+from questions q
+where q.block_id = ?;
+`
+
+type Question struct {
+	Id           int
+	BlockId      int
+	QuestionText string
+}
+
+func (c *DbClient) GetQuestionFromBlock(blockId int) (Question, error) {
+	questionRow := c.db.QueryRow(getQuestionQuery, blockId)
+	question := Question{}
+	err := questionRow.Scan(&question.Id, &question.BlockId, &question.QuestionText)
+	if err != nil {
+		return Question{}, err
+	}
+	return question, nil
+}
+
+const getChoicesForQuestionQuery = `
+select ch.id, ch.question_id, ch.choice_text, ch.correct
+from choices ch
+where ch.question_id = ?
+order by ch.id;
+`
+
+type Choice struct {
+	Id         int
+	QuestionId int
+	ChoiceText string
+	Correct  bool
+}
+
+func (c *DbClient) GetChoicesForQuestion(questionId int) ([]Choice, error) {
+	choiceRows, err := c.db.Query(getChoicesForQuestionQuery, questionId)
+	if err != nil {
+		return nil, err
+	}
+	defer choiceRows.Close()
+	choices := []Choice{}
+	for choiceRows.Next() {
+		choice := Choice{}
+		err := choiceRows.Scan(&choice.Id, &choice.QuestionId, &choice.ChoiceText, &choice.Correct)
+		if err != nil {
+			return nil, err
+		}
+		choices = append(choices, choice)
+	}
+	if err := choiceRows.Err(); err != nil {
+		return nil, err
+	}
+	return choices, nil
+}
+
+func (c *DbClient) GetExplanationForQuestion(questionId int) (Content, error) {
+	explanationRow := c.db.QueryRow(getExplanationContentQuery, questionId)
+	content := Content{}
+	err := explanationRow.Scan(&content.Id, &content.Content)
+	if err != sql.ErrNoRows && err != nil {
+		return Content{}, err
+	} else if err == sql.ErrNoRows {
+		return Content{ -1, "" }, nil
+	} else {
+		return content, nil
+	}
+}
+
+type Content struct {
+	Id      int
+	Content string
+}
+
+func (c *DbClient) GetContentFromBlock(blockId int) (Content, error) {
+	contentRow := c.db.QueryRow(getContentForBlockQuery, blockId)
+	content := Content{}
+	err := contentRow.Scan(&content.Id, &content.Content)
+	if err != nil {
+		return Content{}, err
+	}
+	return content, nil
+}
+
+const getQuestionQueryBleh = `
 select q.id, q.question_text
 from questions q
 join blocks b on q.block_id = b.id
@@ -680,7 +825,7 @@ func (c *DbClient) GetModuleQuestion(moduleId int, questionIdx int) (UiModule, U
 		return UiModule{}, UiQuestion{}, err
 	}
 
-	questionRow := c.db.QueryRow(getQuestionQuery, moduleId, questionIdx)
+	questionRow := c.db.QueryRow(getQuestionQueryBleh, moduleId, questionIdx)
 	question := EmptyQuestion()
 	err = questionRow.Scan(&question.Id, &question.QuestionText)
 	if err != nil {
@@ -762,6 +907,22 @@ func (c *DbClient) GetAnswer(questionId int) (int, error) {
 	return choiceId, nil
 }
 
+const getBlockCountQuery = `
+select count(*)
+from blocks b
+where b.module_id = ?;
+`
+
+func (c *DbClient) GetBlockCount(moduleId int) (int, error) {
+	row := c.db.QueryRow(getBlockCountQuery, moduleId)
+	var blockCount int
+	err := row.Scan(&blockCount)
+	if err != nil {
+		return 0, err
+	}
+	return blockCount, nil
+}
+
 const getQuestionCountQuery = `
 select count(*)
 from questions q
@@ -840,7 +1001,7 @@ create table if not exists blocks (
 const createQuestionTable = `
 create table if not exists questions (
 	id integer primary key autoincrement,
-	block_id integer not null,
+	block_id integer not null unique,
 	question_text text not null,
 	foreign key (block_id) references blocks(id) on delete cascade
 );
@@ -868,7 +1029,7 @@ create table if not exists answers (
 const createContentBlockTable = `
 create table if not exists content_blocks (
 	id integer primary key autoincrement,
-	block_id integer not null,
+	block_id integer not null unique,
 	content_id integer not null,
 	foreign key (block_id) references blocks(id) on delete cascade,
 	foreign key (content_id) references content(id) on delete cascade

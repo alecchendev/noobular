@@ -115,7 +115,7 @@ func (r *Renderer) RenderNewQuestion(w http.ResponseWriter, question UiQuestion)
 type UiContent struct {
 	Id int
 	// This is a random integer created to differentiate questions in the UI.
-	Idx          int
+	Idx     int
 	Content string
 }
 
@@ -153,6 +153,8 @@ func (r *Renderer) RenderModuleEdited(w http.ResponseWriter) error {
 
 type UiTakeModule struct {
 	Module          UiModule
+	BlockType       string
+	Content         template.HTML
 	QuestionCount   int
 	QuestionIndex   int
 	ChosenChoiceId  int

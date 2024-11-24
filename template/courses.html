@@ -111,11 +111,11 @@ html {
 					<a class="edit-module-link" href="/course/{{$course.Id}}/module/{{.Id}}/edit">Edit</a>
 					{{ else }}
 					{{ if eq .NextUnansweredQuestionIdx 0 }}
-					<a class="edit-module-link" href="/student/course/{{$course.Id}}/module/{{.Id}}/question/0">Start</a>
+					<a class="edit-module-link" href="/student/course/{{$course.Id}}/module/{{.Id}}/block/0">Start</a>
 					{{ else }}{{ if lt .NextUnansweredQuestionIdx .QuestionCount }}
 					<a class="edit-module-link" href="/student/course/{{$course.Id}}/module/{{.Id}}/question/{{ .NextUnansweredQuestionIdx }}">Continue</a>
 					{{ else }}{{ if eq .NextUnansweredQuestionIdx .QuestionCount }}
-					<a class="edit-module-link" href="/student/course/{{$course.Id}}/module/{{.Id}}/question/0">Review</a>
+					<a class="edit-module-link" href="/student/course/{{$course.Id}}/module/{{.Id}}/block/0">Review</a>
 					{{ end }}{{ end }}{{ end }}
 					{{ end }}
 				</div>

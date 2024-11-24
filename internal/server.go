@@ -31,9 +31,9 @@ func initRouter(dbClient *DbClient) *http.ServeMux {
 	mux.Handle("/course/{courseId}/module/{moduleId}/edit", NewHandlerMap(dbClient).Get(handleEditModulePage).Put(handleEditModule).Delete(handleDeleteModule))
 	mux.Handle("/course", NewHandlerMap(dbClient).Get(handleCoursesPage))
 	mux.Handle("/student/course", NewHandlerMap(dbClient).Get(handleStudentCoursesPage))
-	mux.Handle("/student/course/{courseId}/module/{moduleId}/question/{questionIdx}", NewHandlerMap(dbClient).Get(handleTakeModulePage))
-	mux.Handle("/student/course/{courseId}/module/{moduleId}/question/{questionIdx}/piece", NewHandlerMap(dbClient).Get(handleTakeModule))
-	mux.Handle("/student/course/{courseId}/module/{moduleId}/question/{questionIdx}/answer", NewHandlerMap(dbClient).Post(handleAnswerQuestion))
+	mux.Handle("/student/course/{courseId}/module/{moduleId}/block/{blockIdx}", NewHandlerMap(dbClient).Get(handleTakeModulePage))
+	mux.Handle("/student/course/{courseId}/module/{moduleId}/block/{blockIdx}/piece", NewHandlerMap(dbClient).Get(handleTakeModule))
+	mux.Handle("/student/course/{courseId}/module/{moduleId}/block/{blockIdx}/answer", NewHandlerMap(dbClient).Post(handleAnswerQuestion))
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 	mux.Handle("/style/", http.StripPrefix("/style/", http.FileServer(http.Dir("style"))))
 	mux.Handle("/", NewHandlerMap(dbClient).Get(handleHomePage))
@@ -172,6 +172,8 @@ func handleStudentCoursesPage(w http.ResponseWriter, r *http.Request, ctx Handle
 			if err != nil {
 				return err
 			}
+			// TODO: this is broken. We should store the latest
+			// block they got to.
 			nextUnansweredQuestionIdx, err := ctx.dbClient.GetNextUnansweredQuestionIdx(module.Id)
 			if err != nil {
 				return err
@@ -480,54 +482,90 @@ func handleEditModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 func getTakeModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext) (UiTakeModule, error) {
 	// courseId, err := strconv.Atoi(r.PathValue("courseId"))
 	// if err != nil {
-	// return UiTakeModule{}, err
+	//	return UiTakeModule{}, err
 	// }
 	moduleId, err := strconv.Atoi(r.PathValue("moduleId"))
 	if err != nil {
 		return UiTakeModule{}, err
 	}
-	questionIdx, err := strconv.Atoi(r.PathValue("questionIdx"))
+	blockIdx, err := strconv.Atoi(r.PathValue("blockIdx"))
+	if err != nil {
+		return UiTakeModule{}, err
+	}
+	module, err := ctx.dbClient.GetModule(moduleId)
 	if err != nil {
 		return UiTakeModule{}, err
 	}
 	// TODO: add restrictions, i.e. you cannot take a question before a previous one
-	questionCount, err := ctx.dbClient.GetQuestionCount(moduleId)
+	blockCount, err := ctx.dbClient.GetBlockCount(moduleId)
 	if err != nil {
 		return UiTakeModule{}, err
 	}
-	if questionIdx >= questionCount {
-		return UiTakeModule{}, fmt.Errorf("Question index %d is out of bounds (>=%d) for module %d", questionIdx, questionCount, moduleId)
+	if blockIdx >= blockCount {
+		return UiTakeModule{}, fmt.Errorf("Block index %d is out of bounds (>=%d) for module %d", blockIdx, blockCount, moduleId)
 	}
-	module, question, err := ctx.dbClient.GetModuleQuestion(moduleId, questionIdx)
+	block, err := ctx.dbClient.GetBlock(moduleId, blockIdx)
 	if err != nil {
 		return UiTakeModule{}, err
 	}
-	choiceId, err := ctx.dbClient.GetAnswer(question.Id)
-	if err != nil {
-		return UiTakeModule{}, err
-	}
-	correctChoiceId := -1
-	for _, choice := range question.Choices {
-		if choice.IsCorrect {
-			correctChoiceId = choice.Id
-			break
+	// TODO: use a html sanitizer like blue monday?
+	if block.BlockType == QuestionBlockType {
+		question, err := ctx.dbClient.GetQuestionFromBlock(block.Id)
+		if err != nil {
+			return UiTakeModule{}, err
 		}
+		choiceId, err := ctx.dbClient.GetAnswer(question.Id)
+		if err != nil {
+			return UiTakeModule{}, err
+		}
+		choices, err := ctx.dbClient.GetChoicesForQuestion(question.Id)
+		correctChoiceId := -1
+		for _, choice := range choices {
+			if choice.Correct {
+				correctChoiceId = choice.Id
+				break
+			}
+		}
+		explanationContent, err := ctx.dbClient.GetExplanationForQuestion(question.Id)
+		var buf bytes.Buffer
+		if err := goldmark.Convert([]byte(explanationContent.Content), &buf); err != nil {
+			return UiTakeModule{}, err
+		}
+		explanation := template.HTML(buf.String())
+		return UiTakeModule{
+			Module:          NewUiModule(module),
+			BlockType:       string(QuestionBlockType),
+			Content:         template.HTML(""),
+			QuestionCount:   blockCount,
+			QuestionIndex:   blockIdx,
+			ChosenChoiceId:  choiceId,
+			CorrectChoiceId: correctChoiceId,
+			Question:        NewUiQuestion(question, choices, explanationContent),
+			Explanation:     explanation,
+		}, nil
+	} else if block.BlockType == ContentBlockType {
+		content, err := ctx.dbClient.GetContentFromBlock(block.Id)
+		if err != nil {
+			return UiTakeModule{}, err
+		}
+		var buf bytes.Buffer
+		if err := goldmark.Convert([]byte(content.Content), &buf); err != nil {
+			return UiTakeModule{}, err
+		}
+		return UiTakeModule{
+			Module:          NewUiModule(module),
+			BlockType:       string(ContentBlockType),
+			Content:         template.HTML(buf.String()),
+			QuestionCount:   blockCount,
+			QuestionIndex:   blockIdx,
+			ChosenChoiceId:  -1,
+			CorrectChoiceId: -1,
+			Question:        EmptyQuestion(),
+			Explanation:     template.HTML(""),
+		}, nil
+	} else {
+		return UiTakeModule{}, fmt.Errorf("Unknown block type %s", block.BlockType)
 	}
-	var buf bytes.Buffer
-	if err := goldmark.Convert([]byte(question.Explanation), &buf); err != nil {
-		return UiTakeModule{}, err
-	}
-	explanation := template.HTML(buf.String())
-	// TODO: use a sanitizer like blue monday?
-	return UiTakeModule{
-		Module:          module,
-		QuestionCount:   questionCount,
-		QuestionIndex:   questionIdx,
-		ChosenChoiceId:  choiceId,
-		CorrectChoiceId: correctChoiceId,
-		Question:        question,
-		Explanation:     explanation,
-	}, nil
 }
 
 func handleTakeModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
@@ -547,15 +585,7 @@ func handleTakeModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 }
 
 func handleAnswerQuestion(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
-	// courseId, err := strconv.Atoi(r.PathValue("courseId"))
-	// if err != nil {
-	// 	return err
-	// }
-	moduleId, err := strconv.Atoi(r.PathValue("moduleId"))
-	if err != nil {
-		return err
-	}
-	questionIdx, err := strconv.Atoi(r.PathValue("questionIdx"))
+	uiTakeModule, err := getTakeModule(w, r, ctx)
 	if err != nil {
 		return err
 	}
@@ -567,51 +597,22 @@ func handleAnswerQuestion(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	if err != nil {
 		return err
 	}
-	log.Println("Module:", moduleId)
-	log.Println("QuestionIdx:", questionIdx)
-	module, question, err := ctx.dbClient.GetModuleQuestion(moduleId, questionIdx)
 	if err != nil {
 		return err
 	}
-	log.Println("Question:", question.Id)
-	log.Println("Choice:", choiceId)
-	log.Println("Explanation:", question.Explanation)
-
-	err = ctx.dbClient.StoreAnswer(question.Id, choiceId)
+	err = ctx.dbClient.StoreAnswer(uiTakeModule.Question.Id, choiceId)
 	if err != nil {
 		return err
 	}
-
-	correctChoiceId := -1
-	for _, choice := range question.Choices {
-		if choice.IsCorrect {
-			correctChoiceId = choice.Id
-			break
-		}
-	}
-	if correctChoiceId == -1 {
-		return fmt.Errorf("Question %d has no correct choice", question.Id)
-	}
-	questionCount, err := ctx.dbClient.GetQuestionCount(moduleId)
-	if err != nil {
-		return err
-	}
-
-	var buf bytes.Buffer
-	if err := goldmark.Convert([]byte(question.Explanation), &buf); err != nil {
-		return err
-	}
-	explanation := template.HTML(buf.String())
-	// TODO: use a sanitizer like blue monday?
 
 	return ctx.renderer.RenderQuestionSubmitted(w, UiSubmittedAnswer{
-		Module:          module,
-		QuestionCount:   questionCount,
-		QuestionIndex:   questionIdx,
+		Module:          uiTakeModule.Module,
+		QuestionCount:   uiTakeModule.QuestionCount,
+		QuestionIndex:   uiTakeModule.QuestionIndex,
 		ChosenChoiceId:  choiceId,
-		CorrectChoiceId: correctChoiceId,
-		Question:        question,
-		Explanation:     explanation,
+		CorrectChoiceId: uiTakeModule.CorrectChoiceId,
+		Question:        uiTakeModule.Question,
+		Explanation:     uiTakeModule.Explanation,
 	})
 }
 
