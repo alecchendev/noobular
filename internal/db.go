@@ -235,12 +235,6 @@ join content_blocks cb on c.id = cb.content_id
 where cb.block_id = ?;
 `
 
-const getQuestionForBlockQuery = `
-select q.id, q.question_text
-from questions q
-where q.block_id = ?;
-`
-
 const getQuestionsQuery = `
 select q.id, q.question_text
 from questions q
@@ -248,14 +242,6 @@ join blocks b on q.block_id = b.id
 where b.module_id = ?
 order by q.id;
 `
-
-const getChoicesQuery = `
-select ch.id, ch.choice_text, ch.correct
-from choices ch
-where ch.question_id = ?
-order by ch.id;
-`
-
 
 const getBlocksQuery = `
 select b.id, b.module_id, b.block_index, b.block_type
@@ -349,13 +335,6 @@ insert into explanations(question_id, content_id)
 values(?, ?);
 `
 
-type BlockType string
-
-const (
-	QuestionBlockType BlockType = "question"
-	ContentBlockType  BlockType = "content"
-)
-
 func UpdateModuleMetadata(tx *sql.Tx, moduleId int, title string, description string) error {
 	_, err := tx.Exec(updateModuleQuery, title, description, moduleId)
 	return err
@@ -375,18 +354,13 @@ func (c *DbClient) EditModule(moduleId int, title string, description string, bl
 	if err != nil {
 		return err
 	}
-	_, err = tx.Exec(updateModuleQuery, title, description, moduleId)
+	err = UpdateModuleMetadata(tx, moduleId, title, description)
 	if err != nil {
 		tx.Rollback()
 		return err
 	}
 	// Delete all content pieces, and questions and choices for this module (deleting questions cascades to choices)
-	_, err = tx.Exec(deleteContentForModuleQuery, moduleId)
-	if err != nil {
-		tx.Rollback()
-		return err
-	}
-	_, err = tx.Exec(deleteBlocksQuery, moduleId)
+	err = DeleteContentForModule(tx, moduleId)
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -506,6 +480,13 @@ func (c *DbClient) GetModule(moduleId int) (Module, error) {
 	}
 	return module, nil
 }
+
+type BlockType string
+
+const (
+	QuestionBlockType BlockType = "question"
+	ContentBlockType  BlockType = "content"
+)
 
 type Block struct {
 	Id         int
