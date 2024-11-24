@@ -64,6 +64,132 @@ func initTemplates() map[string]*template.Template {
 	}
 }
 
+// Course struct for feeding into a template to be rendered
+type UiCourse struct {
+	Id          int
+	Title       string
+	Description string
+	Modules     []UiModule
+}
+
+func EmptyCourse() UiCourse {
+	return UiCourse{-1, "", "", []UiModule{}}
+}
+
+type UiCourseStudent struct {
+	Id          int
+	Title       string
+	Description string
+	Modules     []UiModuleStudent
+}
+
+type UiModule struct {
+	Id          int
+	CourseId    int
+	Title       string
+	Description string
+}
+
+func NewUiModule(m Module) UiModule {
+	return UiModule{m.Id, m.CourseId, m.Title, m.Description}
+}
+
+func EmptyModule() UiModule {
+	return UiModule{-1, -1, "", ""}
+}
+
+func (m UiModule) ElementType() string {
+	return "module"
+}
+
+func (m UiModule) ElementText() string {
+	return m.Title
+}
+
+func (m UiModule) IsEmpty() bool {
+	return m.Id == -1
+}
+
+type UiModuleStudent struct {
+	Id                        int
+	CourseId                  int
+	Title                     string
+	Description               string
+	QuestionCount             int
+	NextUnansweredQuestionIdx int
+}
+
+type UiBlock struct {
+	BlockType BlockType
+	Content   UiContent
+	Question  UiQuestion
+}
+
+type UiQuestion struct {
+	Id int
+	// This is a random integer created to differentiate questions in the UI.
+	Idx          int
+	QuestionText string
+	Choices      []UiChoice
+	Explanation  string
+}
+
+func NewUiQuestion(q Question, choices []Choice, explanation Content) UiQuestion {
+	questionIdx := rand.Int()
+	uiChoices := make([]UiChoice, len(choices))
+	for i, choice := range choices {
+		uiChoices[i] = NewUiChoice(questionIdx, choice)
+	}
+	return UiQuestion{q.Id, questionIdx, q.QuestionText, uiChoices, explanation.Content}
+}
+
+func EmptyQuestion() UiQuestion {
+	return UiQuestion{-1, rand.Int(), "", []UiChoice{}, ""}
+}
+
+func (q UiQuestion) ElementType() string {
+	return "question"
+}
+
+func (q UiQuestion) ElementText() string {
+	return q.QuestionText
+}
+
+func (q UiQuestion) IsEmpty() bool {
+	return q.Id == -1
+}
+
+type UiChoice struct {
+	Id int
+	// This is a random integer created to differentiate questions in the UI.
+	QuestionIdx int
+	/// A random idx just to differentiate choices in the UI
+	/// so that label elements can be associated with certain choices.
+	Idx        int
+	ChoiceText string
+	IsCorrect  bool
+}
+
+func NewUiChoice(questionIdx int, c Choice) UiChoice {
+	return UiChoice{c.Id, questionIdx, rand.Int(), c.ChoiceText, c.Correct}
+}
+
+func EmptyChoice(questionIdx int) UiChoice {
+	return UiChoice{-1, questionIdx, rand.Int(), "", false}
+}
+
+func (c UiChoice) ElementType() string {
+	return "choice"
+}
+
+func (c UiChoice) ElementText() string {
+	return c.ChoiceText
+}
+
+func (c UiChoice) IsEmpty() bool {
+	return c.Id == -1
+}
+
 type CoursePageArgs struct {
 	NewCourseId int
 	Editor      bool
@@ -145,6 +271,15 @@ func (r *Renderer) RenderNewContent(w http.ResponseWriter, content UiContent) er
 
 func (r *Renderer) RenderNewChoice(w http.ResponseWriter, choice UiChoice) error {
 	return r.templates["add_element.html"].ExecuteTemplate(w, "add_element.html", choice)
+}
+
+type UiEditModule struct {
+	CourseId    int
+	CourseTitle string
+	ModuleId    int
+	ModuleTitle string
+	ModuleDesc  string
+	Blocks      []UiBlock
 }
 
 func (r *Renderer) RenderEditModulePage(w http.ResponseWriter, module UiEditModule) error {
