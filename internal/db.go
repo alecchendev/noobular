@@ -284,13 +284,6 @@ from modules m
 where m.id = ?
 `
 
-const getBlocksQuery = `
-select b.id, b.block_index, b.block_type
-from blocks b
-where b.module_id = ?
-order by b.block_index;
-`
-
 const getContentForBlockQuery = `
 select c.id, c.content
 from content c
@@ -399,90 +392,32 @@ func (c UiChoice) IsEmpty() bool {
 	return c.Id == -1
 }
 
-func (c *DbClient) GetEditModule(courseId int, moduleId int) (UiEditModule, error) {
-	courseRow := c.db.QueryRow(getCourseQuery, courseId)
-	var module UiEditModule
-	var courseDescription string // stub
-	err := courseRow.Scan(&module.CourseId, &module.CourseTitle, &courseDescription)
-	if err != nil {
-		return UiEditModule{}, err
-	}
-	moduleRow := c.db.QueryRow(getModuleQuery, moduleId)
-	err = moduleRow.Scan(&module.ModuleId, &module.CourseId, &module.ModuleTitle, &module.ModuleDesc)
-	if err != nil {
-		return UiEditModule{}, err
-	}
+const getBlocksQuery = `
+select b.id, b.module_id, b.block_index, b.block_type
+from blocks b
+where b.module_id = ?
+order by b.block_index;
+`
 
+func (c *DbClient) GetBlocks(moduleId int) ([]Block, error) {
 	blockRows, err := c.db.Query(getBlocksQuery, moduleId)
 	if err != nil {
-		return UiEditModule{}, err
+		return nil, err
 	}
 	defer blockRows.Close()
+	blocks := []Block{}
 	for blockRows.Next() {
-		var blockId int
-		var blockIndex int
-		var blockType string
-		err := blockRows.Scan(&blockId, &blockIndex, &blockType)
+		var block Block
+		err := blockRows.Scan(&block.Id, &block.ModuleId, &block.BlockIndex, &block.BlockType)
 		if err != nil {
-			return UiEditModule{}, err
+			return nil, err
 		}
-		block := UiBlock{}
-		block.BlockType = BlockType(blockType)
-		if blockType == string(ContentBlockType) {
-			contentRow := c.db.QueryRow(getContentForBlockQuery, blockId)
-			contentBlock := EmptyContent()
-			err := contentRow.Scan(&contentBlock.Id, &contentBlock.Content)
-			if err == sql.ErrNoRows {
-				contentBlock.Content = ""
-			} else if err != nil {
-				return UiEditModule{}, err
-			}
-			block.Content = contentBlock
-		} else if blockType == string(QuestionBlockType) {
-			question := EmptyQuestion()
-			questionRow := c.db.QueryRow(getQuestionForBlockQuery, blockId)
-			err := questionRow.Scan(&question.Id, &question.QuestionText)
-			if err != nil {
-				return UiEditModule{}, err
-			}
-
-			choiceRows, err := c.db.Query(getChoicesQuery, question.Id)
-			if err != nil {
-				return UiEditModule{}, err
-			}
-			defer choiceRows.Close()
-			for choiceRows.Next() {
-				choice := EmptyChoice(question.Idx)
-				err := choiceRows.Scan(&choice.Id, &choice.ChoiceText, &choice.IsCorrect)
-				if err != nil {
-					return UiEditModule{}, err
-				}
-				question.Choices = append(question.Choices, choice)
-			}
-			if err := choiceRows.Err(); err != nil {
-				return UiEditModule{}, err
-			}
-
-			explanationRow := c.db.QueryRow(getExplanationContentQuery, question.Id)
-			var contentId int64
-			var content string
-			err = explanationRow.Scan(&contentId, &content)
-			if err != nil && err != sql.ErrNoRows {
-				return UiEditModule{}, err
-			}
-			if err == nil {
-				question.Explanation = content
-			}
-			block.Question = question
-		} else {
-			return UiEditModule{}, fmt.Errorf("invalid block type: %s", blockType)
-		}
-		module.Blocks = append(module.Blocks, block)
+		blocks = append(blocks, block)
 	}
 	if err := blockRows.Err(); err != nil {
-		return UiEditModule{}, err
+		return nil, err
 	}
-	return module, nil
+	return blocks, nil
 }
 
 const updateModuleQuery = `

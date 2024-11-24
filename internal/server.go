@@ -358,11 +358,54 @@ func handleEditModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	if err != nil {
 		return err
 	}
-	uiEditModule, err := ctx.dbClient.GetEditModule(courseId, moduleId)
+	course, err := ctx.dbClient.GetCourse(courseId)
 	if err != nil {
 		return err
 	}
-	return ctx.renderer.RenderEditModulePage(w, uiEditModule)
+	module, err := ctx.dbClient.GetModule(moduleId)
+	if err != nil {
+		return err
+	}
+	blocks, err := ctx.dbClient.GetBlocks(moduleId)
+	if err != nil {
+		return err
+	}
+	uiBlocks := make([]UiBlock, len(blocks))
+	for _, block := range blocks {
+		uiBlock := UiBlock{BlockType: block.BlockType}
+		if block.BlockType == ContentBlockType {
+			content, err := ctx.dbClient.GetContentFromBlock(block.Id)
+			if err != nil {
+				return err
+			}
+			uiBlock.Content = NewUiContent(content)
+		} else if block.BlockType == QuestionBlockType {
+			question, err := ctx.dbClient.GetQuestionFromBlock(block.Id)
+			if err != nil {
+				return err
+			}
+			choices, err := ctx.dbClient.GetChoicesForQuestion(question.Id)
+			if err != nil {
+				return err
+			}
+			explanation, err := ctx.dbClient.GetExplanationForQuestion(question.Id)
+			if err != nil {
+				return err
+			}
+			uiBlock.Question = NewUiQuestion(question, choices, explanation)
+		} else {
+			return fmt.Errorf("invalid block type: %s", block.BlockType)
+		}
+		uiBlocks = append(uiBlocks, uiBlock)
+	}
+	return ctx.renderer.RenderEditModulePage(w, UiEditModule{
+		CourseId:    courseId,
+		CourseTitle: course.Title,
+		ModuleId:    moduleId,
+		ModuleTitle: module.Title,
+		ModuleDesc:  module.Description,
+		Blocks:      uiBlocks,
+	})
 }
 
 type editModuleRequest struct {

@@ -119,6 +119,10 @@ type UiContent struct {
 	Content string
 }
 
+func NewUiContent(content Content) UiContent {
+	return UiContent{content.Id, rand.Int(), content.Content}
+}
+
 func EmptyContent() UiContent {
 	return UiContent{-1, rand.Int(), ""}
 }
