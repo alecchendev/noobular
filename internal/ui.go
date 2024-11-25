@@ -294,8 +294,8 @@ type UiTakeModule struct {
 	Module          UiModule
 	BlockType       string
 	Content         template.HTML
-	QuestionCount   int
-	QuestionIndex   int
+	BlockCount      int
+	BlockIndex      int
 	ChosenChoiceId  int
 	CorrectChoiceId int
 	Question        UiQuestion
@@ -313,8 +313,8 @@ func (r *Renderer) RenderTakeModule(w http.ResponseWriter, module UiTakeModule) 
 
 type UiSubmittedAnswer struct {
 	Module          UiModule
-	QuestionCount   int
-	QuestionIndex   int
+	BlockCount      int
+	BlockIndex      int
 	ChosenChoiceId  int
 	CorrectChoiceId int
 	Question        UiQuestion

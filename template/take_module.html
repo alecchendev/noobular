@@ -58,7 +58,7 @@
 	cursor: default;
 }
 
-.question {
+.block {
 	margin-top: 1rem;
 	border: 1px solid #e0e0e0;
 	border-radius: 10px;
@@ -108,15 +108,15 @@
 
 <div id="header">
 	<div class="progress-bar">
-		{{ range $i := NumRange .QuestionCount }}
+		{{ range $i := NumRange .BlockCount }}
 			<!-- TODO: make this traverse module -->
 			<button 
 				class="progress-bar-button"
 			>
 			<div
-				{{ if lt $i $.QuestionIndex }}
+				{{ if lt $i $.BlockIndex }}
 				class="progress-bar-button-span green-bg"
-				{{ else if eq $i $.QuestionIndex }}
+				{{ else if eq $i $.BlockIndex }}
 				class="progress-bar-button-span blue-bg"
 				{{ else }}
 				class="progress-bar-button-span gray-bg"
@@ -141,7 +141,7 @@
 {{ end }}
 
 {{ define "content_block" }}
-<div id="block-{{ .QuestionIndex }}" class="question">
+<div id="block-{{ .BlockIndex }}" class="block">
 	{{ if not (eq .Content "") }}
 		<div class="explanation">
 			{{ .Content }}
@@ -154,11 +154,11 @@
 {{ define "question_form" }}
 <form
 	id="question-form"
-	hx-post="/student/course/{{ .Module.CourseId }}/module/{{ .Module.Id }}/block/{{ .QuestionIndex }}/answer"
+	hx-post="/student/course/{{ .Module.CourseId }}/module/{{ .Module.Id }}/block/{{ .BlockIndex }}/answer"
 	hx-target="#question-form"
 	hx-swap="outerHTML"
 >
-	<div id="block-{{ .QuestionIndex }}" class="question">
+	<div id="block-{{ .BlockIndex }}" class="block">
 		<h2>{{ .Question.QuestionText }}</h2>
 		<div class="choices">
 		{{ range $choice := .Question.Choices }}
@@ -174,7 +174,7 @@
 {{ end }}
 
 {{ define "question_submitted" }}
-<div id="block-{{ .QuestionIndex }}" class="question">
+<div id="block-{{ .BlockIndex }}" class="block">
 	<h2>{{ .Question.QuestionText }}</h2>
 	<div class="choices">
 	{{ range $choice := .Question.Choices }}
@@ -208,7 +208,7 @@
 {{ end }}
 
 {{ define "next_button" }}
-{{ if eq (Increment $.QuestionIndex) $.QuestionCount }}
+{{ if eq (Increment $.BlockIndex) $.BlockCount }}
 <a href="/student/course">
 <button id="submit-button">Done</button>
 </a>
@@ -216,9 +216,9 @@
 <!-- TODO scroll to new content on load -->
 <button
 	id="submit-button"
-	hx-get="/student/course/{{ $.Module.CourseId }}/module/{{ $.Module.Id }}/block/{{ Increment $.QuestionIndex }}/piece"
+	hx-get="/student/course/{{ $.Module.CourseId }}/module/{{ $.Module.Id }}/block/{{ Increment $.BlockIndex }}/piece"
 	hx-target="#submit-button"
-	hx-swap="outerHTML show:#block-{{ Increment $.QuestionIndex }}:top settle:100ms transition:true"
+	hx-swap="outerHTML show:#block-{{ Increment $.BlockIndex }}:top settle:100ms transition:true"
 	hx-select-oob="#header"
 >Next</button>
 {{ end }}
