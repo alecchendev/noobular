@@ -222,6 +222,29 @@ func (c *DbClient) GetCourse(courseId int) (Course, error) {
 	return course, nil
 }
 
+const deleteCourseQuery = `
+delete from courses
+where id = ?;
+`
+
+func (c *DbClient) DeleteCourse(courseId int) error {
+	tx, err := c.db.Begin()
+	modules, err := c.GetModules(courseId, false)
+	for _, module := range modules {
+		_, err = tx.Exec(deleteContentForModuleQuery, module.Id)
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+	_, err = tx.Exec(deleteCourseQuery, courseId)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	return tx.Commit()
+}
+
 const getModuleQuery = `
 select m.id, m.course_id, m.title, m.description
 from modules m

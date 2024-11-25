@@ -27,6 +27,12 @@ html {
 	align-items: center;
 }
 
+.delete-edit-container {
+	display: flex;
+	justify-content: space-between;
+	gap: 1rem;
+}
+
 .module-toggle {
 	display: none;
 }
@@ -90,9 +96,12 @@ html {
 	<div id="course-{{$course.Id}}" class="course">
 		<div class="course-title-edit-container">
 			<h2 class="course-title">{{.Title}}</h2>
-			{{ if $.Editor }}
-			<a class="edit-course-link" href="/course/{{$course.Id}}/edit">Edit</a>
-			{{ end }}
+			<div class="delete-edit-container">
+				{{ if $.Editor }}
+				<a class="edit-course-link" href="/course/{{$course.Id}}/edit">Edit</a>
+				{{ template "delete_course_link" $course }}
+				{{ end }}
+			</div>
 		</div>
 		<p>{{.Description}}</p>
 		<input type="checkbox"
@@ -116,8 +125,7 @@ html {
 					<a class="edit-module-link" href="/student/course/{{$course.Id}}/module/{{.Id}}/question/{{ .NextUnansweredQuestionIdx }}">Continue</a>
 					{{ else }}{{ if eq .NextUnansweredQuestionIdx .QuestionCount }}
 					<a class="edit-module-link" href="/student/course/{{$course.Id}}/module/{{.Id}}/block/0">Review</a>
-					{{ end }}{{ end }}{{ end }}
-					{{ end }}
+					{{ end }}{{ end }}{{ end }}{{ end }}
 				</div>
 				<p>{{.Description}}</p>
 			</div>
@@ -126,4 +134,15 @@ html {
 	</div>
 	{{end}}
 </div>
+{{ end }}
+
+{{ define "delete_course_link" }}
+<a
+	class="edit-course-link"
+	href="#"
+	hx-delete="/course/{{ .Id }}"
+	hx-confirm="Note: Deleting this course will also delete all its modules and associated content. Are you sure you want to delete this course?"
+	hx-target="closest .course"
+	hx-swap="outerHTML"
+	>Delete</a>
 {{ end }}

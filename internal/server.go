@@ -24,6 +24,7 @@ func initRouter(dbClient *DbClient) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.Handle("/course/create", NewHandlerMap(dbClient).Get(handleCreateCoursePage).Post(handleCreateCourse))
 	mux.Handle("/course/{courseId}/edit", NewHandlerMap(dbClient).Get(handleEditCoursePage).Put(handleEditCourse))
+	mux.Handle("/course/{courseId}", NewHandlerMap(dbClient).Delete(handleDeleteCourse))
 	mux.Handle("/ui/{questionIdx}/choice", NewHandlerMap(dbClient).Get(handleAddChoice))
 	mux.Handle("/ui/{element}", NewHandlerMap(dbClient).Get(handleAddElement).Delete(handleDeleteElement))
 	// This is kinda a weird place to put the deleteModuleHandler because it's on a different page
@@ -190,6 +191,20 @@ func handleStudentCoursesPage(w http.ResponseWriter, r *http.Request, ctx Handle
 		uiCourses[i] = UiCourseStudent{course.Id, course.Title, course.Description, uiModules}
 	}
 	return ctx.renderer.RenderStudentCoursePage(w, uiCourses)
+}
+
+// Delete course (on teacher courses page)
+
+func handleDeleteCourse(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
+	courseId, err := strconv.Atoi(r.PathValue("courseId"))
+	if err != nil {
+		return err
+	}
+	err = ctx.dbClient.DeleteCourse(courseId)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // Create course page
