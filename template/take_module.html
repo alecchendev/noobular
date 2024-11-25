@@ -143,7 +143,7 @@
 {{ end }}
 
 {{ define "content_block" }}
-<div class="question">
+<div id="block-{{ .QuestionIndex }}" class="question">
 	{{ if not (eq .Content "") }}
 		<div class="explanation">
 			{{ .Content }}
@@ -160,7 +160,7 @@
 	hx-target="#question-form"
 	hx-swap="outerHTML"
 >
-	<div class="question">
+	<div id="block-{{ .QuestionIndex }}" class="question">
 		<h2>{{ .Question.QuestionText }}</h2>
 		<div class="choices">
 		{{ range $choice := .Question.Choices }}
@@ -176,7 +176,7 @@
 {{ end }}
 
 {{ define "question_submitted" }}
-<div class="question">
+<div id="block-{{ .QuestionIndex }}" class="question">
 	<h2>{{ .Question.QuestionText }}</h2>
 	<div class="choices">
 	{{ range $choice := .Question.Choices }}
@@ -220,7 +220,7 @@
 	id="submit-button"
 	hx-get="/student/course/{{ $.Module.CourseId }}/module/{{ $.Module.Id }}/block/{{ Increment $.QuestionIndex }}/piece"
 	hx-target="#submit-button"
-	hx-swap="outerHTML"
+	hx-swap="outerHTML show:#block-{{ Increment $.QuestionIndex }}:top settle:100ms transition:true"
 	hx-select-oob="#header"
 >Next</button>
 {{ end }}

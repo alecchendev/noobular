@@ -8,6 +8,7 @@ html, body {
 	width: 800px;
 	margin: auto;
 	margin-bottom: 150px;
+	scroll-behavior: smooth;
 }
 
 * {
