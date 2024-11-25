@@ -54,7 +54,8 @@
 }
 
 .progress-bar-button:hover {
-	cursor: pointer;
+	/* TODO: reenable */
+	cursor: default;
 }
 
 .question {
@@ -108,12 +109,9 @@
 <div id="header">
 	<div class="progress-bar">
 		{{ range $i := NumRange .QuestionCount }}
-			<!-- TODO: this is currently broken -->
+			<!-- TODO: make this traverse module -->
 			<button 
 				class="progress-bar-button"
-				hx-get="/student/course/{{ $.Module.CourseId }}/module/{{ $.Module.Id }}/question/{{ $i }}"
-				hx-target="body"
-				hx-swap="innerHTML"
 			>
 			<div
 				{{ if lt $i $.QuestionIndex }}
