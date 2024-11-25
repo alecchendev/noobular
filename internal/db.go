@@ -591,11 +591,18 @@ func (c *DbClient) GetContentFromBlock(blockId int) (Content, error) {
 }
 
 func (c *DbClient) DeleteModule(moduleId int) error {
-	_, err := c.db.Exec("delete from modules where id = ?;", moduleId)
+	tx, err := c.db.Begin()
+	_, err = tx.Exec(deleteContentForModuleQuery, moduleId)
 	if err != nil {
+		tx.Rollback()
 		return err
 	}
-	return nil
+	_, err = tx.Exec("delete from modules where id = ?;", moduleId)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	return tx.Commit()
 }
 
 const storeAnswerQuery = `
