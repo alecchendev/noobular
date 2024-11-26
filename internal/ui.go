@@ -50,6 +50,7 @@ func initTemplates() map[string]*template.Template {
 		// Pages
 		"index.html":   template.Must(template.ParseFiles("template/page.html", "template/index.html")),
 		"signup.html": template.Must(template.ParseFiles("template/page.html", "template/signup.html")),
+		"student.html": template.Must(template.ParseFiles("template/page.html", "template/student.html")),
 		"courses.html": template.Must(template.ParseFiles("template/page.html", "template/courses.html")),
 		"create_course.html": template.Must(template.New("").Funcs(funcMap).ParseFiles(
 			"template/page.html", "template/create_course.html",
@@ -209,6 +210,14 @@ func (r *Renderer) RenderHomePage(w http.ResponseWriter) error {
 
 func (r *Renderer) RenderSignupPage(w http.ResponseWriter) error {
 	return r.templates["signup.html"].ExecuteTemplate(w, "page.html", nil)
+}
+
+type StudentPageArgs struct {
+	Username string
+}
+
+func (r *Renderer) RenderStudentPage(w http.ResponseWriter, args StudentPageArgs) error {
+	return r.templates["student.html"].ExecuteTemplate(w, "page.html", args)
 }
 
 func (r *Renderer) RenderTeacherCoursePage(w http.ResponseWriter, courses []UiCourse, newCourseId int) error {

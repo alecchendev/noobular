@@ -7,49 +7,55 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/yuin/goldmark"
 )
 
-func NewServer(dbClient *DbClient, port int) *http.Server {
-	router := initRouter(dbClient)
+func NewServer(dbClient *DbClient, jwtSecret []byte, port int) *http.Server {
+	router := initRouter(dbClient, jwtSecret)
 	return &http.Server{
 		Addr:    fmt.Sprintf(":%d", port),
 		Handler: router,
 	}
 }
 
-func initRouter(dbClient *DbClient) *http.ServeMux {
+func initRouter(dbClient *DbClient, jwtSecret []byte) *http.ServeMux {
+	newHandlerMap := func() HandlerMap {
+		return NewHandlerMap(dbClient, jwtSecret)
+	}
 	mux := http.NewServeMux()
-	mux.Handle("/signup", NewHandlerMap(dbClient).Get(handleSignupPage).Post(handleSignup))
-	mux.Handle("/course/create", NewHandlerMap(dbClient).Get(handleCreateCoursePage).Post(handleCreateCourse))
-	mux.Handle("/course/{courseId}/edit", NewHandlerMap(dbClient).Get(handleEditCoursePage).Put(handleEditCourse))
-	mux.Handle("/course/{courseId}", NewHandlerMap(dbClient).Delete(handleDeleteCourse))
-	mux.Handle("/ui/{questionIdx}/choice", NewHandlerMap(dbClient).Get(handleAddChoice))
-	mux.Handle("/ui/{element}", NewHandlerMap(dbClient).Get(handleAddElement).Delete(handleDeleteElement))
+	mux.Handle("/signup", newHandlerMap().Get(handleSignupPage).Post(handleSignup))
+	mux.Handle("/student", newHandlerMap().Get(authHandler(handleStudentPage)))
+	mux.Handle("/course/create", newHandlerMap().Get(handleCreateCoursePage).Post(handleCreateCourse))
+	mux.Handle("/course/{courseId}/edit", newHandlerMap().Get(handleEditCoursePage).Put(handleEditCourse))
+	mux.Handle("/course/{courseId}", newHandlerMap().Delete(handleDeleteCourse))
+	mux.Handle("/ui/{questionIdx}/choice", newHandlerMap().Get(handleAddChoice))
+	mux.Handle("/ui/{element}", newHandlerMap().Get(handleAddElement).Delete(handleDeleteElement))
 	// This is kinda a weird place to put the deleteModuleHandler because it's on a different page
 	// (the edit course page) but it's fine for now.
-	mux.Handle("/course/{courseId}/module/{moduleId}/edit", NewHandlerMap(dbClient).Get(handleEditModulePage).Put(handleEditModule).Delete(handleDeleteModule))
-	mux.Handle("/course", NewHandlerMap(dbClient).Get(handleCoursesPage))
-	mux.Handle("/student/course", NewHandlerMap(dbClient).Get(handleStudentCoursesPage))
-	mux.Handle("/student/course/{courseId}/module/{moduleId}/block/{blockIdx}", NewHandlerMap(dbClient).Get(handleTakeModulePage))
-	mux.Handle("/student/course/{courseId}/module/{moduleId}/block/{blockIdx}/piece", NewHandlerMap(dbClient).Get(handleTakeModule))
-	mux.Handle("/student/course/{courseId}/module/{moduleId}/block/{blockIdx}/answer", NewHandlerMap(dbClient).Post(handleAnswerQuestion))
+	mux.Handle("/course/{courseId}/module/{moduleId}/edit", newHandlerMap().Get(handleEditModulePage).Put(handleEditModule).Delete(handleDeleteModule))
+	mux.Handle("/course", newHandlerMap().Get(handleCoursesPage))
+	mux.Handle("/student/course", newHandlerMap().Get(handleStudentCoursesPage))
+	mux.Handle("/student/course/{courseId}/module/{moduleId}/block/{blockIdx}", newHandlerMap().Get(handleTakeModulePage))
+	mux.Handle("/student/course/{courseId}/module/{moduleId}/block/{blockIdx}/piece", newHandlerMap().Get(handleTakeModule))
+	mux.Handle("/student/course/{courseId}/module/{moduleId}/block/{blockIdx}/answer", newHandlerMap().Post(handleAnswerQuestion))
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 	mux.Handle("/style/", http.StripPrefix("/style/", http.FileServer(http.Dir("style"))))
-	mux.Handle("/", NewHandlerMap(dbClient).Get(handleHomePage))
+	mux.Handle("/", newHandlerMap().Get(handleHomePage))
 	return mux
 }
 
 // Things that all handlers should have access to
 type HandlerContext struct {
-	dbClient *DbClient
-	renderer Renderer
+	dbClient  *DbClient
+	renderer  Renderer
+	jwtSecret []byte
 }
 
-func NewHandlerContext(dbClient *DbClient, renderer Renderer) HandlerContext {
-	return HandlerContext{dbClient, renderer}
+func NewHandlerContext(dbClient *DbClient, renderer Renderer, jwtSecret []byte) HandlerContext {
+	return HandlerContext{dbClient, renderer, jwtSecret}
 }
 
 // Basically an http.Handle but returns an error
@@ -93,10 +99,10 @@ func (hm HandlerMap) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 }
 
-func NewHandlerMap(dbClient *DbClient) HandlerMap {
+func NewHandlerMap(dbClient *DbClient, jwtSecret []byte) HandlerMap {
 	return HandlerMap{
 		handlers:        make(map[string]HandlerMapHandler),
-		ctx:             NewHandlerContext(dbClient, NewRenderer()),
+		ctx:             NewHandlerContext(dbClient, NewRenderer(), jwtSecret),
 		reloadTemplates: true,
 	}
 }
@@ -119,6 +125,22 @@ func (hm HandlerMap) Put(handler HandlerMapHandler) HandlerMap {
 func (hm HandlerMap) Delete(handler HandlerMapHandler) HandlerMap {
 	hm.handlers["DELETE"] = handler
 	return hm
+}
+
+type UserHandler func(http.ResponseWriter, *http.Request, HandlerContext, int64) error
+
+func authHandler(handler UserHandler) HandlerMapHandler {
+	return func(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
+		tokenCookie, err := r.Cookie("session_token")
+		if err != nil {
+			return fmt.Errorf("No session token")
+		}
+		userId, err := ValidateJwt(ctx.jwtSecret, tokenCookie.Value)
+		if err != nil {
+			return err
+		}
+		return handler(w, r, ctx, userId)
+	}
 }
 
 // Home page
@@ -146,15 +168,38 @@ func handleSignup(w http.ResponseWriter, r *http.Request, ctx HandlerContext) er
 	if username == "" {
 		return fmt.Errorf("Username cannot be empty")
 	}
-	err = ctx.dbClient.CreateUser(username)
+	userId, err := ctx.dbClient.CreateUser(username)
 	if err != nil {
 		return err
 	}
 	// TODO: passkeys/webauthn
-	// TODO: jwt to stay logged in
-	// TODO: redirect to student specific course page
-	w.Header().Add("HX-Redirect", fmt.Sprintf("/student/course"))
+	expiry := time.Now().Add(24 * time.Hour)
+	token, err := CreateJwt(ctx.jwtSecret, userId, expiry)
+	if err != nil {
+		return err
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session_token",
+		Value:    token,
+		Expires:  expiry,
+		HttpOnly: true,                 // Not accessible to client side code
+		SameSite: http.SameSiteLaxMode, // Cannot send cookie to other domains
+		// TODO: make it easy to switch between local/prod
+		Secure:   false,                // HTTPS only, need to disable locally
+		Path:     "/",
+	})
+	w.Header().Add("HX-Redirect", fmt.Sprintf("/student"))
 	return nil
+}
+
+// Student page
+
+func handleStudentPage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
+	user, err := ctx.dbClient.GetUser(userId)
+	if err != nil {
+		return err
+	}
+	return ctx.renderer.RenderStudentPage(w, StudentPageArgs{user.Username})
 }
 
 // Courses page

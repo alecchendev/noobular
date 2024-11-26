@@ -43,9 +43,31 @@ insert into users(username)
 values(?);
 `
 
-func (c *DbClient) CreateUser(username string) error {
-	_, err := c.db.Exec(insertUserQuery, username)
-	return err
+func (c *DbClient) CreateUser(username string) (int64, error) {
+	res, err := c.db.Exec(insertUserQuery, username)
+	if err != nil {
+		return 0, err
+	}
+	userId, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	return userId, nil
+}
+
+type User struct {
+	Id       int
+	Username string
+}
+
+func (c *DbClient) GetUser(userId int64) (User, error) {
+	row := c.db.QueryRow("select id, username from users where id = ?;", userId)
+	var user User
+	err := row.Scan(&user.Id, &user.Username)
+	if err != nil {
+		return User{}, err
+	}
+	return user, nil
 }
 
 const insertCourseQuery = `
