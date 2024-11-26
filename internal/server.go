@@ -27,6 +27,7 @@ func initRouter(dbClient *DbClient, jwtSecret []byte) *http.ServeMux {
 	}
 	mux := http.NewServeMux()
 	mux.Handle("/signup", newHandlerMap().Get(handleSignupPage).Post(handleSignup))
+	mux.Handle("/signin", newHandlerMap().Get(handleSigninPage).Post(handleSignin))
 	mux.Handle("/student", newHandlerMap().Get(authHandler(handleStudentPage)))
 	mux.Handle("/course/create", newHandlerMap().Get(handleCreateCoursePage).Post(handleCreateCourse))
 	mux.Handle("/course/{courseId}/edit", newHandlerMap().Get(handleEditCoursePage).Put(handleEditCourse))
@@ -133,11 +134,15 @@ func authHandler(handler UserHandler) HandlerMapHandler {
 	return func(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
 		tokenCookie, err := r.Cookie("session_token")
 		if err != nil {
-			return fmt.Errorf("No session token")
+			log.Println("No session token")
+			http.Redirect(w, r, "/signin", http.StatusSeeOther)
+			return nil
 		}
 		userId, err := ValidateJwt(ctx.jwtSecret, tokenCookie.Value)
 		if err != nil {
-			return err
+			log.Println("Invalid session token:", err)
+			http.Redirect(w, r, "/signin", http.StatusSeeOther)
+			return nil
 		}
 		return handler(w, r, ctx, userId)
 	}
@@ -159,6 +164,24 @@ func handleSignupPage(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 	return ctx.renderer.RenderSignupPage(w)
 }
 
+func createAuthCookie(jwtSecret []byte, userId int64) (http.Cookie, error) {
+	expiry := time.Now().Add(24 * time.Hour)
+	token, err := CreateJwt(jwtSecret, userId, expiry)
+	if err != nil {
+		return http.Cookie{}, err
+	}
+	return http.Cookie{
+		Name:     "session_token",
+		Value:    token,
+		Expires:  expiry,
+		HttpOnly: true,                 // Not accessible to client side code
+		SameSite: http.SameSiteLaxMode, // Cannot send cookie to other domains
+		// TODO: make it easy to switch between local/prod
+		Secure:   false,                // HTTPS only, need to disable locally
+		Path:     "/",
+	}, nil
+}
+
 func handleSignup(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
 	err := r.ParseForm()
 	if err != nil {
@@ -173,21 +196,34 @@ func handleSignup(w http.ResponseWriter, r *http.Request, ctx HandlerContext) er
 		return err
 	}
 	// TODO: passkeys/webauthn
-	expiry := time.Now().Add(24 * time.Hour)
-	token, err := CreateJwt(ctx.jwtSecret, userId, expiry)
+	cookie, err := createAuthCookie(ctx.jwtSecret, userId)
+	http.SetCookie(w, &cookie)
+	w.Header().Add("HX-Redirect", fmt.Sprintf("/student"))
+	return nil
+}
+
+// Sign in page
+
+func handleSigninPage(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
+	return ctx.renderer.RenderSigninPage(w)
+}
+
+func handleSignin(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
+	err := r.ParseForm()
 	if err != nil {
 		return err
 	}
-	http.SetCookie(w, &http.Cookie{
-		Name:     "session_token",
-		Value:    token,
-		Expires:  expiry,
-		HttpOnly: true,                 // Not accessible to client side code
-		SameSite: http.SameSiteLaxMode, // Cannot send cookie to other domains
-		// TODO: make it easy to switch between local/prod
-		Secure:   false,                // HTTPS only, need to disable locally
-		Path:     "/",
-	})
+	username := r.Form.Get("username")
+	if username == "" {
+		return fmt.Errorf("Username cannot be empty")
+	}
+	user, err := ctx.dbClient.GetUserByUsername(username)
+	if err != nil {
+		return err
+	}
+	// TODO: passkeys/webauthn
+	cookie, err := createAuthCookie(ctx.jwtSecret, user.Id)
+	http.SetCookie(w, &cookie)
 	w.Header().Add("HX-Redirect", fmt.Sprintf("/student"))
 	return nil
 }

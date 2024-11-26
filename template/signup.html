@@ -46,9 +46,25 @@ form {
 {{ define "content" }}
 
 <div id="signup-container">
+	{{ if .Signin }}
+	<h1>Signin</h1>
+	{{ else }}
 	<h1>Signup</h1>
-	<form hx-post="/signup">
-		<input type="text" id="username" name="username" placeholder="What should we call you?" required autofocus>
+	{{ end }}
+	<form
+		{{ if .Signin }}
+		hx-post="/signin"
+		{{ else }}
+		hx-post="/signup"
+		{{ end }}
+	>
+		<input type="text" id="username" name="username"
+		{{ if .Signin }}
+		placeholder="Username"
+		{{ else }}
+		placeholder="What should we call you?"
+		{{ end }}
+		required autofocus>
 		<button id="submit-button" type="submit">Submit</button>
 	</form>
 </div>

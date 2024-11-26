@@ -208,8 +208,16 @@ func (r *Renderer) RenderHomePage(w http.ResponseWriter) error {
 	return r.templates["index.html"].ExecuteTemplate(w, "page.html", nil)
 }
 
+type SignupPageArgs struct {
+	Signin bool
+}
+
 func (r *Renderer) RenderSignupPage(w http.ResponseWriter) error {
-	return r.templates["signup.html"].ExecuteTemplate(w, "page.html", nil)
+	return r.templates["signup.html"].ExecuteTemplate(w, "page.html", SignupPageArgs{false})
+}
+
+func (r *Renderer) RenderSigninPage(w http.ResponseWriter) error {
+	return r.templates["signup.html"].ExecuteTemplate(w, "page.html", SignupPageArgs{true})
 }
 
 type StudentPageArgs struct {
