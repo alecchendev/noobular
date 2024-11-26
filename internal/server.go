@@ -22,6 +22,7 @@ func NewServer(dbClient *DbClient, port int) *http.Server {
 
 func initRouter(dbClient *DbClient) *http.ServeMux {
 	mux := http.NewServeMux()
+	mux.Handle("/signup", NewHandlerMap(dbClient).Get(handleSignupPage).Post(handleSignup))
 	mux.Handle("/course/create", NewHandlerMap(dbClient).Get(handleCreateCoursePage).Post(handleCreateCourse))
 	mux.Handle("/course/{courseId}/edit", NewHandlerMap(dbClient).Get(handleEditCoursePage).Put(handleEditCourse))
 	mux.Handle("/course/{courseId}", NewHandlerMap(dbClient).Delete(handleDeleteCourse))
@@ -128,6 +129,32 @@ func handleHomePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext) 
 		return fmt.Errorf("Not found")
 	}
 	return ctx.renderer.RenderHomePage(w)
+}
+
+// Sign up page
+
+func handleSignupPage(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
+	return ctx.renderer.RenderSignupPage(w)
+}
+
+func handleSignup(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
+	err := r.ParseForm()
+	if err != nil {
+		return err
+	}
+	username := r.Form.Get("username")
+	if username == "" {
+		return fmt.Errorf("Username cannot be empty")
+	}
+	err = ctx.dbClient.CreateUser(username)
+	if err != nil {
+		return err
+	}
+	// TODO: passkeys/webauthn
+	// TODO: jwt to stay logged in
+	// TODO: redirect to student specific course page
+	w.Header().Add("HX-Redirect", fmt.Sprintf("/student/course"))
+	return nil
 }
 
 // Courses page

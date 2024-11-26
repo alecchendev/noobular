@@ -38,6 +38,16 @@ func (c *DbClient) Close() {
 	c.db.Close()
 }
 
+const insertUserQuery = `
+insert into users(username)
+values(?);
+`
+
+func (c *DbClient) CreateUser(username string) error {
+	_, err := c.db.Exec(insertUserQuery, username)
+	return err
+}
+
 const insertCourseQuery = `
 insert into courses(title, description)
 values(?, ?);
@@ -810,6 +820,14 @@ create table if not exists explanations (
 );
 `
 
+// TODO: webauthn/passkeys
+const createUserTable = `
+create table if not exists users (
+	id integer primary key autoincrement,
+	username string not null unique
+);
+`
+
 func initDb(db *sql.DB) {
 	tx, err := db.Begin()
 	if err != nil {
@@ -825,6 +843,7 @@ func initDb(db *sql.DB) {
 		createContentBlockTable,
 		createContentTable,
 		createExplanationTable,
+		createUserTable,
 	}
 	for _, stmt := range stmts {
 		_, err := tx.Exec(stmt)
