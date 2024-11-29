@@ -177,7 +177,7 @@ where c.user_id = ? and m.id = ?;
 `
 
 func (c *DbClient) GetModuleCourse(userId int64, moduleId int) (Course, error) {
-	row := c.db.QueryRow(getCourseQuery, userId, moduleId)
+	row := c.db.QueryRow(getModuleCourseQuery, userId, moduleId)
 	var course Course
 	err := row.Scan(&course.Id, &course.Title, &course.Description)
 	if err != nil {
@@ -188,10 +188,10 @@ func (c *DbClient) GetModuleCourse(userId int64, moduleId int) (Course, error) {
 
 const deleteCourseQuery = `
 delete from courses
-where id = ?;
+where user_id = ? and id = ?;
 `
 
-func (c *DbClient) DeleteCourse(courseId int) error {
+func (c *DbClient) DeleteCourse(userId int64, courseId int) error {
 	tx, err := c.db.Begin()
 	modules, err := c.GetModules(courseId, false)
 	for _, module := range modules {
@@ -201,7 +201,7 @@ func (c *DbClient) DeleteCourse(courseId int) error {
 			return err
 		}
 	}
-	_, err = tx.Exec(deleteCourseQuery, courseId)
+	_, err = tx.Exec(deleteCourseQuery, userId, courseId)
 	if err != nil {
 		tx.Rollback()
 		return err

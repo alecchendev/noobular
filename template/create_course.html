@@ -57,7 +57,7 @@ form {
 
 {{ if $edit }}
 <div class="path">
-	<a href="/course">Courses</a> &gt; <a href="/course/{{ .Id }}/edit">{{ .Title }}</a>
+	<a href="/teacher">Courses</a> &gt; <a href="/course/{{ .Id }}/edit">{{ .Title }}</a>
 </div>
 <h1>Edit Course</h1>
 {{ else }}
@@ -65,7 +65,7 @@ form {
 {{ end }}
 <form
     {{ if $edit }}
-    hx-put="/course/{{ .Id }}/edit"
+    hx-put="/course/{{ .Id }}"
     hx-target="#response-message"
     hx-swap="outerHTML"
     {{ else }}

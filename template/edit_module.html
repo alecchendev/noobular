@@ -65,12 +65,12 @@ button {
 {{ end }}
 {{ define "content" }}
 <div class="path">
-	<a href="/course">Courses</a> &gt; <a href="/course/{{ .CourseId }}/edit">{{ .CourseTitle }}</a> &gt; {{ .ModuleTitle }}
+	<a href="/teacher">Courses</a> &gt; <a href="/course/{{ .CourseId }}/edit">{{ .CourseTitle }}</a> &gt; {{ .ModuleTitle }}
 </div>
 <h1>Edit Module</h1>
 <p>Note: Content blocks and question explanations expect <a href="https://commonmark.org/help/">markdown</a>.</p>
 <form
-    hx-put="/course/{{ .CourseId }}/module/{{ .ModuleId }}/edit"
+    hx-put="/course/{{ .CourseId }}/module/{{ .ModuleId }}"
     hx-target="#response-message"
     hx-swap="outerHTML"
 >

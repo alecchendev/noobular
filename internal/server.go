@@ -45,13 +45,12 @@ func initRouter(dbClient *db.DbClient, jwtSecret []byte) *http.ServeMux {
 
 	// TODO: make these sub routes of teacher
 	mux.Handle("/course/create", newHandlerMap().Get(authHandler(handleCreateCoursePage)).Post(authHandler(handleCreateCourse)))
-	mux.Handle("/course/{courseId}/edit", newHandlerMap().Get(authHandler(handleEditCoursePage)).Put(authHandler(handleEditCourse)))
-	mux.Handle("/course/{courseId}", newHandlerMap().Delete(handleDeleteCourse))
+	mux.Handle("/course/{courseId}/edit", newHandlerMap().Get(authHandler(handleEditCoursePage)))
+	mux.Handle("/course/{courseId}", newHandlerMap().Put(authHandler(handleEditCourse)).Delete(authHandler(handleDeleteCourse)))
+	mux.Handle("/course/{courseId}/module/{moduleId}", newHandlerMap().Put(authHandler(handleEditModule)).Delete(authHandler(handleDeleteModule)))
 	mux.Handle("/ui/{questionIdx}/choice", newHandlerMap().Get(handleAddChoice))
 	mux.Handle("/ui/{element}", newHandlerMap().Get(handleAddElement).Delete(handleDeleteElement))
-	// This is kinda a weird place to put the deleteModuleHandler because it's on a different page
-	// (the edit course page) but it's fine for now.
-	mux.Handle("/course/{courseId}/module/{moduleId}/edit", newHandlerMap().Get(authHandler(handleEditModulePage)).Put(authHandler(handleEditModule)).Delete(handleDeleteModule))
+	mux.Handle("/course/{courseId}/module/{moduleId}/edit", newHandlerMap().Get(authHandler(handleEditModulePage)))
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 	mux.Handle("/style/", http.StripPrefix("/style/", http.FileServer(http.Dir("style"))))
 	mux.Handle("/", newHandlerMap().Get(handleHomePage))
@@ -371,12 +370,12 @@ func handleStudentCoursesPage(w http.ResponseWriter, r *http.Request, ctx Handle
 
 // Delete course (on teacher courses page)
 
-func handleDeleteCourse(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
+func handleDeleteCourse(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
 	courseId, err := strconv.Atoi(r.PathValue("courseId"))
 	if err != nil {
 		return err
 	}
-	err = ctx.dbClient.DeleteCourse(courseId)
+	err = ctx.dbClient.DeleteCourse(userId, courseId)
 	if err != nil {
 		return err
 	}
@@ -524,8 +523,12 @@ func handleDeleteElement(w http.ResponseWriter, r *http.Request, ctx HandlerCont
 	return nil
 }
 
-func handleDeleteModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
+func handleDeleteModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
 	moduleId, err := strconv.Atoi(r.PathValue("moduleId"))
+	if err != nil {
+		return err
+	}
+	_, err = ctx.dbClient.GetModuleCourse(userId, moduleId)
 	if err != nil {
 		return err
 	}
@@ -706,7 +709,7 @@ func handleEditModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 	}
 	_, err = ctx.dbClient.GetModuleCourse(userId, req.moduleId)
 	if err != nil {
-		return err
+		return fmt.Errorf("Module %d not found", req.moduleId)
 	}
 	err = ctx.dbClient.EditModule(req.moduleId, req.title, req.description, req.blockTypes, req.contents, req.questions, req.choicesByQuestion, req.correctChoiceIdxs, req.explanations)
 	if err != nil {
