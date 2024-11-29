@@ -12,6 +12,11 @@ create table if not exists users (
 );
 `
 
+type User struct {
+	Id       int64
+	Username string
+}
+
 const insertUserQuery = `
 insert into users(username)
 values(?);
@@ -27,11 +32,6 @@ func (c *DbClient) CreateUser(username string) (int64, error) {
 		return 0, err
 	}
 	return userId, nil
-}
-
-type User struct {
-	Id       int64
-	Username string
 }
 
 func (c *DbClient) GetUser(userId int64) (User, error) {

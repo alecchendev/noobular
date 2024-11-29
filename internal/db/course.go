@@ -17,16 +17,16 @@ create table if not exists courses (
 );
 `
 
-const insertCourseQuery = `
-insert into courses(user_id, title, description)
-values(?, ?, ?);
-`
-
 type Course struct {
 	Id          int
 	Title       string
 	Description string
 }
+
+const insertCourseQuery = `
+insert into courses(user_id, title, description)
+values(?, ?, ?);
+`
 
 func (c *DbClient) CreateCourse(userId int64, title string, description string, moduleTitles []string, moduleDescriptions []string) (Course, []Module, error) {
 	if len(moduleTitles) != len(moduleDescriptions) {
@@ -45,15 +45,10 @@ func (c *DbClient) CreateCourse(userId int64, title string, description string, 
 	for i := 0; i < len(moduleTitles); i++ {
 		moduleTitle := moduleTitles[i]
 		moduleDescription := moduleDescriptions[i]
-		res, err = c.db.Exec(insertModuleQuery, courseId, moduleTitle, moduleDescription)
+		module, err := c.CreateModule(int(courseId), moduleTitle, moduleDescription)
 		if err != nil {
 			return Course{}, []Module{}, err
 		}
-		moduleId, err := res.LastInsertId()
-		if err != nil {
-			return Course{}, []Module{}, err
-		}
-		module := Module{int(moduleId), course.Id, moduleTitle, moduleDescription}
 		modules[i] = module
 	}
 	return course, modules, nil
@@ -69,7 +64,7 @@ func (c *DbClient) EditCourse(courseId int, title string, description string, mo
 	if len(moduleTitles) != len(moduleDescriptions) || len(moduleTitles) != len(moduleIds) {
 		return Course{}, []Module{}, fmt.Errorf("moduleTitles, moduleDescriptions, and moduleIds must have the same length, got titles: %d, descs: %d, ids: %d", len(moduleTitles), len(moduleDescriptions), len(moduleIds))
 	}
-	res, err := c.db.Exec(updateCourseQuery, title, description, courseId)
+	_, err := c.db.Exec(updateCourseQuery, title, description, courseId)
 	if err != nil {
 		return Course{}, []Module{}, err
 	}
@@ -81,15 +76,11 @@ func (c *DbClient) EditCourse(courseId int, title string, description string, mo
 		moduleDescription := moduleDescriptions[i]
 		// -1 means this is a new module
 		if moduleId == -1 {
-			res, err = c.db.Exec(insertModuleQuery, courseId, moduleTitle, moduleDescription)
+			module, err := c.CreateModule(courseId, moduleTitle, moduleDescription)
 			if err != nil {
 				return Course{}, []Module{}, err
 			}
-			moduleIdInt64, err := res.LastInsertId()
-			if err != nil {
-				return Course{}, []Module{}, err
-			}
-			moduleId = int(moduleIdInt64)
+			moduleId = module.Id
 		} else {
 			_, err = c.db.Exec(updateModuleQuery, moduleTitle, moduleDescription, moduleId)
 			if err != nil {

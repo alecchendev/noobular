@@ -29,6 +29,18 @@ insert into modules(course_id, title, description)
 values(?, ?, ?);
 `
 
+func (c *DbClient) CreateModule(courseId int, moduleTitle string, moduleDescription string) (Module, error) {
+	res, err := c.db.Exec(insertModuleQuery, courseId, moduleTitle, moduleDescription)
+	if err != nil {
+		return Module{}, err
+	}
+	moduleId, err := res.LastInsertId()
+	if err != nil {
+		return Module{}, err
+	}
+	return Module{int(moduleId), courseId, moduleTitle, moduleDescription}, nil
+}
+
 const getModulesQuery = `
 select m.id, m.course_id, m.title, m.description
 from modules m
