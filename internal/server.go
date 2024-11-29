@@ -30,7 +30,11 @@ func initRouter(dbClient *DbClient, jwtSecret []byte) *http.ServeMux {
 	mux.Handle("/signin", newHandlerMap().Get(handleSigninPage).Post(handleSignin))
 	mux.Handle("/logout", newHandlerMap().Get(authHandler(handleLogout)))
 
+	mux.Handle("/browse", newHandlerMap().Get(handleBrowsePage))
+
 	mux.Handle("/student", newHandlerMap().Get(authHandler(handleStudentPage)))
+	mux.Handle("/teacher", newHandlerMap().Get(authHandler(handleTeacherCoursesPage)))
+
 	mux.Handle("/student/course", newHandlerMap().Get(authHandler(handleStudentCoursesPage)))
 	mux.Handle("/student/course/{courseId}/module/{moduleId}/block/{blockIdx}", newHandlerMap().Get(handleTakeModulePage))
 	mux.Handle("/student/course/{courseId}/module/{moduleId}/block/{blockIdx}/piece", newHandlerMap().Get(handleTakeModule))
@@ -44,7 +48,6 @@ func initRouter(dbClient *DbClient, jwtSecret []byte) *http.ServeMux {
 	// This is kinda a weird place to put the deleteModuleHandler because it's on a different page
 	// (the edit course page) but it's fine for now.
 	mux.Handle("/course/{courseId}/module/{moduleId}/edit", newHandlerMap().Get(handleEditModulePage).Put(handleEditModule).Delete(handleDeleteModule))
-	mux.Handle("/course", newHandlerMap().Get(handleCoursesPage))
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 	mux.Handle("/style/", http.StripPrefix("/style/", http.FileServer(http.Dir("style"))))
 	mux.Handle("/", newHandlerMap().Get(handleHomePage))
@@ -251,6 +254,32 @@ func handleLogout(w http.ResponseWriter, r *http.Request, ctx HandlerContext, us
 	return nil
 }
 
+// Browse page
+
+func handleBrowsePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
+	_, err := checkCookie(r, ctx.jwtSecret)
+	loggedIn := err == nil
+	// Copied from teacher's course page
+	courses, err := ctx.dbClient.GetCourses(false)
+	if err != nil {
+		return err
+	}
+	uiCourses := make([]UiCourse, len(courses))
+	for i, course := range courses {
+		modules, err := ctx.dbClient.GetModules(course.Id, false)
+		if err != nil {
+			return err
+		}
+		uiModules := make([]UiModule, len(modules))
+		for j, module := range modules {
+			uiModules[j] = NewUiModule(module)
+		}
+		uiCourses[i] = UiCourse{course.Id, course.Title, course.Description, uiModules}
+	}
+	return ctx.renderer.RenderBrowsePage(w, uiCourses, loggedIn)
+}
+
+
 // Student page
 
 func handleStudentPage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
@@ -263,11 +292,12 @@ func handleStudentPage(w http.ResponseWriter, r *http.Request, ctx HandlerContex
 
 // Courses page
 
-func handleCoursesPage(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
+func handleTeacherCoursesPage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
 	newCourseId, err := strconv.Atoi(r.URL.Query().Get("newCourse"))
 	if err != nil {
 		newCourseId = -1
 	}
+	// TODO: only get courses created by this user
 	courses, err := ctx.dbClient.GetCourses(false)
 	if err != nil {
 		return err

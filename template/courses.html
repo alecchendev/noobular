@@ -87,7 +87,11 @@ html {
 }
 {{ end }}
 {{ define "content" }}
+{{ if .Editor }}
 <h1>My Courses</h1>
+{{ else }}
+<h1>Courses</h1>
+{{ end }}
 <div class="courses">
 	{{range $course := .Courses }}
 	{{ if eq $course.Id $.NewCourseId }}
@@ -116,6 +120,8 @@ html {
 			<div id="{{$course.Id}}-module-{{.Id}}" class="module">
 				<div class="edit-module">
 					<h3 class="module-title">{{.Title}}</h3>
+					{{ if not $.LoggedIn }}
+					{{ else }}
 					{{ if $.Editor }}
 					<a class="edit-module-link" href="/course/{{$course.Id}}/module/{{.Id}}/edit">Edit</a>
 					{{ else }}
@@ -125,7 +131,7 @@ html {
 					<a class="edit-module-link" href="/student/course/{{$course.Id}}/module/{{.Id}}/question/{{ .NextUnansweredQuestionIdx }}">Continue</a>
 					{{ else }}{{ if eq .NextUnansweredQuestionIdx .QuestionCount }}
 					<a class="edit-module-link" href="/student/course/{{$course.Id}}/module/{{.Id}}/block/0">Review</a>
-					{{ end }}{{ end }}{{ end }}{{ end }}
+					{{ end }}{{ end }}{{ end }}{{ end }}{{ end }}
 				</div>
 				<p>{{.Description}}</p>
 			</div>

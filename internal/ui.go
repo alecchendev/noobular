@@ -100,6 +100,9 @@ func (r *Renderer) RenderSigninPage(w http.ResponseWriter) error {
 	return r.templates["signup.html"].ExecuteTemplate(w, "page.html", NewPageArgs(true, false, SignupPageArgs{true}))
 }
 
+func (r *Renderer) RenderBrowsePage(w http.ResponseWriter, courses []UiCourse, loggedIn bool) error {
+	return r.templates["courses.html"].ExecuteTemplate(w, "page.html", NewPageArgs(true, loggedIn, CoursePageArgs{0, false, loggedIn, courses}))
+}
 
 // Course struct for feeding into a template to be rendered
 type UiCourse struct {
@@ -230,12 +233,14 @@ func (c UiChoice) IsEmpty() bool {
 type CoursePageArgs struct {
 	NewCourseId int
 	Editor      bool
+	LoggedIn    bool
 	Courses     []UiCourse
 }
 
 type CoursePageArgsStudent struct {
 	NewCourseId int
 	Editor      bool
+	LoggedIn    bool
 	Courses     []UiCourseStudent
 }
 
@@ -244,15 +249,15 @@ type StudentPageArgs struct {
 }
 
 func (r *Renderer) RenderStudentPage(w http.ResponseWriter, args StudentPageArgs) error {
-	return r.templates["student.html"].ExecuteTemplate(w, "page.html", args)
+	return r.templates["student.html"].ExecuteTemplate(w, "page.html", NewPageArgs(true, true, args))
 }
 
 func (r *Renderer) RenderTeacherCoursePage(w http.ResponseWriter, courses []UiCourse, newCourseId int) error {
-	return r.templates["courses.html"].ExecuteTemplate(w, "page.html", CoursePageArgs{newCourseId, true, courses})
+	return r.templates["courses.html"].ExecuteTemplate(w, "page.html", NewPageArgs(true, true, CoursePageArgs{newCourseId, true, true, courses}))
 }
 
 func (r *Renderer) RenderStudentCoursePage(w http.ResponseWriter, courses []UiCourseStudent) error {
-	return r.templates["courses.html"].ExecuteTemplate(w, "page.html", CoursePageArgsStudent{0, false, courses})
+	return r.templates["courses.html"].ExecuteTemplate(w, "page.html", CoursePageArgsStudent{0, false, false, courses})
 }
 
 func (r *Renderer) RenderCreateCoursePage(w http.ResponseWriter) error {
