@@ -22,6 +22,14 @@ insert into blocks(module_id, block_index, block_type)
 values(?, ?, ?);
 `
 
+func InsertBlock(tx *sql.Tx, moduleId int, blockIdx int, blockType BlockType) (int64, error) {
+	res, err := tx.Exec(insertBlockQuery, moduleId, blockIdx, blockType)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
 const insertContentBlockQuery = `
 insert into content_blocks(block_id, content_id)
 values(?, ?);
@@ -103,11 +111,6 @@ func (c *DbClient) GetBlock(moduleId int, blockIdx int) (Block, error) {
 	}
 	return block, nil
 }
-
-const deleteBlocksQuery = `
-delete from blocks
-where module_id = ?;
-`
 
 const getBlockCountQuery = `
 select count(*)

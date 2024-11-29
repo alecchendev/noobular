@@ -111,12 +111,23 @@ func UpdateModuleMetadata(tx *sql.Tx, moduleId int, title string, description st
 	return err
 }
 
+const deleteContentForModuleQuery = `
+with module_block_ids as (
+	select id from blocks where module_id = ?
+)
+delete from content
+where id in (
+    select content_id from content_blocks where block_id in module_block_ids
+)
+or id in (
+    select content_id from explanations where question_id in (
+        select id from questions where block_id in module_block_ids
+    )
+);
+`
+
 func DeleteContentForModule(tx *sql.Tx, moduleId int) error {
 	_, err := tx.Exec(deleteContentForModuleQuery, moduleId)
-	if err != nil {
-		return err
-	}
-	_, err = tx.Exec(deleteBlocksQuery, moduleId)
 	return err
 }
 
@@ -139,12 +150,11 @@ func (c *DbClient) EditModule(moduleId int, title string, description string, bl
 	questionIdx := 0
 	contentIdx := 0
 	for i, blockType := range blockTypes {
-		res, err := tx.Exec(insertBlockQuery, moduleId, i, blockType)
+		blockId, err := InsertBlock(tx, moduleId, i, BlockType(blockType))
 		if err != nil {
 			tx.Rollback()
 			return err
 		}
-		blockId, err := res.LastInsertId()
 		if blockType == string(ContentBlockType) {
 			err = c.InsertContentBlock(tx, blockId, contents[contentIdx])
 			if err != nil {
@@ -186,24 +196,9 @@ func (c *DbClient) GetModule(moduleId int) (Module, error) {
 	return module, nil
 }
 
-const deleteContentForModuleQuery = `
-with module_block_ids as (
-	select id from blocks where module_id = ?
-)
-delete from content
-where id in (
-    select content_id from content_blocks where block_id in module_block_ids
-)
-or id in (
-    select content_id from explanations where question_id in (
-        select id from questions where block_id in module_block_ids
-    )
-);
-`
-
 func (c *DbClient) DeleteModule(moduleId int) error {
 	tx, err := c.db.Begin()
-	_, err = tx.Exec(deleteContentForModuleQuery, moduleId)
+	err = DeleteContentForModule(tx, moduleId)
 	if err != nil {
 		tx.Rollback()
 		return err
