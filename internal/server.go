@@ -219,12 +219,12 @@ func handleSignup(w http.ResponseWriter, r *http.Request, ctx HandlerContext) er
 	if username == "" {
 		return fmt.Errorf("Username cannot be empty")
 	}
-	userId, err := ctx.dbClient.CreateUser(username)
+	user, err := ctx.dbClient.CreateUser(username)
 	if err != nil {
 		return err
 	}
 	// TODO: passkeys/webauthn
-	cookie, err := createAuthCookie(ctx.jwtSecret, userId)
+	cookie, err := createAuthCookie(ctx.jwtSecret, user.Id)
 	http.SetCookie(w, &cookie)
 	w.Header().Add("HX-Redirect", fmt.Sprintf("/student"))
 	return nil
