@@ -64,8 +64,10 @@ func (c *DbClient) EditCourse(courseId int, title string, description string, mo
 	if len(moduleTitles) != len(moduleDescriptions) || len(moduleTitles) != len(moduleIds) {
 		return Course{}, []Module{}, fmt.Errorf("moduleTitles, moduleDescriptions, and moduleIds must have the same length, got titles: %d, descs: %d, ids: %d", len(moduleTitles), len(moduleDescriptions), len(moduleIds))
 	}
-	_, err := c.db.Exec(updateCourseQuery, title, description, courseId)
+	tx, err := c.db.Begin()
+	_, err = tx.Exec(updateCourseQuery, title, description, courseId)
 	if err != nil {
+		tx.Rollback()
 		return Course{}, []Module{}, err
 	}
 	course := Course{courseId, title, description}
@@ -76,19 +78,25 @@ func (c *DbClient) EditCourse(courseId int, title string, description string, mo
 		moduleDescription := moduleDescriptions[i]
 		// -1 means this is a new module
 		if moduleId == -1 {
-			module, err := c.CreateModule(courseId, moduleTitle, moduleDescription)
+			module, err := CreateModule(tx, courseId, moduleTitle, moduleDescription)
 			if err != nil {
+				tx.Rollback()
 				return Course{}, []Module{}, err
 			}
 			moduleId = module.Id
 		} else {
-			_, err = c.db.Exec(updateModuleQuery, moduleTitle, moduleDescription, moduleId)
+			err = UpdateModuleMetadata(tx, moduleId, moduleTitle, moduleDescription)
 			if err != nil {
+				tx.Rollback()
 				return Course{}, []Module{}, err
 			}
 		}
 		module := Module{moduleId, course.Id, moduleTitle, moduleDescription}
 		modules[i] = module
+	}
+	err = tx.Commit()
+	if err != nil {
+		return Course{}, []Module{}, err
 	}
 	return course, modules, nil
 }

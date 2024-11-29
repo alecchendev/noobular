@@ -30,7 +30,24 @@ values(?, ?, ?);
 `
 
 func (c *DbClient) CreateModule(courseId int, moduleTitle string, moduleDescription string) (Module, error) {
-	res, err := c.db.Exec(insertModuleQuery, courseId, moduleTitle, moduleDescription)
+	tx, err := c.db.Begin()
+	if err != nil {
+		return Module{}, err
+	}
+	module, err := CreateModule(tx, courseId, moduleTitle, moduleDescription)
+	if err != nil {
+		tx.Rollback()
+		return Module{}, err
+	}
+	err = tx.Commit()
+	if err != nil {
+		return Module{}, err
+	}
+	return module, nil
+}
+
+func CreateModule(tx *sql.Tx, courseId int, moduleTitle string, moduleDescription string) (Module, error) {
+	res, err := tx.Exec(insertModuleQuery, courseId, moduleTitle, moduleDescription)
 	if err != nil {
 		return Module{}, err
 	}
