@@ -81,8 +81,8 @@ func (c *DbClient) GetUserByUsername(username string) (User, error) {
 }
 
 const insertCourseQuery = `
-insert into courses(title, description)
-values(?, ?);
+insert into courses(user_id, title, description)
+values(?, ?, ?);
 `
 
 const insertModuleQuery = `
@@ -90,11 +90,11 @@ insert into modules(course_id, title, description)
 values(?, ?, ?);
 `
 
-func (c *DbClient) CreateCourse(title string, description string, moduleTitles []string, moduleDescriptions []string) (Course, []Module, error) {
+func (c *DbClient) CreateCourse(userId int64, title string, description string, moduleTitles []string, moduleDescriptions []string) (Course, []Module, error) {
 	if len(moduleTitles) != len(moduleDescriptions) {
 		return Course{}, []Module{}, fmt.Errorf("moduleTitles and moduleDescriptions must have the same length")
 	}
-	res, err := c.db.Exec(insertCourseQuery, title, description)
+	res, err := c.db.Exec(insertCourseQuery, userId, title, description)
 	if err != nil {
 		return Course{}, []Module{}, err
 	}
@@ -212,6 +212,13 @@ from courses c
 order by c.id;
 `
 
+const getUserCoursesQuery = `
+select c.id, c.title, c.description
+from courses c
+where c.user_id = ?
+order by c.id;
+`
+
 const getCoursesWithModulesWithBlocksQuery = `
 select distinct c.id, c.title, c.description
 from courses c
@@ -220,14 +227,16 @@ join blocks b on m.id = b.module_id
 order by c.id;
 `
 
-func (c *DbClient) GetCourses(forStudent bool) ([]Course, error) {
-	var query string
+func (c *DbClient) GetCourses(userId int64, forStudent bool) ([]Course, error) {
+	var courseRows *sql.Rows
+	var err error
 	if forStudent {
-		query = getCoursesWithModulesWithBlocksQuery
+		courseRows, err = c.db.Query(getCoursesWithModulesWithBlocksQuery)
+	} else if userId != -1 {
+		courseRows, err = c.db.Query(getUserCoursesQuery, userId)
 	} else {
-		query = getCoursesQuery
+		courseRows, err = c.db.Query(getCoursesQuery)
 	}
-	courseRows, err := c.db.Query(query)
 	if err != nil {
 		return nil, err
 	}
@@ -251,11 +260,28 @@ func (c *DbClient) GetCourses(forStudent bool) ([]Course, error) {
 const getCourseQuery = `
 select c.id, c.title, c.description
 from courses c
-where c.id = ?;
+where c.user_id = ? and c.id = ?;
 `
 
-func (c *DbClient) GetCourse(courseId int) (Course, error) {
-	row := c.db.QueryRow(getCourseQuery, courseId)
+func (c *DbClient) GetCourse(userId int64, courseId int) (Course, error) {
+	row := c.db.QueryRow(getCourseQuery, userId, courseId)
+	var course Course
+	err := row.Scan(&course.Id, &course.Title, &course.Description)
+	if err != nil {
+		return Course{}, err
+	}
+	return course, nil
+}
+
+const getModuleCourseQuery = `
+select c.id, c.title, c.description
+from modules m
+join courses c on m.course_id = c.id
+where c.user_id = ? and m.id = ?;
+`
+
+func (c *DbClient) GetModuleCourse(userId int64, moduleId int) (Course, error) {
+	row := c.db.QueryRow(getCourseQuery, userId, moduleId)
 	var course Course
 	err := row.Scan(&course.Id, &course.Title, &course.Description)
 	if err != nil {
@@ -771,8 +797,10 @@ func (c *DbClient) GetNextUnansweredQuestionIdx(moduleId int) (int, error) {
 const createCourseTable = `
 create table if not exists courses (
 	id integer primary key autoincrement,
+	user_id integer not null,
 	title text not null,
-	description text not null
+	description text not null,
+	foreign key (user_id) references users(id) on delete cascade
 );
 `
 

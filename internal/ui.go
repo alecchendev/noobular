@@ -261,7 +261,7 @@ func (r *Renderer) RenderStudentCoursePage(w http.ResponseWriter, courses []UiCo
 }
 
 func (r *Renderer) RenderCreateCoursePage(w http.ResponseWriter) error {
-	return r.templates["create_course.html"].ExecuteTemplate(w, "page.html", EmptyCourse())
+	return r.templates["create_course.html"].ExecuteTemplate(w, "page.html", NewPageArgs(true, true, EmptyCourse()))
 }
 
 func (r *Renderer) RenderCourseCreated(w http.ResponseWriter) error {
@@ -269,7 +269,7 @@ func (r *Renderer) RenderCourseCreated(w http.ResponseWriter) error {
 }
 
 func (r *Renderer) RenderEditCoursePage(w http.ResponseWriter, course UiCourse) error {
-	return r.templates["create_course.html"].ExecuteTemplate(w, "page.html", course)
+	return r.templates["create_course.html"].ExecuteTemplate(w, "page.html", NewPageArgs(true, true, course))
 }
 
 func (r *Renderer) RenderCourseEdited(w http.ResponseWriter) error {
@@ -329,7 +329,7 @@ type UiEditModule struct {
 }
 
 func (r *Renderer) RenderEditModulePage(w http.ResponseWriter, module UiEditModule) error {
-	return r.templates["edit_module.html"].ExecuteTemplate(w, "page.html", module)
+	return r.templates["edit_module.html"].ExecuteTemplate(w, "page.html", NewPageArgs(true, true, module))
 }
 
 func (r *Renderer) RenderModuleEdited(w http.ResponseWriter) error {

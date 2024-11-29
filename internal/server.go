@@ -2,6 +2,7 @@ package internal
 
 import (
 	"bytes"
+	"database/sql"
 	"fmt"
 	"html/template"
 	"log"
@@ -40,14 +41,14 @@ func initRouter(dbClient *DbClient, jwtSecret []byte) *http.ServeMux {
 	mux.Handle("/student/course/{courseId}/module/{moduleId}/block/{blockIdx}/piece", newHandlerMap().Get(handleTakeModule))
 	mux.Handle("/student/course/{courseId}/module/{moduleId}/block/{blockIdx}/answer", newHandlerMap().Post(handleAnswerQuestion))
 
-	mux.Handle("/course/create", newHandlerMap().Get(handleCreateCoursePage).Post(handleCreateCourse))
-	mux.Handle("/course/{courseId}/edit", newHandlerMap().Get(handleEditCoursePage).Put(handleEditCourse))
+	mux.Handle("/course/create", newHandlerMap().Get(authHandler(handleCreateCoursePage)).Post(authHandler(handleCreateCourse)))
+	mux.Handle("/course/{courseId}/edit", newHandlerMap().Get(authHandler(handleEditCoursePage)).Put(authHandler(handleEditCourse)))
 	mux.Handle("/course/{courseId}", newHandlerMap().Delete(handleDeleteCourse))
 	mux.Handle("/ui/{questionIdx}/choice", newHandlerMap().Get(handleAddChoice))
 	mux.Handle("/ui/{element}", newHandlerMap().Get(handleAddElement).Delete(handleDeleteElement))
 	// This is kinda a weird place to put the deleteModuleHandler because it's on a different page
 	// (the edit course page) but it's fine for now.
-	mux.Handle("/course/{courseId}/module/{moduleId}/edit", newHandlerMap().Get(handleEditModulePage).Put(handleEditModule).Delete(handleDeleteModule))
+	mux.Handle("/course/{courseId}/module/{moduleId}/edit", newHandlerMap().Get(authHandler(handleEditModulePage)).Put(authHandler(handleEditModule)).Delete(handleDeleteModule))
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 	mux.Handle("/style/", http.StripPrefix("/style/", http.FileServer(http.Dir("style"))))
 	mux.Handle("/", newHandlerMap().Get(handleHomePage))
@@ -157,6 +158,17 @@ func authHandler(handler UserHandler) HandlerMapHandler {
 			http.Redirect(w, r, "/signin", http.StatusSeeOther)
 			return nil
 		}
+		_, err = ctx.dbClient.GetUser(userId)
+		if err == sql.ErrNoRows {
+			log.Println("User not found")
+			http.Redirect(w, r, "/signup", http.StatusSeeOther)
+			return nil
+		}
+		if err != nil {
+			log.Println("Error getting user:", err)
+			http.Redirect(w, r, "/signin", http.StatusSeeOther)
+			return nil
+		}
 		return handler(w, r, ctx, userId)
 	}
 }
@@ -260,7 +272,7 @@ func handleBrowsePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 	_, err := checkCookie(r, ctx.jwtSecret)
 	loggedIn := err == nil
 	// Copied from teacher's course page
-	courses, err := ctx.dbClient.GetCourses(false)
+	courses, err := ctx.dbClient.GetCourses(-1, false)
 	if err != nil {
 		return err
 	}
@@ -298,7 +310,7 @@ func handleTeacherCoursesPage(w http.ResponseWriter, r *http.Request, ctx Handle
 		newCourseId = -1
 	}
 	// TODO: only get courses created by this user
-	courses, err := ctx.dbClient.GetCourses(false)
+	courses, err := ctx.dbClient.GetCourses(userId, false)
 	if err != nil {
 		return err
 	}
@@ -318,7 +330,7 @@ func handleTeacherCoursesPage(w http.ResponseWriter, r *http.Request, ctx Handle
 }
 
 func handleStudentCoursesPage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
-	courses, err := ctx.dbClient.GetCourses(true)
+	courses, err := ctx.dbClient.GetCourses(-1, true)
 	if err != nil {
 		return err
 	}
@@ -370,7 +382,7 @@ func handleDeleteCourse(w http.ResponseWriter, r *http.Request, ctx HandlerConte
 
 // Create course page
 
-func handleCreateCoursePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
+func handleCreateCoursePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
 	return ctx.renderer.RenderCreateCoursePage(w)
 }
 
@@ -393,27 +405,27 @@ func parseCreateCourseRequest(r *http.Request) (createCourseRequest, error) {
 	return createCourseRequest{title, description, moduleTitles, moduleDescriptions}, nil
 }
 
-func handleCreateCourse(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
+func handleCreateCourse(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
 	req, err := parseCreateCourseRequest(r)
 	if err != nil {
 		return err
 	}
-	course, _, err := ctx.dbClient.CreateCourse(req.title, req.description, req.moduleTitles, req.moduleDescriptions)
+	course, _, err := ctx.dbClient.CreateCourse(userId, req.title, req.description, req.moduleTitles, req.moduleDescriptions)
 	if err != nil {
 		return err
 	}
-	w.Header().Add("HX-Redirect", fmt.Sprintf("/course?newCourse=%d#course-%d", course.Id, course.Id))
+	w.Header().Add("HX-Redirect", fmt.Sprintf("/teacher?newCourse=%d#course-%d", course.Id, course.Id))
 	return nil
 }
 
 // Edit course page
 
-func handleEditCoursePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
+func handleEditCoursePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
 	courseId, err := strconv.Atoi(r.PathValue("courseId"))
 	if err != nil {
 		return err
 	}
-	course, err := ctx.dbClient.GetCourse(courseId)
+	course, err := ctx.dbClient.GetCourse(userId, courseId)
 	if err != nil {
 		return err
 	}
@@ -462,7 +474,7 @@ func parseEditCourseRequest(r *http.Request) (editCourseRequest, error) {
 	return editCourseRequest{courseId, title, description, moduleIds, moduleTitles, moduleDescriptions}, nil
 }
 
-func handleEditCourse(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
+func handleEditCourse(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
 	req, err := parseEditCourseRequest(r)
 	if err != nil {
 		return err
@@ -524,7 +536,7 @@ func handleDeleteModule(w http.ResponseWriter, r *http.Request, ctx HandlerConte
 
 // Edit module page
 
-func handleEditModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
+func handleEditModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
 	// Get courseId and moduleId from "/course/:courseId/module/:moduleId/edit"
 	courseId, err := strconv.Atoi(r.PathValue("courseId"))
 	if err != nil {
@@ -534,7 +546,7 @@ func handleEditModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	if err != nil {
 		return err
 	}
-	course, err := ctx.dbClient.GetCourse(courseId)
+	course, err := ctx.dbClient.GetCourse(userId, courseId)
 	if err != nil {
 		return err
 	}
@@ -684,8 +696,12 @@ func parseEditModuleRequest(r *http.Request) (editModuleRequest, error) {
 	}, nil
 }
 
-func handleEditModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
+func handleEditModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
 	req, err := parseEditModuleRequest(r)
+	if err != nil {
+		return err
+	}
+	_, err = ctx.dbClient.GetModuleCourse(userId, req.moduleId)
 	if err != nil {
 		return err
 	}
