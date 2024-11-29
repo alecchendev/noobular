@@ -49,7 +49,7 @@ func initTemplates() map[string]*template.Template {
 	return map[string]*template.Template{
 		// Pages
 		"index.html":   template.Must(template.ParseFiles("template/page.html", "template/index.html")),
-		"signup.html": template.Must(template.ParseFiles("template/page.html", "template/signup.html")),
+		"signup.html":  template.Must(template.ParseFiles("template/page.html", "template/signup.html")),
 		"student.html": template.Must(template.ParseFiles("template/page.html", "template/student.html")),
 		"courses.html": template.Must(template.ParseFiles("template/page.html", "template/courses.html")),
 		"create_course.html": template.Must(template.New("").Funcs(funcMap).ParseFiles(
@@ -65,6 +65,41 @@ func initTemplates() map[string]*template.Template {
 		"add_element.html": template.Must(template.New("").Funcs(funcMap).ParseFiles("template/add_element.html")),
 	}
 }
+
+type PageArgs struct {
+	ShowNav     bool
+	LoggedIn    bool
+	ContentArgs interface{}
+}
+
+func NewPageArgs(showNav, loggedIn bool, contentArgs interface{}) PageArgs {
+	return PageArgs{showNav, loggedIn, contentArgs}
+}
+
+// Home page - optional login
+// Browse page - optional login
+// Sign in/up page - not logged in
+// Teacher page - logged in
+// Student page - logged in
+// Take module page - optional login
+
+// Basic welcome page when a user is not logged in.
+func (r *Renderer) RenderHomePage(w http.ResponseWriter, loggedIn bool) error {
+	return r.templates["index.html"].ExecuteTemplate(w, "page.html", NewPageArgs(true, loggedIn, nil))
+}
+
+type SignupPageArgs struct {
+	Signin bool
+}
+
+func (r *Renderer) RenderSignupPage(w http.ResponseWriter) error {
+	return r.templates["signup.html"].ExecuteTemplate(w, "page.html", NewPageArgs(true, false, SignupPageArgs{false}))
+}
+
+func (r *Renderer) RenderSigninPage(w http.ResponseWriter) error {
+	return r.templates["signup.html"].ExecuteTemplate(w, "page.html", NewPageArgs(true, false, SignupPageArgs{true}))
+}
+
 
 // Course struct for feeding into a template to be rendered
 type UiCourse struct {
@@ -202,22 +237,6 @@ type CoursePageArgsStudent struct {
 	NewCourseId int
 	Editor      bool
 	Courses     []UiCourseStudent
-}
-
-func (r *Renderer) RenderHomePage(w http.ResponseWriter) error {
-	return r.templates["index.html"].ExecuteTemplate(w, "page.html", nil)
-}
-
-type SignupPageArgs struct {
-	Signin bool
-}
-
-func (r *Renderer) RenderSignupPage(w http.ResponseWriter) error {
-	return r.templates["signup.html"].ExecuteTemplate(w, "page.html", SignupPageArgs{false})
-}
-
-func (r *Renderer) RenderSigninPage(w http.ResponseWriter) error {
-	return r.templates["signup.html"].ExecuteTemplate(w, "page.html", SignupPageArgs{true})
 }
 
 type StudentPageArgs struct {

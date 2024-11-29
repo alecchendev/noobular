@@ -6,15 +6,58 @@
 	<script src="/static/htmx.min.js"></script>
 	<script src="/static/json-enc.js"></script>
 	<link rel="stylesheet" type="text/css" href="/style/global.css">
-	<style>{{ template "style" }}</style>
+	<style>
+	{{ template "nav_style" }}
+	{{ template "style" }}
+	</style>
 </head>
 <body>
-	<br/>
+{{ if .ShowNav }}
+{{ template "nav" . }}
+{{ end }}
+
+{{ template "content" .ContentArgs }}
+</body>
+
+{{ define "nav_style" }}
+#nav {
+	display: flex;
+	justify-content: space-between;
+}
+
+.left-nav, .right-nav {
+	display: flex;
+	gap: 1rem;
+	padding: 1rem 0;
+}
+{{ end }}
+
+{{ define "nav" }}
+<div id="nav">
+	<div class="left-nav">
+		<a href="/">Home</a>
+		<a href="/browse">Browse</a>
+		{{ if .LoggedIn }}
+		<a href="/teacher">Student</a>
+		<a href="/student">Teacher</a>
+		{{ end }}
+	</div>
+	<div class="right-nav">
+		{{ if .LoggedIn }}
+		<a href="/logout">Logout</a>
+		{{ else }}
+		<a href="/signup">Signup</a>
+		<a href="/signin">Signin</a>
+		{{ end }}
+	</div>
+</div>
+<div>
+	<p>Old nav</p>
 	<a href="/">Home</a>
 	<a href="/course">Courses</a>
 	<a href="/course/create">Create</a>
 	<a href="/student/course">Student</a>
 	<a href="/signup">Signup</a>
 	<a href="/signin">Signin</a>
-	{{ template "content" . }}
-</body>
+</div>
+{{ end }}

@@ -28,7 +28,14 @@ func initRouter(dbClient *DbClient, jwtSecret []byte) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.Handle("/signup", newHandlerMap().Get(handleSignupPage).Post(handleSignup))
 	mux.Handle("/signin", newHandlerMap().Get(handleSigninPage).Post(handleSignin))
+	mux.Handle("/logout", newHandlerMap().Get(authHandler(handleLogout)))
+
 	mux.Handle("/student", newHandlerMap().Get(authHandler(handleStudentPage)))
+	mux.Handle("/student/course", newHandlerMap().Get(authHandler(handleStudentCoursesPage)))
+	mux.Handle("/student/course/{courseId}/module/{moduleId}/block/{blockIdx}", newHandlerMap().Get(handleTakeModulePage))
+	mux.Handle("/student/course/{courseId}/module/{moduleId}/block/{blockIdx}/piece", newHandlerMap().Get(handleTakeModule))
+	mux.Handle("/student/course/{courseId}/module/{moduleId}/block/{blockIdx}/answer", newHandlerMap().Post(handleAnswerQuestion))
+
 	mux.Handle("/course/create", newHandlerMap().Get(handleCreateCoursePage).Post(handleCreateCourse))
 	mux.Handle("/course/{courseId}/edit", newHandlerMap().Get(handleEditCoursePage).Put(handleEditCourse))
 	mux.Handle("/course/{courseId}", newHandlerMap().Delete(handleDeleteCourse))
@@ -38,10 +45,6 @@ func initRouter(dbClient *DbClient, jwtSecret []byte) *http.ServeMux {
 	// (the edit course page) but it's fine for now.
 	mux.Handle("/course/{courseId}/module/{moduleId}/edit", newHandlerMap().Get(handleEditModulePage).Put(handleEditModule).Delete(handleDeleteModule))
 	mux.Handle("/course", newHandlerMap().Get(handleCoursesPage))
-	mux.Handle("/student/course", newHandlerMap().Get(handleStudentCoursesPage))
-	mux.Handle("/student/course/{courseId}/module/{moduleId}/block/{blockIdx}", newHandlerMap().Get(handleTakeModulePage))
-	mux.Handle("/student/course/{courseId}/module/{moduleId}/block/{blockIdx}/piece", newHandlerMap().Get(handleTakeModule))
-	mux.Handle("/student/course/{courseId}/module/{moduleId}/block/{blockIdx}/answer", newHandlerMap().Post(handleAnswerQuestion))
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 	mux.Handle("/style/", http.StripPrefix("/style/", http.FileServer(http.Dir("style"))))
 	mux.Handle("/", newHandlerMap().Get(handleHomePage))
@@ -130,17 +133,24 @@ func (hm HandlerMap) Delete(handler HandlerMapHandler) HandlerMap {
 
 type UserHandler func(http.ResponseWriter, *http.Request, HandlerContext, int64) error
 
+func checkCookie(r *http.Request, jwtSecret []byte) (int64, error) {
+	tokenCookie, err := r.Cookie("session_token")
+	if err != nil {
+		log.Println("No session token")
+		return 0, err
+	}
+	userId, err := ValidateJwt(jwtSecret, tokenCookie.Value)
+	if err != nil {
+		log.Println("Invalid session token:", err)
+		return 0, err
+	}
+	return userId, nil
+}
+
 func authHandler(handler UserHandler) HandlerMapHandler {
 	return func(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
-		tokenCookie, err := r.Cookie("session_token")
+		userId, err := checkCookie(r, ctx.jwtSecret)
 		if err != nil {
-			log.Println("No session token")
-			http.Redirect(w, r, "/signin", http.StatusSeeOther)
-			return nil
-		}
-		userId, err := ValidateJwt(ctx.jwtSecret, tokenCookie.Value)
-		if err != nil {
-			log.Println("Invalid session token:", err)
 			http.Redirect(w, r, "/signin", http.StatusSeeOther)
 			return nil
 		}
@@ -155,7 +165,9 @@ func handleHomePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext) 
 		// TODO: We should return 404 here
 		return fmt.Errorf("Not found")
 	}
-	return ctx.renderer.RenderHomePage(w)
+	_, err := checkCookie(r, ctx.jwtSecret)
+	loggedIn := err == nil
+	return ctx.renderer.RenderHomePage(w, loggedIn)
 }
 
 // Sign up page
@@ -228,6 +240,17 @@ func handleSignin(w http.ResponseWriter, r *http.Request, ctx HandlerContext) er
 	return nil
 }
 
+func handleLogout(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
+	cookie, err := createAuthCookie(ctx.jwtSecret, userId)
+	if err != nil {
+		return err
+	}
+	cookie.Expires = time.Unix(0, 0)
+	http.SetCookie(w, &cookie)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+	return nil
+}
+
 // Student page
 
 func handleStudentPage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
@@ -264,7 +287,7 @@ func handleCoursesPage(w http.ResponseWriter, r *http.Request, ctx HandlerContex
 	return ctx.renderer.RenderTeacherCoursePage(w, uiCourses, newCourseId)
 }
 
-func handleStudentCoursesPage(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
+func handleStudentCoursesPage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
 	courses, err := ctx.dbClient.GetCourses(true)
 	if err != nil {
 		return err
