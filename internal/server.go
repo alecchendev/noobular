@@ -41,6 +41,7 @@ func initRouter(dbClient *DbClient, jwtSecret []byte) *http.ServeMux {
 	mux.Handle("/student/course/{courseId}/module/{moduleId}/block/{blockIdx}/piece", newHandlerMap().Get(authHandler(handleTakeModule)))
 	mux.Handle("/student/course/{courseId}/module/{moduleId}/block/{blockIdx}/answer", newHandlerMap().Post(authHandler(handleAnswerQuestion)))
 
+	// TODO: make these sub routes of teacher
 	mux.Handle("/course/create", newHandlerMap().Get(authHandler(handleCreateCoursePage)).Post(authHandler(handleCreateCourse)))
 	mux.Handle("/course/{courseId}/edit", newHandlerMap().Get(authHandler(handleEditCoursePage)).Put(authHandler(handleEditCourse)))
 	mux.Handle("/course/{courseId}", newHandlerMap().Delete(handleDeleteCourse))
