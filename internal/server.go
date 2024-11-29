@@ -37,9 +37,9 @@ func initRouter(dbClient *DbClient, jwtSecret []byte) *http.ServeMux {
 	mux.Handle("/teacher", newHandlerMap().Get(authHandler(handleTeacherCoursesPage)))
 
 	mux.Handle("/student/course", newHandlerMap().Get(authHandler(handleStudentCoursesPage)))
-	mux.Handle("/student/course/{courseId}/module/{moduleId}/block/{blockIdx}", newHandlerMap().Get(handleTakeModulePage))
-	mux.Handle("/student/course/{courseId}/module/{moduleId}/block/{blockIdx}/piece", newHandlerMap().Get(handleTakeModule))
-	mux.Handle("/student/course/{courseId}/module/{moduleId}/block/{blockIdx}/answer", newHandlerMap().Post(handleAnswerQuestion))
+	mux.Handle("/student/course/{courseId}/module/{moduleId}/block/{blockIdx}", newHandlerMap().Get(authHandler(handleTakeModulePage)))
+	mux.Handle("/student/course/{courseId}/module/{moduleId}/block/{blockIdx}/piece", newHandlerMap().Get(authHandler(handleTakeModule)))
+	mux.Handle("/student/course/{courseId}/module/{moduleId}/block/{blockIdx}/answer", newHandlerMap().Post(authHandler(handleAnswerQuestion)))
 
 	mux.Handle("/course/create", newHandlerMap().Get(authHandler(handleCreateCoursePage)).Post(authHandler(handleCreateCourse)))
 	mux.Handle("/course/{courseId}/edit", newHandlerMap().Get(authHandler(handleEditCoursePage)).Put(authHandler(handleEditCourse)))
@@ -348,7 +348,7 @@ func handleStudentCoursesPage(w http.ResponseWriter, r *http.Request, ctx Handle
 			}
 			// TODO: this is broken. We should store the latest
 			// block they got to.
-			nextUnansweredQuestionIdx, err := ctx.dbClient.GetNextUnansweredQuestionIdx(module.Id)
+			nextUnansweredQuestionIdx, err := ctx.dbClient.GetNextUnansweredQuestionIdx(userId, module.Id)
 			if err != nil {
 				return err
 			}
@@ -714,7 +714,7 @@ func handleEditModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 
 // Take module page
 
-func getTakeModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext) (UiTakeModule, error) {
+func getTakeModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) (UiTakeModule, error) {
 	// courseId, err := strconv.Atoi(r.PathValue("courseId"))
 	// if err != nil {
 	//	return UiTakeModule{}, err
@@ -749,7 +749,7 @@ func getTakeModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext) (
 		if err != nil {
 			return UiTakeModule{}, err
 		}
-		choiceId, err := ctx.dbClient.GetAnswer(question.Id)
+		choiceId, err := ctx.dbClient.GetAnswer(userId, question.Id)
 		if err != nil {
 			return UiTakeModule{}, err
 		}
@@ -803,24 +803,24 @@ func getTakeModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext) (
 	}
 }
 
-func handleTakeModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
-	module, err := getTakeModule(w, r, ctx)
+func handleTakeModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
+	module, err := getTakeModule(w, r, ctx, userId)
 	if err != nil {
 		return err
 	}
 	return ctx.renderer.RenderTakeModulePage(w, module)
 }
 
-func handleTakeModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
-	module, err := getTakeModule(w, r, ctx)
+func handleTakeModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
+	module, err := getTakeModule(w, r, ctx, userId)
 	if err != nil {
 		return err
 	}
 	return ctx.renderer.RenderTakeModule(w, module)
 }
 
-func handleAnswerQuestion(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
-	uiTakeModule, err := getTakeModule(w, r, ctx)
+func handleAnswerQuestion(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
+	uiTakeModule, err := getTakeModule(w, r, ctx, userId)
 	if err != nil {
 		return err
 	}
@@ -835,7 +835,7 @@ func handleAnswerQuestion(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	if err != nil {
 		return err
 	}
-	err = ctx.dbClient.StoreAnswer(uiTakeModule.Question.Id, choiceId)
+	err = ctx.dbClient.StoreAnswer(userId, uiTakeModule.Question.Id, choiceId)
 	if err != nil {
 		return err
 	}

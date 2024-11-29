@@ -237,11 +237,19 @@ type CoursePageArgs struct {
 	Courses     []UiCourse
 }
 
+func (c CoursePageArgs) Browsing() bool {
+	return true
+}
+
 type CoursePageArgsStudent struct {
 	NewCourseId int
 	Editor      bool
 	LoggedIn    bool
 	Courses     []UiCourseStudent
+}
+
+func (c CoursePageArgsStudent) Browsing() bool {
+	return false
 }
 
 type StudentPageArgs struct {
@@ -257,7 +265,7 @@ func (r *Renderer) RenderTeacherCoursePage(w http.ResponseWriter, courses []UiCo
 }
 
 func (r *Renderer) RenderStudentCoursePage(w http.ResponseWriter, courses []UiCourseStudent) error {
-	return r.templates["courses.html"].ExecuteTemplate(w, "page.html", CoursePageArgsStudent{0, false, false, courses})
+	return r.templates["courses.html"].ExecuteTemplate(w, "page.html", NewPageArgs(true, true, CoursePageArgsStudent{0, false, true, courses}))
 }
 
 func (r *Renderer) RenderCreateCoursePage(w http.ResponseWriter) error {
@@ -349,7 +357,7 @@ type UiTakeModule struct {
 }
 
 func (r *Renderer) RenderTakeModulePage(w http.ResponseWriter, module UiTakeModule) error {
-	return r.templates["take_module.html"].ExecuteTemplate(w, "page.html", module)
+	return r.templates["take_module.html"].ExecuteTemplate(w, "page.html", NewPageArgs(false, true, module))
 }
 
 // Renders just the content, i.e. the header + content, not the full page.

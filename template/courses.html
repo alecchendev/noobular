@@ -122,17 +122,19 @@ html {
 				<div class="edit-module">
 					<h3 class="module-title">{{.Title}}</h3>
 					{{ if not $.LoggedIn }}
-					{{ else }}
-					{{ if $.Editor }}
+					{{ else if $.Editor }}
 					<a class="edit-module-link" href="/course/{{$course.Id}}/module/{{.Id}}/edit">Edit</a>
+					{{ else if $.Browsing }}
+					<a class="edit-module-link">TODO</a>
 					{{ else }}
 					{{ if eq .NextUnansweredQuestionIdx 0 }}
 					<a class="edit-module-link" href="/student/course/{{$course.Id}}/module/{{.Id}}/block/0">Start</a>
 					{{ else }}{{ if lt .NextUnansweredQuestionIdx .QuestionCount }}
-					<a class="edit-module-link" href="/student/course/{{$course.Id}}/module/{{.Id}}/question/{{ .NextUnansweredQuestionIdx }}">Continue</a>
+					<!-- TODO: this goes to the first right now, should eventually render to the latest piece -->
+					<a class="edit-module-link" href="/student/course/{{$course.Id}}/module/{{.Id}}/block/0">Continue</a>
 					{{ else }}{{ if eq .NextUnansweredQuestionIdx .QuestionCount }}
 					<a class="edit-module-link" href="/student/course/{{$course.Id}}/module/{{.Id}}/block/0">Review</a>
-					{{ end }}{{ end }}{{ end }}{{ end }}{{ end }}
+					{{ end }}{{ end }}{{ end }}{{ end }}
 				</div>
 				<p>{{.Description}}</p>
 			</div>
