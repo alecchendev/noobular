@@ -4,8 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"reflect"
-	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -40,118 +38,21 @@ func (c *DbClient) Close() {
 	c.db.Close()
 }
 
-type DbMethod int
+const insertUserQuery = `
+insert into users(username)
+values(?);
+`
 
-const (
-	None DbMethod = iota
-	Select
-	Insert
-)
-
-func selectColumns(queryBuilder interface{}) []string {
-	selectColumns := []string{}
-	for i := 0; i < reflect.TypeOf(queryBuilder).NumField(); i++ {
-		field := reflect.TypeOf(queryBuilder).Field(i)
-		tag := field.Tag.Get("db")
-		if tag != "" {
-			selectColumns = append(selectColumns, tag)
-		}
-	}
-	return selectColumns
-}
-
-func insertColumns(queryBuilder interface{}) []string {
-	insertColumns := []string{}
-	for i := 0; i < reflect.TypeOf(queryBuilder).NumField(); i++ {
-		field := reflect.TypeOf(queryBuilder).Field(i)
-		tag := field.Tag.Get("db")
-		insert := field.Tag.Get("insert")
-		if tag != "" && insert != "false" {
-			insertColumns = append(insertColumns, tag)
-		}
-	}
-	return insertColumns
-}
-
-// TODO: how to do optional values
-type DbUserQueryBuilder struct {
-	method DbMethod
-	Id       *int64  `db:"id" insert:"false"`
-	Username *string `db:"username"`
-}
-
-func NewDbUserQueryBuilder() *DbUserQueryBuilder {
-	q := &DbUserQueryBuilder{}
-	q.method = None
-	return q
-}
-
-func (q DbUserQueryBuilder) TableName() string {
-	return "users"
-}
-
-func (q DbUserQueryBuilder) Select() DbUserQueryBuilder {
-	q.method = Select
-	return q
-}
-
-func (q DbUserQueryBuilder) Insert() DbUserQueryBuilder {
-	q.method = Insert
-	return q
-}
-
-func (q DbUserQueryBuilder) WhereIdEq(id int64) DbUserQueryBuilder {
-	q.Id = &id
-	return q
-}
-
-func (q DbUserQueryBuilder) WhereUsernameEq(username string) DbUserQueryBuilder {
-	q.Username = &username
-	return q
-}
-
-func (q DbUserQueryBuilder) Build() (string, []interface{}) {
-	var query string
-	var args []interface{}
-	switch q.method {
-	case None:
-		log.Fatal("method must be set")
-	case Select:
-		query = fmt.Sprintf("select %s from %s", strings.Join(selectColumns(q), ", "), q.TableName())
-		filters := []string{}
-		for i := 0; i < reflect.TypeOf(q).NumField(); i++ {
-			field := reflect.TypeOf(q).Field(i)
-			fieldVal := reflect.ValueOf(q).FieldByName(field.Name)
-			tag := field.Tag.Get("db")
-			if tag != "" && !fieldVal.IsNil() {
-				filters = append(filters, fmt.Sprintf("%s = ?", tag))
-				args = append(args, fieldVal.Elem().Interface())
-			}
-		}
-		if len(filters) > 0 {
-			query += fmt.Sprintf(" where %s", strings.Join(filters, " and "))
-		}
-	case Insert:
-		query = fmt.Sprintf("insert into %s(%s) values(?)", q.TableName(), strings.Join(insertColumns(q), ", "))
-		if q.Username != nil {
-			args = append(args, *q.Username)
-		}
-	}
-	query += ";"
-	return query, args
-}
-
-func (c *DbClient) CreateUser(username string) (User, error) {
-	query, args := NewDbUserQueryBuilder().Insert().WhereUsernameEq(username).Build()
-	res, err := c.db.Exec(query, args...)
+func (c *DbClient) CreateUser(username string) (int64, error) {
+	res, err := c.db.Exec(insertUserQuery, username)
 	if err != nil {
-		return User{}, err
+		return 0, err
 	}
 	userId, err := res.LastInsertId()
 	if err != nil {
-		return User{}, err
+		return 0, err
 	}
-	return c.GetUser(userId)
+	return userId, nil
 }
 
 type User struct {
@@ -160,18 +61,17 @@ type User struct {
 }
 
 func (c *DbClient) GetUser(userId int64) (User, error) {
-	query, args := NewDbUserQueryBuilder().Select().WhereIdEq(userId).Build()
-	row := c.db.QueryRow(query, args...)
-	return userFromRow(row)
+	row := c.db.QueryRow("select id, username from users where id = ?;", userId)
+	var user User
+	err := row.Scan(&user.Id, &user.Username)
+	if err != nil {
+		return User{}, err
+	}
+	return user, nil
 }
 
 func (c *DbClient) GetUserByUsername(username string) (User, error) {
-	query, args := NewDbUserQueryBuilder().Select().WhereUsernameEq(username).Build()
-	row := c.db.QueryRow(query, args...)
-	return userFromRow(row)
-}
-
-func userFromRow(row *sql.Row) (User, error) {
+	row := c.db.QueryRow("select id, username from users where username = ?;", username)
 	var user User
 	err := row.Scan(&user.Id, &user.Username)
 	if err != nil {
