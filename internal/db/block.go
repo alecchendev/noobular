@@ -17,6 +17,20 @@ create table if not exists blocks (
 );
 `
 
+type BlockType string
+
+const (
+	QuestionBlockType BlockType = "question"
+	ContentBlockType  BlockType = "content"
+)
+
+type Block struct {
+	Id         int
+	ModuleId   int
+	BlockIndex int
+	BlockType  BlockType
+}
+
 const insertBlockQuery = `
 insert into blocks(module_id, block_index, block_type)
 values(?, ?, ?);
@@ -29,28 +43,6 @@ func InsertBlock(tx *sql.Tx, moduleId int, blockIdx int, blockType BlockType) (i
 	}
 	return res.LastInsertId()
 }
-
-const insertContentBlockQuery = `
-insert into content_blocks(block_id, content_id)
-values(?, ?);
-`
-
-func (c *DbClient) InsertContentBlock(tx *sql.Tx, blockId int64, content string) error {
-	res, err := tx.Exec(insertContentQuery, content)
-	if err != nil {
-		return err
-	}
-	contentId, err := res.LastInsertId()
-	if err != nil {
-		return err
-	}
-	_, err = tx.Exec(insertContentBlockQuery, blockId, contentId)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 
 const getBlocksQuery = `
 select b.id, b.module_id, b.block_index, b.block_type
@@ -86,21 +78,6 @@ from blocks b
 where b.block_index = ?
 and b.module_id = ?;
 `
-
-
-type BlockType string
-
-const (
-	QuestionBlockType BlockType = "question"
-	ContentBlockType  BlockType = "content"
-)
-
-type Block struct {
-	Id         int
-	ModuleId   int
-	BlockIndex int
-	BlockType  BlockType
-}
 
 func (c *DbClient) GetBlock(moduleId int, blockIdx int) (Block, error) {
 	blockRow := c.db.QueryRow(getBlockQuery, blockIdx, moduleId)

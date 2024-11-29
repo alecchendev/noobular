@@ -156,14 +156,14 @@ func (c *DbClient) EditModule(moduleId int, title string, description string, bl
 			return err
 		}
 		if blockType == string(ContentBlockType) {
-			err = c.InsertContentBlock(tx, blockId, contents[contentIdx])
+			err = InsertContentBlock(tx, blockId, contents[contentIdx])
 			if err != nil {
 				tx.Rollback()
 				return err
 			}
 			contentIdx += 1
 		} else if blockType == string(QuestionBlockType) {
-			err = c.InsertQuestion(tx, blockId, questions[questionIdx], choices[questionIdx], correctChoiceIdxs[questionIdx], explanations[questionIdx])
+			err = InsertQuestion(tx, blockId, questions[questionIdx], choices[questionIdx], correctChoiceIdxs[questionIdx], explanations[questionIdx])
 			if err != nil {
 				tx.Rollback()
 				return err

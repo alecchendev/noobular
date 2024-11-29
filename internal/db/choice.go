@@ -1,6 +1,8 @@
 package db
 
 import (
+	"database/sql"
+
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -25,6 +27,18 @@ const insertChoiceQuery = `
 insert into choices(question_id, choice_text, correct)
 values(?, ?, ?);
 `
+
+func InsertChoice(tx *sql.Tx, questionId int64, choiceText string, correct bool) (Choice, error) {
+	res, err := tx.Exec(insertChoiceQuery, questionId, choiceText, correct)
+	if err != nil {
+		return Choice{}, err
+	}
+	choiceId, err := res.LastInsertId()
+	if err != nil {
+		return Choice{}, err
+	}
+	return Choice{int(choiceId), int(questionId), choiceText, correct}, nil
+}
 
 const getChoicesForQuestionQuery = `
 select ch.id, ch.question_id, ch.choice_text, ch.correct

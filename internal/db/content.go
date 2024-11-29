@@ -1,6 +1,8 @@
 package db
 
 import (
+	"database/sql"
+
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -27,6 +29,48 @@ type Content struct {
 	Content string
 }
 
+const insertContentQuery = `
+insert into content(content)
+values(?);
+`
+
+func InsertContent(tx *sql.Tx, content string) (int64, error) {
+	res, err := tx.Exec(insertContentQuery, content)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+const insertContentBlockQuery = `
+insert into content_blocks(block_id, content_id)
+values(?, ?);
+`
+
+func InsertContentBlock(tx *sql.Tx, blockId int64, content string) error {
+	contentId, err := InsertContent(tx, content)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(insertContentBlockQuery, blockId, contentId)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+const updateContentQuery = `
+update content
+set content = ?
+where id = ?;
+`
+
+func UpdateContent(tx *sql.Tx, contentId int64, content string) error {
+	_, err := tx.Exec(updateContentQuery, content, contentId)
+	return err
+}
+
+
 const getContentForBlockQuery = `
 select c.id, c.content
 from content c
@@ -43,22 +87,3 @@ func (c *DbClient) GetContentFromBlock(blockId int) (Content, error) {
 	}
 	return content, nil
 }
-
-const getExplanationContentQuery = `
-select c.id, c.content
-from explanations e
-join content c on e.content_id = c.id
-where e.question_id = ?;
-`
-
-const insertContentQuery = `
-insert into content(content)
-values(?);
-`
-
-const updateContentQuery = `
-update content
-set content = ?
-where id = ?;
-`
-

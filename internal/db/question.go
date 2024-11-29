@@ -21,22 +21,13 @@ type Question struct {
 	QuestionText string
 }
 
-const getQuestionsQuery = `
-select q.id, q.question_text
-from questions q
-join blocks b on q.block_id = b.id
-where b.module_id = ?
-order by q.id;
-`
-
-
 const insertQuestionQuery = `
 insert into questions(block_id, question_text)
 values(?, ?);
 `
 
 // Need to rollback tx upon error one level up the stack because this function will not do that.
-func (c *DbClient) InsertQuestion(tx *sql.Tx, blockId int64, question string, choices []string, correctChoiceIdx int, explanation string) error {
+func InsertQuestion(tx *sql.Tx, blockId int64, question string, choices []string, correctChoiceIdx int, explanation string) error {
 	res, err := tx.Exec(insertQuestionQuery, blockId, question)
 	if err != nil {
 		return err
@@ -46,32 +37,26 @@ func (c *DbClient) InsertQuestion(tx *sql.Tx, blockId int64, question string, ch
 		return err
 	}
 	for choiceIdx, choice := range choices {
-		_, err = tx.Exec(insertChoiceQuery, questionId, choice, choiceIdx == correctChoiceIdx)
+		_, err = InsertChoice(tx, questionId, choice, choiceIdx == correctChoiceIdx)
 		if err != nil {
 			return err
 		}
 	}
-	existingExplanation := tx.QueryRow(getExplanationContentQuery, questionId)
-	var contentId int64
-	var content string
-	err = existingExplanation.Scan(&contentId, &content)
-	if err != nil && err != sql.ErrNoRows {
+	content, err := GetExplanationForQuestion(tx, questionId)
+	if err != nil {
 		return err
-	} else if err == sql.ErrNoRows && explanation != "" {
-		res, err := tx.Exec(insertContentQuery, explanation)
+	} else if content.Id == -1 && explanation != "" {
+		contentId, err := InsertContent(tx, explanation)
 		if err != nil {
 			return err
 		}
-		contentId, err = res.LastInsertId()
-		if err != nil {
-			return err
-		}
-		_, err = tx.Exec(insertExplanationQuery, questionId, contentId)
+		err = InsertExplanation(tx, int(questionId), int(contentId))
 		if err != nil {
 			return err
 		}
 	} else {
-		_, err = tx.Exec(updateContentQuery, explanation, contentId)
+		// TODO if explanation is empty, just delete the content row
+		err = UpdateContent(tx, int64(content.Id), explanation)
 		if err != nil {
 			return err
 		}
@@ -112,6 +97,14 @@ func (c *DbClient) GetQuestionCount(moduleId int) (int, error) {
 	}
 	return questionCount, nil
 }
+
+const getQuestionsQuery = `
+select q.id, q.question_text
+from questions q
+join blocks b on q.block_id = b.id
+where b.module_id = ?
+order by q.id;
+`
 
 func (c *DbClient) GetNextUnansweredQuestionIdx(userId int64, moduleId int) (int, error) {
 	rows, err := c.db.Query(getQuestionsQuery, moduleId)
