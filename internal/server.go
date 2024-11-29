@@ -12,9 +12,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/yuin/goldmark"
+
+	"noobular/internal/db"
 )
 
-func NewServer(dbClient *DbClient, jwtSecret []byte, port int) *http.Server {
+func NewServer(dbClient *db.DbClient, jwtSecret []byte, port int) *http.Server {
 	router := initRouter(dbClient, jwtSecret)
 	return &http.Server{
 		Addr:    fmt.Sprintf(":%d", port),
@@ -22,7 +24,7 @@ func NewServer(dbClient *DbClient, jwtSecret []byte, port int) *http.Server {
 	}
 }
 
-func initRouter(dbClient *DbClient, jwtSecret []byte) *http.ServeMux {
+func initRouter(dbClient *db.DbClient, jwtSecret []byte) *http.ServeMux {
 	newHandlerMap := func() HandlerMap {
 		return NewHandlerMap(dbClient, jwtSecret)
 	}
@@ -58,12 +60,12 @@ func initRouter(dbClient *DbClient, jwtSecret []byte) *http.ServeMux {
 
 // Things that all handlers should have access to
 type HandlerContext struct {
-	dbClient  *DbClient
+	dbClient  *db.DbClient
 	renderer  Renderer
 	jwtSecret []byte
 }
 
-func NewHandlerContext(dbClient *DbClient, renderer Renderer, jwtSecret []byte) HandlerContext {
+func NewHandlerContext(dbClient *db.DbClient, renderer Renderer, jwtSecret []byte) HandlerContext {
 	return HandlerContext{dbClient, renderer, jwtSecret}
 }
 
@@ -108,7 +110,7 @@ func (hm HandlerMap) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 }
 
-func NewHandlerMap(dbClient *DbClient, jwtSecret []byte) HandlerMap {
+func NewHandlerMap(dbClient *db.DbClient, jwtSecret []byte) HandlerMap {
 	return HandlerMap{
 		handlers:        make(map[string]HandlerMapHandler),
 		ctx:             NewHandlerContext(dbClient, NewRenderer(), jwtSecret),
@@ -562,13 +564,13 @@ func handleEditModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	uiBlocks := make([]UiBlock, len(blocks))
 	for _, block := range blocks {
 		uiBlock := UiBlock{BlockType: block.BlockType}
-		if block.BlockType == ContentBlockType {
+		if block.BlockType == db.ContentBlockType {
 			content, err := ctx.dbClient.GetContentFromBlock(block.Id)
 			if err != nil {
 				return err
 			}
 			uiBlock.Content = NewUiContent(content)
-		} else if block.BlockType == QuestionBlockType {
+		} else if block.BlockType == db.QuestionBlockType {
 			question, err := ctx.dbClient.GetQuestionFromBlock(block.Id)
 			if err != nil {
 				return err
@@ -745,7 +747,7 @@ func getTakeModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext, u
 		return UiTakeModule{}, err
 	}
 	// TODO: use a html sanitizer like blue monday?
-	if block.BlockType == QuestionBlockType {
+	if block.BlockType == db.QuestionBlockType {
 		question, err := ctx.dbClient.GetQuestionFromBlock(block.Id)
 		if err != nil {
 			return UiTakeModule{}, err
@@ -770,7 +772,7 @@ func getTakeModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext, u
 		explanation := template.HTML(buf.String())
 		return UiTakeModule{
 			Module:          NewUiModule(module),
-			BlockType:       string(QuestionBlockType),
+			BlockType:       string(db.QuestionBlockType),
 			Content:         template.HTML(""),
 			BlockCount:      blockCount,
 			BlockIndex:      blockIdx,
@@ -779,7 +781,7 @@ func getTakeModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext, u
 			Question:        NewUiQuestion(question, choices, explanationContent),
 			Explanation:     explanation,
 		}, nil
-	} else if block.BlockType == ContentBlockType {
+	} else if block.BlockType == db.ContentBlockType {
 		content, err := ctx.dbClient.GetContentFromBlock(block.Id)
 		if err != nil {
 			return UiTakeModule{}, err
@@ -790,7 +792,7 @@ func getTakeModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext, u
 		}
 		return UiTakeModule{
 			Module:          NewUiModule(module),
-			BlockType:       string(ContentBlockType),
+			BlockType:       string(db.ContentBlockType),
 			Content:         template.HTML(buf.String()),
 			BlockCount:      blockCount,
 			BlockIndex:      blockIdx,

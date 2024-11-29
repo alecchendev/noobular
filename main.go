@@ -3,9 +3,11 @@ package main
 import (
 	"encoding/hex"
 	"fmt"
-	"internal"
 	"log"
 	"os"
+
+	"noobular/internal"
+	"noobular/internal/db"
 )
 
 func main() {
@@ -18,7 +20,7 @@ func main() {
 		log.Fatal("JWT_SECRET must be a valid hex string")
 	}
 	port := 8080
-	dbClient := internal.NewDbClient()
+	dbClient := db.NewDbClient()
 	defer dbClient.Close()
 	server := internal.NewServer(dbClient, jwtSecret, port)
 	fmt.Println("Listening on port", server.Addr)

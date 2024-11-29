@@ -1,0 +1,210 @@
+package db
+
+import (
+	"database/sql"
+	"fmt"
+
+	_ "github.com/mattn/go-sqlite3"
+)
+
+const createCourseTable = `
+create table if not exists courses (
+	id integer primary key autoincrement,
+	user_id integer not null,
+	title text not null,
+	description text not null,
+	foreign key (user_id) references users(id) on delete cascade
+);
+`
+
+const insertCourseQuery = `
+insert into courses(user_id, title, description)
+values(?, ?, ?);
+`
+
+type Course struct {
+	Id          int
+	Title       string
+	Description string
+}
+
+func (c *DbClient) CreateCourse(userId int64, title string, description string, moduleTitles []string, moduleDescriptions []string) (Course, []Module, error) {
+	if len(moduleTitles) != len(moduleDescriptions) {
+		return Course{}, []Module{}, fmt.Errorf("moduleTitles and moduleDescriptions must have the same length")
+	}
+	res, err := c.db.Exec(insertCourseQuery, userId, title, description)
+	if err != nil {
+		return Course{}, []Module{}, err
+	}
+	courseId, err := res.LastInsertId()
+	if err != nil {
+		return Course{}, []Module{}, err
+	}
+	course := Course{int(courseId), title, description}
+	modules := make([]Module, len(moduleTitles))
+	for i := 0; i < len(moduleTitles); i++ {
+		moduleTitle := moduleTitles[i]
+		moduleDescription := moduleDescriptions[i]
+		res, err = c.db.Exec(insertModuleQuery, courseId, moduleTitle, moduleDescription)
+		if err != nil {
+			return Course{}, []Module{}, err
+		}
+		moduleId, err := res.LastInsertId()
+		if err != nil {
+			return Course{}, []Module{}, err
+		}
+		module := Module{int(moduleId), course.Id, moduleTitle, moduleDescription}
+		modules[i] = module
+	}
+	return course, modules, nil
+}
+
+const updateCourseQuery = `
+update courses
+set title = ?, description = ?
+where id = ?;
+`
+
+func (c *DbClient) EditCourse(courseId int, title string, description string, moduleIds []int, moduleTitles []string, moduleDescriptions []string) (Course, []Module, error) {
+	if len(moduleTitles) != len(moduleDescriptions) || len(moduleTitles) != len(moduleIds) {
+		return Course{}, []Module{}, fmt.Errorf("moduleTitles, moduleDescriptions, and moduleIds must have the same length, got titles: %d, descs: %d, ids: %d", len(moduleTitles), len(moduleDescriptions), len(moduleIds))
+	}
+	res, err := c.db.Exec(updateCourseQuery, title, description, courseId)
+	if err != nil {
+		return Course{}, []Module{}, err
+	}
+	course := Course{courseId, title, description}
+	modules := make([]Module, len(moduleTitles))
+	for i := 0; i < len(moduleTitles); i++ {
+		moduleId := moduleIds[i]
+		moduleTitle := moduleTitles[i]
+		moduleDescription := moduleDescriptions[i]
+		// -1 means this is a new module
+		if moduleId == -1 {
+			res, err = c.db.Exec(insertModuleQuery, courseId, moduleTitle, moduleDescription)
+			if err != nil {
+				return Course{}, []Module{}, err
+			}
+			moduleIdInt64, err := res.LastInsertId()
+			if err != nil {
+				return Course{}, []Module{}, err
+			}
+			moduleId = int(moduleIdInt64)
+		} else {
+			_, err = c.db.Exec(updateModuleQuery, moduleTitle, moduleDescription, moduleId)
+			if err != nil {
+				return Course{}, []Module{}, err
+			}
+		}
+		module := Module{moduleId, course.Id, moduleTitle, moduleDescription}
+		modules[i] = module
+	}
+	return course, modules, nil
+}
+
+const getCoursesQuery = `
+select c.id, c.title, c.description
+from courses c
+order by c.id;
+`
+
+const getUserCoursesQuery = `
+select c.id, c.title, c.description
+from courses c
+where c.user_id = ?
+order by c.id;
+`
+
+const getCoursesWithModulesWithBlocksQuery = `
+select distinct c.id, c.title, c.description
+from courses c
+join modules m on c.id = m.course_id
+join blocks b on m.id = b.module_id
+order by c.id;
+`
+
+func (c *DbClient) GetCourses(userId int64, forStudent bool) ([]Course, error) {
+	var courseRows *sql.Rows
+	var err error
+	if forStudent {
+		courseRows, err = c.db.Query(getCoursesWithModulesWithBlocksQuery)
+	} else if userId != -1 {
+		courseRows, err = c.db.Query(getUserCoursesQuery, userId)
+	} else {
+		courseRows, err = c.db.Query(getCoursesQuery)
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer courseRows.Close()
+
+	var courses []Course
+	for courseRows.Next() {
+		var course Course
+		err := courseRows.Scan(&course.Id, &course.Title, &course.Description)
+		if err != nil {
+			return nil, err
+		}
+		courses = append(courses, course)
+	}
+	if err := courseRows.Err(); err != nil {
+		return nil, err
+	}
+	return courses, nil
+}
+
+const getCourseQuery = `
+select c.id, c.title, c.description
+from courses c
+where c.user_id = ? and c.id = ?;
+`
+
+func (c *DbClient) GetCourse(userId int64, courseId int) (Course, error) {
+	row := c.db.QueryRow(getCourseQuery, userId, courseId)
+	var course Course
+	err := row.Scan(&course.Id, &course.Title, &course.Description)
+	if err != nil {
+		return Course{}, err
+	}
+	return course, nil
+}
+
+const getModuleCourseQuery = `
+select c.id, c.title, c.description
+from modules m
+join courses c on m.course_id = c.id
+where c.user_id = ? and m.id = ?;
+`
+
+func (c *DbClient) GetModuleCourse(userId int64, moduleId int) (Course, error) {
+	row := c.db.QueryRow(getCourseQuery, userId, moduleId)
+	var course Course
+	err := row.Scan(&course.Id, &course.Title, &course.Description)
+	if err != nil {
+		return Course{}, err
+	}
+	return course, nil
+}
+
+const deleteCourseQuery = `
+delete from courses
+where id = ?;
+`
+
+func (c *DbClient) DeleteCourse(courseId int) error {
+	tx, err := c.db.Begin()
+	modules, err := c.GetModules(courseId, false)
+	for _, module := range modules {
+		_, err = tx.Exec(deleteContentForModuleQuery, module.Id)
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+	_, err = tx.Exec(deleteCourseQuery, courseId)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	return tx.Commit()
+}

@@ -5,6 +5,8 @@ import (
 	"math/rand/v2"
 	"net/http"
 	"strings"
+
+	"noobular/internal/db"
 )
 
 type Renderer struct {
@@ -130,7 +132,7 @@ type UiModule struct {
 	Description string
 }
 
-func NewUiModule(m Module) UiModule {
+func NewUiModule(m db.Module) UiModule {
 	return UiModule{m.Id, m.CourseId, m.Title, m.Description}
 }
 
@@ -160,7 +162,7 @@ type UiModuleStudent struct {
 }
 
 type UiBlock struct {
-	BlockType BlockType
+	BlockType db.BlockType
 	Content   UiContent
 	Question  UiQuestion
 }
@@ -174,7 +176,7 @@ type UiQuestion struct {
 	Explanation  string
 }
 
-func NewUiQuestion(q Question, choices []Choice, explanation Content) UiQuestion {
+func NewUiQuestion(q db.Question, choices []db.Choice, explanation db.Content) UiQuestion {
 	questionIdx := rand.Int()
 	uiChoices := make([]UiChoice, len(choices))
 	for i, choice := range choices {
@@ -210,7 +212,7 @@ type UiChoice struct {
 	IsCorrect  bool
 }
 
-func NewUiChoice(questionIdx int, c Choice) UiChoice {
+func NewUiChoice(questionIdx int, c db.Choice) UiChoice {
 	return UiChoice{c.Id, questionIdx, rand.Int(), c.ChoiceText, c.Correct}
 }
 
@@ -299,7 +301,7 @@ type UiContent struct {
 	Content string
 }
 
-func NewUiContent(content Content) UiContent {
+func NewUiContent(content db.Content) UiContent {
 	return UiContent{content.Id, rand.Int(), content.Content}
 }
 
