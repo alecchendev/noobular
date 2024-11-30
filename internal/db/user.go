@@ -22,16 +22,16 @@ insert into users(username)
 values(?);
 `
 
-func (c *DbClient) CreateUser(username string) (int64, error) {
+func (c *DbClient) CreateUser(username string) (User, error) {
 	res, err := c.db.Exec(insertUserQuery, username)
 	if err != nil {
-		return 0, err
+		return User{}, err
 	}
 	userId, err := res.LastInsertId()
 	if err != nil {
-		return 0, err
+		return User{}, err
 	}
-	return userId, nil
+	return User{userId, username}, nil
 }
 
 func (c *DbClient) GetUser(userId int64) (User, error) {
