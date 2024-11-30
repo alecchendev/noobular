@@ -42,7 +42,8 @@ func main() {
 	port := 8080
 	dbClient := db.NewDbClient()
 	defer dbClient.Close()
-	server := internal.NewServer(dbClient, webAuthn, jwtSecret, port)
+	renderer := internal.NewRenderer(".")
+	server := internal.NewServer(dbClient, renderer, webAuthn, jwtSecret, port)
 	fmt.Println("Listening on port", server.Addr)
 	log.Fatal(server.ListenAndServe())
 }

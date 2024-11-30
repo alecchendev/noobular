@@ -11,17 +11,17 @@ import (
 	"noobular/internal/db"
 )
 
-func NewServer(dbClient *db.DbClient, webAuthn *webauthn.WebAuthn, jwtSecret []byte, port int) *http.Server {
-	router := initRouter(dbClient, webAuthn, jwtSecret)
+func NewServer(dbClient *db.DbClient, renderer Renderer, webAuthn *webauthn.WebAuthn, jwtSecret []byte, port int) *http.Server {
+	router := initRouter(dbClient, renderer, webAuthn, jwtSecret)
 	return &http.Server{
 		Addr:    fmt.Sprintf(":%d", port),
 		Handler: router,
 	}
 }
 
-func initRouter(dbClient *db.DbClient, webAuthn *webauthn.WebAuthn, jwtSecret []byte) *http.ServeMux {
+func initRouter(dbClient *db.DbClient, renderer Renderer, webAuthn *webauthn.WebAuthn, jwtSecret []byte) *http.ServeMux {
 	newHandlerMap := func() HandlerMap {
-		return NewHandlerMap(dbClient, webAuthn, jwtSecret)
+		return NewHandlerMap(dbClient, renderer, webAuthn, jwtSecret)
 	}
 	mux := http.NewServeMux()
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
@@ -53,6 +53,11 @@ func initRouter(dbClient *db.DbClient, webAuthn *webauthn.WebAuthn, jwtSecret []
 
 	mux.Handle("/ui/{questionIdx}/choice", newHandlerMap().Get(handleAddChoice))
 	mux.Handle("/ui/{element}", newHandlerMap().Get(handleAddElement).Delete(handleDeleteElement))
+
+	// Test handlers
+	// TODO: turn this off in production/find a better way to make test fixtures
+	mux.Handle("/signup/test", newHandlerMap().Post(authRejectedHandler(handleCreateTestUser)))
+
 	return mux
 }
 
@@ -109,10 +114,10 @@ func (hm HandlerMap) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 }
 
-func NewHandlerMap(dbClient *db.DbClient, webAuthn *webauthn.WebAuthn, jwtSecret []byte) HandlerMap {
+func NewHandlerMap(dbClient *db.DbClient, renderer Renderer, webAuthn *webauthn.WebAuthn, jwtSecret []byte) HandlerMap {
 	return HandlerMap{
 		handlers:        make(map[string]HandlerMapHandler),
-		ctx:             NewHandlerContext(dbClient, NewRenderer(), webAuthn, jwtSecret),
+		ctx:             NewHandlerContext(dbClient, renderer, webAuthn, jwtSecret),
 		reloadTemplates: true,
 	}
 }
@@ -172,4 +177,13 @@ func handleBrowsePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 		uiCourses[i] = UiCourse{course.Id, course.Title, course.Description, uiModules}
 	}
 	return ctx.renderer.RenderBrowsePage(w, uiCourses, loggedIn)
+}
+
+func handleCreateTestUser(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
+	user, err := ctx.dbClient.CreateUser("test")
+	if err != nil {
+		return err
+	}
+	log.Println("Created test user", user)
+	return nil
 }

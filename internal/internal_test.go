@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"noobular/internal"
 	"noobular/internal/db"
-	"os"
+	"strings"
 	"testing"
 
 	"github.com/go-webauthn/webauthn/webauthn"
@@ -28,10 +28,9 @@ func testServer(ready chan struct{}) {
 	})
 
 	port := 8080
+	renderer := internal.NewRenderer("..")
 	dbClient := db.NewMemoryDbClient()
-	defer dbClient.Close()
-	os.Chdir("..") // Go to root of this project
-	server := internal.NewServer(dbClient, webAuthn, jwtSecret, port)
+	server := internal.NewServer(dbClient, renderer, webAuthn, jwtSecret, port)
 	close(ready)
 	server.ListenAndServe()
 }
@@ -52,9 +51,8 @@ func newTestClient(t *testing.T) testClient {
 	return testClient{t: t, baseUrl: testUrl}
 }
 
-func (c testClient) login() testClient {
+func (c testClient) login(userId int64) testClient {
 	jwtSecret, _ := hex.DecodeString(testJwtSecretHex)
-	userId := int64(1)
 	cookie, _ := internal.CreateAuthCookie(jwtSecret, userId)
 	c.session_token = &cookie
 	return c
@@ -62,6 +60,16 @@ func (c testClient) login() testClient {
 
 func (c testClient) get(path string) *http.Response {
 	req, _ := http.NewRequest("GET", c.baseUrl+path, nil)
+	if c.session_token != nil {
+		req.AddCookie(c.session_token)
+	}
+	resp, _ := http.DefaultClient.Do(req)
+	return resp
+}
+
+func (c testClient) post(path string, body string) *http.Response {
+	req, _ := http.NewRequest("POST", c.baseUrl+path, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	if c.session_token != nil {
 		req.AddCookie(c.session_token)
 	}
@@ -97,7 +105,7 @@ func TestBasicNav(t *testing.T) {
 		assert.Contains(t, body, "Signin")
 		assert.Contains(t, body, "Signup")
 
-		client = client.login()
+		client = client.login(1)
 		resp = client.get(path)
 		assert.Equal(t, 200, resp.StatusCode)
 
@@ -111,4 +119,40 @@ func TestBasicNav(t *testing.T) {
 			test(t, tt.path, tt.expectedText)
 		})
 	}
+}
+
+func TestCreateCourse(t *testing.T) {
+	startServer()
+
+	client := newTestClient(t)
+	resp := client.post("/signup/test", "")
+	assert.Equal(t, 200, resp.StatusCode)
+
+	client = client.login(1)
+	resp = client.get("/teacher")
+	assert.Equal(t, 200, resp.StatusCode)
+
+	body := bodyText(t, resp)
+	assert.Contains(t, body, "/teacher/course/create")
+	sampleCourseName := "sample course name"
+	assert.NotContains(t, body, sampleCourseName)
+
+	formData := url.Values{}
+
+	formData.Set("title", "hello")
+	formData.Set("description", "goodbye")
+	formData.Add("module-title[]", "module title")
+	formData.Add("module-id[]", "-1")
+	formData.Add("module-description[]", "module description")
+
+	resp = client.post("/teacher/course/create", formData.Encode())
+	assert.Equal(t, 200, resp.StatusCode)
+
+	resp = client.get("/teacher")
+	assert.Equal(t, 200, resp.StatusCode)
+	body = bodyText(t, resp)
+	assert.Contains(t, body, "hello")
+	assert.Contains(t, body, "goodbye")
+	assert.Contains(t, body, "module title")
+	assert.Contains(t, body, "module description")
 }

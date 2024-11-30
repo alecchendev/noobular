@@ -10,20 +10,22 @@ import (
 )
 
 type Renderer struct {
+	projectRootDir string
 	templates map[string]*template.Template
 }
 
-func NewRenderer() Renderer {
+func NewRenderer(projectRootDir string) Renderer {
 	return Renderer{
-		templates: initTemplates(),
+		projectRootDir: projectRootDir,
+		templates: initTemplates(projectRootDir),
 	}
 }
 
 func (r *Renderer) refreshTemplates() {
-	r.templates = initTemplates()
+	r.templates = initTemplates(r.projectRootDir)
 }
 
-func initTemplates() map[string]*template.Template {
+func initTemplates(projectRootDir string) map[string]*template.Template {
 	funcMap := template.FuncMap{
 		"TitleCase": func(s string) string {
 			return strings.Title(strings.ToLower(s))
@@ -48,24 +50,25 @@ func initTemplates() map[string]*template.Template {
 			return i + 1
 		},
 	}
-	return map[string]*template.Template{
-		// Pages
-		"index.html":   template.Must(template.ParseFiles("template/page.html", "template/index.html")),
-		"signup.html":  template.Must(template.ParseFiles("template/page.html", "template/signup.html")),
-		"student.html": template.Must(template.ParseFiles("template/page.html", "template/student.html")),
-		"courses.html": template.Must(template.ParseFiles("template/page.html", "template/courses.html")),
-		"create_course.html": template.Must(template.New("").Funcs(funcMap).ParseFiles(
-			"template/page.html", "template/create_course.html",
-			"template/add_element.html", "template/created_course_response.html",
-			"template/edited_course_response.html")),
-		"edit_module.html": template.Must(template.New("").Funcs(funcMap).ParseFiles(
-			"template/page.html", "template/edit_module.html", "template/add_element.html",
-			"template/edited_module_response.html")),
-		"take_module.html": template.Must(template.New("").Funcs(funcMap).ParseFiles(
-			"template/page.html", "template/take_module.html")),
-		// Standalone partials
-		"add_element.html": template.Must(template.New("").Funcs(funcMap).ParseFiles("template/add_element.html")),
+	filePaths := map[string][]string{
+		"index.html": {"page.html", "index.html"},
+		"signup.html": {"page.html", "signup.html"},
+		"student.html": {"page.html", "student.html"},
+		"courses.html": {"page.html", "courses.html"},
+		"create_course.html": {"page.html", "create_course.html", "add_element.html", "created_course_response.html", "edited_course_response.html"},
+		"edit_module.html": {"page.html", "edit_module.html", "add_element.html", "edited_module_response.html"},
+		"take_module.html": {"page.html", "take_module.html"},
+		"add_element.html": {"add_element.html"},
 	}
+	templates := make(map[string]*template.Template)
+	for name, paths := range filePaths {
+		files := make([]string, len(paths))
+		for i, path := range paths {
+			files[i] = projectRootDir + "/template/" + path
+		}
+		templates[name] = template.Must(template.New("").Funcs(funcMap).ParseFiles(files...))
+	}
+	return templates
 }
 
 type PageArgs struct {

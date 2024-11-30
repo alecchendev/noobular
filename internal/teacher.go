@@ -68,9 +68,21 @@ func parseCreateCourseRequest(r *http.Request) (createCourseRequest, error) {
 		return createCourseRequest{}, err
 	}
 	title := r.Form.Get("title")
+	if title == "" {
+		return createCourseRequest{}, fmt.Errorf("Title cannot be empty")
+	}
 	description := r.Form.Get("description")
+	if description == "" {
+		return createCourseRequest{}, fmt.Errorf("Description cannot be empty")
+	}
 	moduleTitles := r.Form["module-title[]"]
+	if len(moduleTitles) == 0 {
+		return createCourseRequest{}, fmt.Errorf("Course must have at least one module")
+	}
 	moduleDescriptions := r.Form["module-description[]"]
+	if len(moduleDescriptions) != len(moduleTitles) {
+		return createCourseRequest{}, fmt.Errorf("Each module must have a description")
+	}
 	return createCourseRequest{title, description, moduleTitles, moduleDescriptions}, nil
 }
 
