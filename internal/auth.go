@@ -85,7 +85,7 @@ func handleSigninPage(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 // Log out
 
 func handleLogout(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
-	cookie, err := createAuthCookie(ctx.jwtSecret, userId)
+	cookie, err := CreateAuthCookie(ctx.jwtSecret, userId)
 	if err != nil {
 		return err
 	}
@@ -144,7 +144,7 @@ func SaveSessionAndReturnOpts(w http.ResponseWriter, ctx HandlerContext, webAuth
 	return err
 }
 
-func createAuthCookie(jwtSecret []byte, userId int64) (http.Cookie, error) {
+func CreateAuthCookie(jwtSecret []byte, userId int64) (http.Cookie, error) {
 	expiry := time.Now().Add(24 * time.Hour)
 	token, err := CreateJwt(jwtSecret, userId, expiry)
 	if err != nil {
@@ -219,7 +219,7 @@ func handleSignupFinish(w http.ResponseWriter, r *http.Request, ctx HandlerConte
 	// TODO: add credentials to cookie and verify in auth middleware
 	// This would mean even if attacker gets our server's jwt secret
 	// they'd need to also compromise the user's webauthn device to forge a token
-	cookie, err := createAuthCookie(ctx.jwtSecret, webAuthnUser.User.Id)
+	cookie, err := CreateAuthCookie(ctx.jwtSecret, webAuthnUser.User.Id)
 	http.SetCookie(w, &cookie)
 	return nil
 }
@@ -288,7 +288,7 @@ func handleSigninFinish(w http.ResponseWriter, r *http.Request, ctx HandlerConte
 	}
 	log.Printf("User %s logged in with credentials", username)
 
-	cookie, err := createAuthCookie(ctx.jwtSecret, webAuthnUser.User.Id)
+	cookie, err := CreateAuthCookie(ctx.jwtSecret, webAuthnUser.User.Id)
 	http.SetCookie(w, &cookie)
 	return nil
 }
