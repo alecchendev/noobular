@@ -2,14 +2,11 @@ package internal
 
 import (
 	"bytes"
-	"database/sql"
-	"encoding/json"
 	"fmt"
 	"html/template"
 	"log"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/google/uuid"
@@ -40,29 +37,29 @@ func initRouter(dbClient *db.DbClient, webAuthn *webauthn.WebAuthn, jwtSecret []
 	mux.Handle("/signin/begin", newHandlerMap().Get(handleSigninBegin))
 	mux.Handle("/signin/finish", newHandlerMap().Post(handleSigninFinish))
 
-	mux.Handle("/logout", newHandlerMap().Get(authHandler(handleLogout)))
+	mux.Handle("/logout", newHandlerMap().Get(authRequiredHandler(handleLogout)))
 
-	mux.Handle("/browse", newHandlerMap().Get(handleBrowsePage))
+	mux.Handle("/browse", newHandlerMap().Get(authOptionalHandler(handleBrowsePage)))
 
-	mux.Handle("/student", newHandlerMap().Get(authHandler(handleStudentPage)))
-	mux.Handle("/teacher", newHandlerMap().Get(authHandler(handleTeacherCoursesPage)))
+	mux.Handle("/student", newHandlerMap().Get(authRequiredHandler(handleStudentPage)))
+	mux.Handle("/teacher", newHandlerMap().Get(authRequiredHandler(handleTeacherCoursesPage)))
 
-	mux.Handle("/student/course", newHandlerMap().Get(authHandler(handleStudentCoursesPage)))
-	mux.Handle("/student/course/{courseId}/module/{moduleId}/block/{blockIdx}", newHandlerMap().Get(authHandler(handleTakeModulePage)))
-	mux.Handle("/student/course/{courseId}/module/{moduleId}/block/{blockIdx}/piece", newHandlerMap().Get(authHandler(handleTakeModule)))
-	mux.Handle("/student/course/{courseId}/module/{moduleId}/block/{blockIdx}/answer", newHandlerMap().Post(authHandler(handleAnswerQuestion)))
+	mux.Handle("/student/course", newHandlerMap().Get(authRequiredHandler(handleStudentCoursesPage)))
+	mux.Handle("/student/course/{courseId}/module/{moduleId}/block/{blockIdx}", newHandlerMap().Get(authRequiredHandler(handleTakeModulePage)))
+	mux.Handle("/student/course/{courseId}/module/{moduleId}/block/{blockIdx}/piece", newHandlerMap().Get(authRequiredHandler(handleTakeModule)))
+	mux.Handle("/student/course/{courseId}/module/{moduleId}/block/{blockIdx}/answer", newHandlerMap().Post(authRequiredHandler(handleAnswerQuestion)))
 
 	// TODO: make these sub routes of teacher
-	mux.Handle("/course/create", newHandlerMap().Get(authHandler(handleCreateCoursePage)).Post(authHandler(handleCreateCourse)))
-	mux.Handle("/course/{courseId}/edit", newHandlerMap().Get(authHandler(handleEditCoursePage)))
-	mux.Handle("/course/{courseId}", newHandlerMap().Put(authHandler(handleEditCourse)).Delete(authHandler(handleDeleteCourse)))
-	mux.Handle("/course/{courseId}/module/{moduleId}", newHandlerMap().Put(authHandler(handleEditModule)).Delete(authHandler(handleDeleteModule)))
+	mux.Handle("/course/create", newHandlerMap().Get(authRequiredHandler(handleCreateCoursePage)).Post(authRequiredHandler(handleCreateCourse)))
+	mux.Handle("/course/{courseId}/edit", newHandlerMap().Get(authRequiredHandler(handleEditCoursePage)))
+	mux.Handle("/course/{courseId}", newHandlerMap().Put(authRequiredHandler(handleEditCourse)).Delete(authRequiredHandler(handleDeleteCourse)))
+	mux.Handle("/course/{courseId}/module/{moduleId}", newHandlerMap().Put(authRequiredHandler(handleEditModule)).Delete(authRequiredHandler(handleDeleteModule)))
 	mux.Handle("/ui/{questionIdx}/choice", newHandlerMap().Get(handleAddChoice))
 	mux.Handle("/ui/{element}", newHandlerMap().Get(handleAddElement).Delete(handleDeleteElement))
-	mux.Handle("/course/{courseId}/module/{moduleId}/edit", newHandlerMap().Get(authHandler(handleEditModulePage)))
+	mux.Handle("/course/{courseId}/module/{moduleId}/edit", newHandlerMap().Get(authRequiredHandler(handleEditModulePage)))
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 	mux.Handle("/style/", http.StripPrefix("/style/", http.FileServer(http.Dir("style"))))
-	mux.Handle("/", newHandlerMap().Get(handleHomePage))
+	mux.Handle("/", newHandlerMap().Get(authOptionalHandler(handleHomePage)))
 	return mux
 }
 
@@ -149,274 +146,21 @@ func (hm HandlerMap) Delete(handler HandlerMapHandler) HandlerMap {
 
 type UserHandler func(http.ResponseWriter, *http.Request, HandlerContext, int64) error
 
-func checkCookie(r *http.Request, jwtSecret []byte) (int64, error) {
-	tokenCookie, err := r.Cookie("session_token")
-	if err != nil {
-		log.Println("No session token")
-		return 0, err
-	}
-	userId, err := ValidateJwt(jwtSecret, tokenCookie.Value)
-	if err != nil {
-		log.Println("Invalid session token:", err)
-		return 0, err
-	}
-	return userId, nil
-}
-
-func authHandler(handler UserHandler) HandlerMapHandler {
-	return func(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
-		userId, err := checkCookie(r, ctx.jwtSecret)
-		if err != nil {
-			http.Redirect(w, r, "/signin", http.StatusSeeOther)
-			return nil
-		}
-		_, err = ctx.dbClient.GetUser(userId)
-		if err == sql.ErrNoRows {
-			log.Println("User not found")
-			http.Redirect(w, r, "/signup", http.StatusSeeOther)
-			return nil
-		}
-		if err != nil {
-			log.Println("Error getting user:", err)
-			http.Redirect(w, r, "/signin", http.StatusSeeOther)
-			return nil
-		}
-		return handler(w, r, ctx, userId)
-	}
-}
+type AnyoneHandler func(http.ResponseWriter, *http.Request, HandlerContext, bool) error
 
 // Home page
 
-func handleHomePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
+func handleHomePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, loggedIn bool) error {
 	if r.URL.Path != "/" {
 		// TODO: We should return 404 here
 		return fmt.Errorf("Not found")
 	}
-	_, err := checkCookie(r, ctx.jwtSecret)
-	loggedIn := err == nil
 	return ctx.renderer.RenderHomePage(w, loggedIn)
-}
-
-// Webauthn sign up
-
-func GetWebAuthnUser(dbClient *db.DbClient, username string, create bool, failExistingCredential bool) (WebAuthnUser, error) {
-	var user db.User
-	user, err := dbClient.GetUserByUsername(username)
-	if err == sql.ErrNoRows && create {
-		user, err = dbClient.CreateUser(username)
-		if err != nil {
-			return WebAuthnUser{}, err
-		}
-	} else if err != nil {
-		return WebAuthnUser{}, fmt.Errorf("Error getting user: %v", err)
-	}
-	credential, err := dbClient.GetCredentialByUserId(user.Id)
-	if err == nil && failExistingCredential {
-		return WebAuthnUser{}, fmt.Errorf("User already has a credential")
-	} else if err == sql.ErrNoRows {
-		return WebAuthnUser{user, []webauthn.Credential{}}, nil
-	} else if err != nil {
-		return WebAuthnUser{}, fmt.Errorf("Error getting credential: %v", err)
-	}
-	webAuthnCredential, err := NewWebAuthnCredential(&credential)
-	if err != nil {
-		return WebAuthnUser{}, fmt.Errorf("Error converting credential: %v", err)
-	}
-	return WebAuthnUser{user, []webauthn.Credential{webAuthnCredential}}, nil
-}
-
-func SaveSessionAndReturnOpts(w http.ResponseWriter, ctx HandlerContext, webAuthnUser WebAuthnUser, options interface{}, session *webauthn.SessionData) error {
-	// Save session data for next request
-	sessionBlob, err := json.Marshal(session)
-	if err != nil {
-		return fmt.Errorf("Error marshalling session: %v", err)
-	}
-	err = ctx.dbClient.InsertSession(webAuthnUser.User.Id, sessionBlob)
-	if err != nil {
-		return fmt.Errorf("Error inserting session: %v", err)
-	}
-	// Write back option json to client
-	optionsBlob, err := json.Marshal(options)
-	if err != nil {
-		return fmt.Errorf("Error marshalling options: %v", err)
-	}
-	w.Header().Add("Content-Type", "application/json")
-	_, err = w.Write(optionsBlob)
-	return err
-}
-
-func handleSignupBegin(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
-	username := r.URL.Query().Get("username")
-	if username == "" {
-		return fmt.Errorf("empty username")
-	}
-	webAuthnUser, err := GetWebAuthnUser(ctx.dbClient, username, true, true)
-	if err != nil {
-		return fmt.Errorf("Error getting webauthn user: %v", err)
-	}
-
-	// Begin registration
-	options, session, err := ctx.webAuthn.BeginRegistration(&webAuthnUser)
-	if err != nil {
-		return fmt.Errorf("Error beginning registration: %v", err)
-	}
-	return SaveSessionAndReturnOpts(w, ctx, webAuthnUser, options, session)
-}
-
-func handleSignupFinish(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
-	username := r.URL.Query().Get("username")
-	if username == "" {
-		return fmt.Errorf("empty username")
-	}
-	webAuthnUser, err := GetWebAuthnUser(ctx.dbClient, username, false, false)
-	if err != nil {
-		return fmt.Errorf("Error getting webauthn user: %v", err)
-	}
-
-	sessionData, err := ctx.dbClient.GetSession(webAuthnUser.User.Id)
-	if err != nil {
-		return fmt.Errorf("Error getting session: %v", err)
-	}
-	var session webauthn.SessionData
-	err = json.Unmarshal(sessionData, &session)
-	if err != nil {
-		return fmt.Errorf("Error unmarshalling session: %v", err)
-	}
-
-	webAuthnCredential, err := ctx.webAuthn.FinishRegistration(&webAuthnUser, session, r)
-	if err != nil {
-		return fmt.Errorf("Error finishing registration: %v", err)
-	}
-	credential, err := NewCredential(webAuthnUser.User.Id, *webAuthnCredential)
-	if err != nil {
-		return fmt.Errorf("Error converting credential: %v", err)
-	}
-	err = ctx.dbClient.InsertCredential(credential)
-	if err != nil {
-		return fmt.Errorf("Error inserting credential: %v", err)
-	}
-	log.Printf("User %s registered with credentials", username)
-
-	// TODO: add credentials to cookie and verify in auth middleware
-	// This would mean even if attacker gets our server's jwt secret
-	// they'd need to also compromise the user's webauthn device to forge a token
-	cookie, err := createAuthCookie(ctx.jwtSecret, webAuthnUser.User.Id)
-	http.SetCookie(w, &cookie)
-	return nil
-}
-
-// Webauthn sign in
-
-func handleSigninBegin(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
-	username := r.URL.Query().Get("username")
-	if username == "" {
-		return fmt.Errorf("empty username")
-	}
-	webAuthnUser, err := GetWebAuthnUser(ctx.dbClient, username, false, false)
-	if err != nil {
-		return fmt.Errorf("Error getting webauthn user: %v", err)
-	}
-
-	// Begin registration
-	options, session, err := ctx.webAuthn.BeginLogin(&webAuthnUser)
-	if err != nil {
-		return fmt.Errorf("Error beginning registration: %v", err)
-	}
-	return SaveSessionAndReturnOpts(w, ctx, webAuthnUser, options, session)
-}
-
-func handleSigninFinish(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
-	username := r.URL.Query().Get("username")
-	if username == "" {
-		return fmt.Errorf("empty username")
-	}
-	webAuthnUser, err := GetWebAuthnUser(ctx.dbClient, username, false, false)
-	if err != nil {
-		return fmt.Errorf("Error getting webauthn user: %v", err)
-	}
-
-	sessionData, err := ctx.dbClient.GetSession(webAuthnUser.User.Id)
-	if err != nil {
-		return fmt.Errorf("Error getting session: %v", err)
-	}
-	var session webauthn.SessionData
-	err = json.Unmarshal(sessionData, &session)
-	if err != nil {
-		return fmt.Errorf("Error unmarshalling session: %v", err)
-	}
-
-	webAuthnCredential, err := ctx.webAuthn.FinishLogin(&webAuthnUser, session, r)
-	if err != nil {
-		return fmt.Errorf("Error finishing registration: %v", err)
-	}
-
-	// Prevent replay attacks by checking the sign count has been incremented
-	if webAuthnCredential.Authenticator.CloneWarning {
-		return fmt.Errorf("Sign count not incremented, key may have been cloned!")
-	}
-
-	credential, err := NewCredential(webAuthnUser.User.Id, *webAuthnCredential)
-	if err != nil {
-		return fmt.Errorf("Error converting credential: %v", err)
-	}
-	err = ctx.dbClient.UpdateCredential(credential)
-	if err != nil {
-		return fmt.Errorf("Error updating credential: %v", err)
-	}
-	log.Printf("User %s logged in with credentials", username)
-
-	cookie, err := createAuthCookie(ctx.jwtSecret, webAuthnUser.User.Id)
-	http.SetCookie(w, &cookie)
-	return nil
-}
-
-
-// Sign up page
-
-func handleSignupPage(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
-	return ctx.renderer.RenderSignupPage(w)
-}
-
-func createAuthCookie(jwtSecret []byte, userId int64) (http.Cookie, error) {
-	expiry := time.Now().Add(24 * time.Hour)
-	token, err := CreateJwt(jwtSecret, userId, expiry)
-	if err != nil {
-		return http.Cookie{}, err
-	}
-	return http.Cookie{
-		Name:     "session_token",
-		Value:    token,
-		Expires:  expiry,
-		HttpOnly: true,                 // Not accessible to client side code
-		SameSite: http.SameSiteLaxMode, // Cannot send cookie to other domains
-		// TODO: make it easy to switch between local/prod
-		Secure: false, // HTTPS only, need to disable locally
-		Path:   "/",
-	}, nil
-}
-
-// Sign in page
-
-func handleSigninPage(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
-	return ctx.renderer.RenderSigninPage(w)
-}
-
-func handleLogout(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
-	cookie, err := createAuthCookie(ctx.jwtSecret, userId)
-	if err != nil {
-		return err
-	}
-	cookie.Expires = time.Unix(0, 0)
-	http.SetCookie(w, &cookie)
-	http.Redirect(w, r, "/", http.StatusSeeOther)
-	return nil
 }
 
 // Browse page
 
-func handleBrowsePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
-	_, err := checkCookie(r, ctx.jwtSecret)
-	loggedIn := err == nil
+func handleBrowsePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, loggedIn bool) error {
 	// Copied from teacher's course page
 	courses, err := ctx.dbClient.GetCourses(-1, false)
 	if err != nil {
@@ -998,5 +742,3 @@ func handleAnswerQuestion(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 		Explanation:     uiTakeModule.Explanation,
 	})
 }
-
-// Render individual module (for switching)
