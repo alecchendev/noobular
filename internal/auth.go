@@ -59,6 +59,17 @@ func authOptionalHandler(handler AnyoneHandler) HandlerMapHandler {
 	}
 }
 
+func authRejectedHandler(handler HandlerMapHandler) HandlerMapHandler {
+	return func(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
+		_, err := checkCookie(r, ctx.jwtSecret)
+		if err == nil {
+			http.Redirect(w, r, "/", http.StatusSeeOther)
+			return nil
+		}
+		return handler(w, r, ctx)
+	}
+}
+
 // Sign up page
 
 func handleSignupPage(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
@@ -215,6 +226,10 @@ func handleSignupFinish(w http.ResponseWriter, r *http.Request, ctx HandlerConte
 
 // Webauthn sign in
 
+// TODO: there is a bug when you have 1password (and maybe others) autofill
+// and press submit for you. It pulls up both the widget in the top left,
+// but also asks the browser (so on safari it starts doing the safari passkey flow).
+// If you manually type and press submit it works fine.
 func handleSigninBegin(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
 	username := r.URL.Query().Get("username")
 	if username == "" {

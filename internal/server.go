@@ -28,18 +28,20 @@ func initRouter(dbClient *db.DbClient, webAuthn *webauthn.WebAuthn, jwtSecret []
 		return NewHandlerMap(dbClient, webAuthn, jwtSecret)
 	}
 	mux := http.NewServeMux()
-	mux.Handle("/signup", newHandlerMap().Get(handleSignupPage))
-	mux.Handle("/signin", newHandlerMap().Get(handleSigninPage))
+	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
+	mux.Handle("/style/", http.StripPrefix("/style/", http.FileServer(http.Dir("style"))))
 
-	mux.Handle("/signup/begin", newHandlerMap().Get(handleSignupBegin))
-	mux.Handle("/signup/finish", newHandlerMap().Post(handleSignupFinish))
+	mux.Handle("/", newHandlerMap().Get(authOptionalHandler(handleHomePage)))
+	mux.Handle("/browse", newHandlerMap().Get(authOptionalHandler(handleBrowsePage)))
 
-	mux.Handle("/signin/begin", newHandlerMap().Get(handleSigninBegin))
-	mux.Handle("/signin/finish", newHandlerMap().Post(handleSigninFinish))
-
+	mux.Handle("/signup", newHandlerMap().Get(authRejectedHandler(handleSignupPage)))
+	mux.Handle("/signin", newHandlerMap().Get(authRejectedHandler(handleSigninPage)))
+	mux.Handle("/signup/begin", newHandlerMap().Get(authRejectedHandler(handleSignupBegin)))
+	mux.Handle("/signup/finish", newHandlerMap().Post(authRejectedHandler(handleSignupFinish)))
+	mux.Handle("/signin/begin", newHandlerMap().Get(authRejectedHandler(handleSigninBegin)))
+	mux.Handle("/signin/finish", newHandlerMap().Post(authRejectedHandler(handleSigninFinish)))
 	mux.Handle("/logout", newHandlerMap().Get(authRequiredHandler(handleLogout)))
 
-	mux.Handle("/browse", newHandlerMap().Get(authOptionalHandler(handleBrowsePage)))
 
 	mux.Handle("/student", newHandlerMap().Get(authRequiredHandler(handleStudentPage)))
 	mux.Handle("/teacher", newHandlerMap().Get(authRequiredHandler(handleTeacherCoursesPage)))
@@ -57,9 +59,6 @@ func initRouter(dbClient *db.DbClient, webAuthn *webauthn.WebAuthn, jwtSecret []
 	mux.Handle("/ui/{questionIdx}/choice", newHandlerMap().Get(handleAddChoice))
 	mux.Handle("/ui/{element}", newHandlerMap().Get(handleAddElement).Delete(handleDeleteElement))
 	mux.Handle("/course/{courseId}/module/{moduleId}/edit", newHandlerMap().Get(authRequiredHandler(handleEditModulePage)))
-	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
-	mux.Handle("/style/", http.StripPrefix("/style/", http.FileServer(http.Dir("style"))))
-	mux.Handle("/", newHandlerMap().Get(authOptionalHandler(handleHomePage)))
 	return mux
 }
 
