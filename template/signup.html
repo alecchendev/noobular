@@ -30,7 +30,7 @@ form {
 }
 
 /* Copied from create_course.html */
-#submit-button {
+.submit-button {
     margin-top: 1rem;
     height: 50px;
     background-color: #0077cc;
@@ -39,11 +39,159 @@ form {
     border-radius: 10px;
 }
 
-#submit-button:hover {
+.submit-button:hover {
     background-color: #0055aa;
 }
 {{ end }}
 {{ define "content" }}
+<script src="/static/base64.min.js"></script>
+
+<!-- Copied from https://github.com/Darkness4/webauthn-minimal/blob/main/pages/index.html -->
+<script>
+  async function register(name) {
+    if (!window.PublicKeyCredential) {
+      alert('Error: this browser does not support WebAuthn.');
+      return;
+    }
+
+    console.log('registering', name);
+    let resp = await fetch(`/signup/begin?username=${name}`);
+	  console.log("resp", resp);
+
+    if (!resp.ok) {
+      throw new Error(await resp.text());
+    }
+
+    const options = await resp.json();
+	  console.log("options", options);
+
+    // go-webauthn returns base64 encoded values.
+    options.publicKey.challenge = Base64.toUint8Array(
+      options.publicKey.challenge
+    );
+    options.publicKey.user.id = Base64.toUint8Array(options.publicKey.user.id);
+    if (options.publicKey.excludeCredentials) {
+      options.publicKey.excludeCredentials.forEach(function (listItem) {
+        listItem.id = Base64.toUint8Array(listItem.id);
+      });
+    }
+
+    const credential = await navigator.credentials.create(options);
+
+    resp = await fetch(`/signup/finish?username=${name}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        id: credential.id,
+        rawId: Base64.fromUint8Array(new Uint8Array(credential.rawId), true),
+        type: credential.type,
+        response: {
+          attestationObject: Base64.fromUint8Array(
+            new Uint8Array(credential.response.attestationObject),
+            true
+          ),
+          clientDataJSON: Base64.fromUint8Array(
+            new Uint8Array(credential.response.clientDataJSON),
+            true
+          ),
+        },
+      }),
+    });
+
+    if (!resp.ok) {
+      throw new Error(await resp.text());
+    }
+
+    window.location.href = '/student';
+  }
+
+  // Login executes the WebAuthn flow.
+  async function login(name) {
+    if (!window.PublicKeyCredential) {
+      alert('Error: this browser does not support WebAuthn');
+      return;
+    }
+
+    let resp = await fetch(`/signin/begin?username=${name}`);
+
+    if (!resp.ok) {
+      throw new Error(await resp.text());
+    }
+
+    const options = await resp.json();
+
+    options.publicKey.challenge = Base64.toUint8Array(
+      options.publicKey.challenge
+    );
+    options.publicKey.allowCredentials.forEach(function (listItem) {
+      listItem.id = Base64.toUint8Array(listItem.id);
+    });
+
+    const assertion = await navigator.credentials.get(options);
+
+    resp = await fetch(`/signin/finish?username=${name}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        id: assertion.id,
+        rawId: Base64.fromUint8Array(new Uint8Array(assertion.rawId), true),
+        type: assertion.type,
+        response: {
+          authenticatorData: Base64.fromUint8Array(
+            new Uint8Array(assertion.response.authenticatorData),
+            true
+          ),
+          clientDataJSON: Base64.fromUint8Array(
+            new Uint8Array(assertion.response.clientDataJSON),
+            true
+          ),
+          signature: Base64.fromUint8Array(
+            new Uint8Array(assertion.response.signature),
+            true
+          ),
+          userHandle: Base64.fromUint8Array(
+            new Uint8Array(assertion.response.userHandle),
+            true
+          ),
+        },
+      }),
+    });
+
+    if (!resp.ok) {
+      throw new Error(await resp.text());
+    }
+
+    window.location.href = '/student';
+  }
+
+  window.addEventListener('DOMContentLoaded', () => {
+    signUp = document.getElementById('webauthn-sign-up');
+    if (signUp) {
+      signUp.addEventListener('click', async () => {
+	try {
+	  await register(document.getElementById('username').value);
+	} catch (err) {
+	  alert(err);
+	}
+      });
+    }
+
+    signIn = document.getElementById('webauthn-sign-in');
+    if (signIn) {
+      signIn.addEventListener('click', async () => {
+	try {
+	  await login(document.getElementById('username').value);
+	} catch (err) {
+	  alert(err);
+	}
+      });
+    }
+  });
+</script>
 
 <div id="signup-container">
 	{{ if .Signin }}
@@ -51,13 +199,6 @@ form {
 	{{ else }}
 	<h1>Signup</h1>
 	{{ end }}
-	<form
-		{{ if .Signin }}
-		hx-post="/signin"
-		{{ else }}
-		hx-post="/signup"
-		{{ end }}
-	>
 		<input type="text" id="username" name="username"
 		{{ if .Signin }}
 		placeholder="Username"
@@ -65,8 +206,15 @@ form {
 		placeholder="What should we call you?"
 		{{ end }}
 		required autofocus>
-		<button id="submit-button" type="submit">Submit</button>
-	</form>
+		<button
+			{{ if .Signin }}
+			id="webauthn-sign-in"
+			{{ else }}
+			id="webauthn-sign-up"
+			{{ end }}
+			class="submit-button"
+			type="submit"
+		>Submit</button>
 </div>
 
 {{ end }}
