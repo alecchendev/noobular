@@ -23,6 +23,10 @@ type Choice struct {
 	Correct    bool
 }
 
+func NewChoice(id int, questionId int, choiceText string, correct bool) Choice {
+	return Choice{id, questionId, choiceText, correct}
+}
+
 const insertChoiceQuery = `
 insert into choices(question_id, choice_text, correct)
 values(?, ?, ?);

@@ -31,6 +31,10 @@ type Block struct {
 	BlockType  BlockType
 }
 
+func NewBlock(id int, moduleId int, blockIdx int, blockType BlockType) Block {
+	return Block{id, moduleId, blockIdx, blockType}
+}
+
 const insertBlockQuery = `
 insert into blocks(module_id, block_index, block_type)
 values(?, ?, ?);

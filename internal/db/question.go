@@ -21,6 +21,10 @@ type Question struct {
 	QuestionText string
 }
 
+func NewQuestion(id int, blockId int, question string) Question {
+	return Question{id, blockId, question}
+}
+
 const insertQuestionQuery = `
 insert into questions(block_id, question_text)
 values(?, ?);

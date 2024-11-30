@@ -2,11 +2,13 @@ package internal_test
 
 import (
 	"encoding/hex"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"noobular/internal"
 	"noobular/internal/db"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -54,8 +56,11 @@ func newTestClient(t *testing.T) testClient {
 	return testClient{t: t, baseUrl: testUrl}
 }
 
-func (c testClient) get(path string) *http.Response {
-	req, _ := http.NewRequest("GET", c.baseUrl+path, nil)
+func (c testClient) request(method string, path string, body string) *http.Response {
+	req, _ := http.NewRequest(method, c.baseUrl+path, strings.NewReader(body))
+	if method == "POST" || method == "PUT" {
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	}
 	if c.session_token != nil {
 		req.AddCookie(c.session_token)
 	}
@@ -63,14 +68,16 @@ func (c testClient) get(path string) *http.Response {
 	return resp
 }
 
+func (c testClient) get(path string) *http.Response {
+	return c.request("GET", path, "")
+}
+
 func (c testClient) post(path string, body string) *http.Response {
-	req, _ := http.NewRequest("POST", c.baseUrl+path, strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	if c.session_token != nil {
-		req.AddCookie(c.session_token)
-	}
-	resp, _ := http.DefaultClient.Do(req)
-	return resp
+	return c.request("POST", path, body)
+}
+
+func (c testClient) put(path string, body string) *http.Response {
+	return c.request("PUT", path, body)
 }
 
 func (c testClient) login(userId int64) testClient {
@@ -102,6 +109,52 @@ func createCourseForm(course db.Course, modules []db.Module) url.Values {
 		formData.Add("module-title[]", module.Title)
 		formData.Add("module-id[]", "-1")
 		formData.Add("module-description[]", module.Description)
+	}
+	return formData
+}
+type blockInput struct {
+	blockType db.BlockType
+	block interface{}
+}
+
+func editModulePageRoute(courseId, moduleId int) string {
+	return editModuleRoute(courseId, moduleId) + "/edit"
+}
+
+func editModuleRoute(courseId, moduleId int) string {
+	return fmt.Sprintf("/teacher/course/%d/module/%d", courseId, moduleId)
+}
+
+func (c testClient) editModule(module db.Module, blocks []blockInput) {
+	formData := editModuleForm(module, blocks)
+	resp := c.put(editModuleRoute(module.CourseId, module.Id), formData.Encode())
+	assert.Equal(c.t, 200, resp.StatusCode)
+}
+
+func editModuleForm(module db.Module, blocks []blockInput) url.Values {
+	formData := url.Values{}
+	formData.Set("title", module.Title)
+	formData.Set("description", module.Description)
+	for _, block := range blocks {
+		formData.Add("block-type[]", string(block.blockType))
+		switch block.blockType {
+		case db.QuestionBlockType:
+			question := block.block.(internal.UiQuestion)
+			formData.Add("question-title[]", question.QuestionText)
+			formData.Add("question-idx[]", strconv.Itoa(question.Idx))
+			formData.Add("question-explanation[]", question.Explanation)
+			for _, choice := range question.Choices {
+				formData.Add("choice-title[]", choice.ChoiceText)
+				formData.Add("choice-idx[]", strconv.Itoa(choice.Idx))
+				if choice.IsCorrect {
+					formData.Add("correct-choice-"+strconv.Itoa(choice.QuestionIdx), strconv.FormatBool(true))
+				}
+			}
+			formData.Add("choice-title[]", "end-choice")
+			formData.Add("choice-idx[]", "end-choice")
+		case db.ContentBlockType:
+			formData.Add("content-text[]", block.block.(db.Content).Content)
+		}
 	}
 	return formData
 }
@@ -180,5 +233,70 @@ func TestCreateCourse(t *testing.T) {
 	for _, module := range modules {
 		assert.Contains(t, body, module.Title)
 		assert.Contains(t, body, module.Description)
+	}
+}
+
+func TestEditModule(t *testing.T) {
+	server := startServer()
+	defer server.Close()
+
+	client := newTestClient(t).createTestUser()
+
+	course := db.NewCourse(-1, "hello", "goodbye")
+	modules := []db.Module{
+		db.NewModule(-1, -1, "module title1", "module description1"),
+	}
+	client.createCourse(course, modules)
+
+	module := db.NewModule(1, 1, "new title", "new description")
+
+	resp := client.get("/teacher")
+	assert.Equal(t, 200, resp.StatusCode)
+	body := bodyText(t, resp)
+	editModulePageLink := editModulePageRoute(module.CourseId, module.Id)
+	assert.Contains(t, body, editModulePageLink)
+
+	resp = client.get(editModulePageLink)
+	assert.Equal(t, 200, resp.StatusCode)
+	body = bodyText(t, resp)
+	assert.Contains(t, body, editModuleRoute(module.CourseId, module.Id))
+
+	blocks := []blockInput{
+		{db.QuestionBlockType, internal.NewUiQuestion(db.NewQuestion(-1, -1, "qname1"), []db.Choice{
+			db.NewChoice(-1, -1, "qchoice1", false),
+			db.NewChoice(-1, -1, "qchoice2", true),
+			db.NewChoice(-1, -1, "qchoice3", false),
+		}, db.NewContent(-1, "qexplanation1"))},
+		{db.ContentBlockType, db.NewContent(-1, "qcontent1")},
+		{db.QuestionBlockType, internal.NewUiQuestion(db.NewQuestion(-1, -1, "qname2"), []db.Choice{
+			db.NewChoice(-1, -1, "qchoice4", false),
+			db.NewChoice(-1, -1, "qchoice5", false),
+			db.NewChoice(-1, -1, "qchoice6", true),
+		}, db.NewContent(-1, "qexplanation2"))},
+		{db.ContentBlockType, db.NewContent(-1, "qcontent1")},
+	}
+
+	client.editModule(module, blocks)
+
+	// Check that if we revisit the edit module page
+	// all of our changes are reflected
+	resp = client.get(editModulePageLink)
+	assert.Equal(t, 200, resp.StatusCode)
+	body = bodyText(t, resp)
+	assert.Contains(t, body, module.Title)
+	assert.Contains(t, body, module.Description)
+	for _, block := range blocks {
+		switch block.blockType {
+		case db.QuestionBlockType:
+			question := block.block.(internal.UiQuestion)
+			assert.Contains(t, body, question.QuestionText)
+			assert.Contains(t, body, question.Explanation)
+			for _, choice := range question.Choices {
+				assert.Contains(t, body, choice.ChoiceText)
+			}
+		case db.ContentBlockType:
+			content := block.block.(db.Content)
+			assert.Contains(t, body, content.Content)
+		}
 	}
 }

@@ -29,6 +29,10 @@ type Content struct {
 	Content string
 }
 
+func NewContent(id int, content string) Content {
+	return Content{id, content}
+}
+
 const insertContentQuery = `
 insert into content(content)
 values(?);
