@@ -38,23 +38,21 @@ func initRouter(dbClient *db.DbClient, webAuthn *webauthn.WebAuthn, jwtSecret []
 	mux.Handle("/signin/finish", newHandlerMap().Post(authRejectedHandler(handleSigninFinish)))
 	mux.Handle("/logout", newHandlerMap().Get(authRequiredHandler(handleLogout)))
 
-
 	mux.Handle("/student", newHandlerMap().Get(authRequiredHandler(handleStudentPage)))
-	mux.Handle("/teacher", newHandlerMap().Get(authRequiredHandler(handleTeacherCoursesPage)))
-
 	mux.Handle("/student/course", newHandlerMap().Get(authRequiredHandler(handleStudentCoursesPage)))
 	mux.Handle("/student/course/{courseId}/module/{moduleId}/block/{blockIdx}", newHandlerMap().Get(authRequiredHandler(handleTakeModulePage)))
 	mux.Handle("/student/course/{courseId}/module/{moduleId}/block/{blockIdx}/piece", newHandlerMap().Get(authRequiredHandler(handleTakeModule)))
 	mux.Handle("/student/course/{courseId}/module/{moduleId}/block/{blockIdx}/answer", newHandlerMap().Post(authRequiredHandler(handleAnswerQuestion)))
 
-	// TODO: make these sub routes of teacher
-	mux.Handle("/course/create", newHandlerMap().Get(authRequiredHandler(handleCreateCoursePage)).Post(authRequiredHandler(handleCreateCourse)))
-	mux.Handle("/course/{courseId}/edit", newHandlerMap().Get(authRequiredHandler(handleEditCoursePage)))
-	mux.Handle("/course/{courseId}", newHandlerMap().Put(authRequiredHandler(handleEditCourse)).Delete(authRequiredHandler(handleDeleteCourse)))
-	mux.Handle("/course/{courseId}/module/{moduleId}", newHandlerMap().Put(authRequiredHandler(handleEditModule)).Delete(authRequiredHandler(handleDeleteModule)))
+	mux.Handle("/teacher", newHandlerMap().Get(authRequiredHandler(handleTeacherCoursesPage)))
+	mux.Handle("/teacher/course/create", newHandlerMap().Get(authRequiredHandler(handleCreateCoursePage)).Post(authRequiredHandler(handleCreateCourse)))
+	mux.Handle("/teacher/course/{courseId}/edit", newHandlerMap().Get(authRequiredHandler(handleEditCoursePage)))
+	mux.Handle("/teacher/course/{courseId}", newHandlerMap().Put(authRequiredHandler(handleEditCourse)).Delete(authRequiredHandler(handleDeleteCourse)))
+	mux.Handle("/teacher/course/{courseId}/module/{moduleId}", newHandlerMap().Put(authRequiredHandler(handleEditModule)).Delete(authRequiredHandler(handleDeleteModule)))
+	mux.Handle("/teacher/course/{courseId}/module/{moduleId}/edit", newHandlerMap().Get(authRequiredHandler(handleEditModulePage)))
+
 	mux.Handle("/ui/{questionIdx}/choice", newHandlerMap().Get(handleAddChoice))
 	mux.Handle("/ui/{element}", newHandlerMap().Get(handleAddElement).Delete(handleDeleteElement))
-	mux.Handle("/course/{courseId}/module/{moduleId}/edit", newHandlerMap().Get(authRequiredHandler(handleEditModulePage)))
 	return mux
 }
 

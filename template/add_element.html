@@ -94,7 +94,7 @@
 {{ define "delete_module_button" }}
 <button type="button"
 	class="delete-element"
-	hx-delete="/course/{{ .CourseId }}/module/{{ .Id }}"
+	hx-delete="/teacher/course/{{ .CourseId }}/module/{{ .Id }}"
 	hx-confirm="Note: Deleting this module will also delete all its questions. Are you sure you want to delete this module?"
 	hx-target="closest .element-container"
 	hx-swap="outerHTML"
