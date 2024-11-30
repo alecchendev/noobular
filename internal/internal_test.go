@@ -139,11 +139,19 @@ func TestCreateCourse(t *testing.T) {
 
 	formData := url.Values{}
 
-	formData.Set("title", "hello")
-	formData.Set("description", "goodbye")
-	formData.Add("module-title[]", "module title")
-	formData.Add("module-id[]", "-1")
-	formData.Add("module-description[]", "module description")
+	course := db.NewCourse(-1, "hello", "goodbye")
+	modules := []db.Module{
+		db.NewModule(-1, -1, "module title1", "module description1"),
+		db.NewModule(-1, -1, "module title2", "module description2"),
+	}
+
+	formData.Set("title", course.Title)
+	formData.Set("description", course.Description)
+	for _, module := range modules {
+		formData.Add("module-title[]", module.Title)
+		formData.Add("module-id[]", "-1")
+		formData.Add("module-description[]", module.Description)
+	}
 
 	resp = client.post("/teacher/course/create", formData.Encode())
 	assert.Equal(t, 200, resp.StatusCode)
@@ -151,8 +159,10 @@ func TestCreateCourse(t *testing.T) {
 	resp = client.get("/teacher")
 	assert.Equal(t, 200, resp.StatusCode)
 	body = bodyText(t, resp)
-	assert.Contains(t, body, "hello")
-	assert.Contains(t, body, "goodbye")
-	assert.Contains(t, body, "module title")
-	assert.Contains(t, body, "module description")
+	assert.Contains(t, body, course.Title)
+	assert.Contains(t, body, course.Description)
+	for _, module := range modules {
+		assert.Contains(t, body, module.Title)
+		assert.Contains(t, body, module.Description)
+	}
 }

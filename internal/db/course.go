@@ -23,6 +23,10 @@ type Course struct {
 	Description string
 }
 
+func NewCourse(id int, title string, description string) Course {
+	return Course{id, title, description}
+}
+
 const insertCourseQuery = `
 insert into courses(user_id, title, description)
 values(?, ?, ?);

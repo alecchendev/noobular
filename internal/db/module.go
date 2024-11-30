@@ -24,6 +24,10 @@ type Module struct {
 	Description string
 }
 
+func NewModule(id int, courseId int, title string, description string) Module {
+	return Module{id, courseId, title, description}
+}
+
 const insertModuleQuery = `
 insert into modules(course_id, title, description)
 values(?, ?, ?);
