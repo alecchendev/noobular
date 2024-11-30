@@ -17,7 +17,7 @@ import (
 const testUrl = "http://localhost:8080"
 const testJwtSecretHex = "5b0c060a53f2c6cd88dde0993fac31648ae75fe092b56571e6b51da56a8e4e87"
 
-func testServer(ready chan struct{}) {
+func testServer() *http.Server {
 	jwtSecret, _ := hex.DecodeString(testJwtSecretHex)
 	urlStr := testUrl
 	urlUrl, _ := url.Parse(urlStr)
@@ -30,15 +30,18 @@ func testServer(ready chan struct{}) {
 	port := 8080
 	renderer := internal.NewRenderer("..")
 	dbClient := db.NewMemoryDbClient()
-	server := internal.NewServer(dbClient, renderer, webAuthn, jwtSecret, port)
-	close(ready)
-	server.ListenAndServe()
+	return internal.NewServer(dbClient, renderer, webAuthn, jwtSecret, port)
 }
 
-func startServer() {
+func startServer() *http.Server {
+	server := testServer()
 	ready := make(chan struct{})
-	go testServer(ready)
+	go func() {
+		close(ready)
+		server.ListenAndServe()
+	}()
 	<-ready
+	return server
 }
 
 type testClient struct {
@@ -49,13 +52,6 @@ type testClient struct {
 
 func newTestClient(t *testing.T) testClient {
 	return testClient{t: t, baseUrl: testUrl}
-}
-
-func (c testClient) login(userId int64) testClient {
-	jwtSecret, _ := hex.DecodeString(testJwtSecretHex)
-	cookie, _ := internal.CreateAuthCookie(jwtSecret, userId)
-	c.session_token = &cookie
-	return c
 }
 
 func (c testClient) get(path string) *http.Response {
@@ -77,6 +73,39 @@ func (c testClient) post(path string, body string) *http.Response {
 	return resp
 }
 
+func (c testClient) login(userId int64) testClient {
+	jwtSecret, _ := hex.DecodeString(testJwtSecretHex)
+	cookie, _ := internal.CreateAuthCookie(jwtSecret, userId)
+	c.session_token = &cookie
+	return c
+}
+
+func (c testClient) createTestUser() testClient {
+	resp := c.post("/signup/test", "")
+	assert.Equal(c.t, 200, resp.StatusCode)
+	return c.login(1)
+}
+
+const createCourseRoute = "/teacher/course/create"
+
+func (c testClient) createCourse(course db.Course, modules []db.Module) {
+	formData := createCourseForm(course, modules)
+	resp := c.post(createCourseRoute, formData.Encode())
+	assert.Equal(c.t, 200, resp.StatusCode)
+}
+
+func createCourseForm(course db.Course, modules []db.Module) url.Values {
+	formData := url.Values{}
+	formData.Set("title", course.Title)
+	formData.Set("description", course.Description)
+	for _, module := range modules {
+		formData.Add("module-title[]", module.Title)
+		formData.Add("module-id[]", "-1")
+		formData.Add("module-description[]", module.Description)
+	}
+	return formData
+}
+
 func bodyText(t *testing.T, resp *http.Response) string {
 	bodyBytes, err := io.ReadAll(resp.Body)
 	assert.Nil(t, err)
@@ -84,7 +113,8 @@ func bodyText(t *testing.T, resp *http.Response) string {
 }
 
 func TestBasicNav(t *testing.T) {
-	startServer()
+	server := startServer()
+	defer server.Close()
 
 	tests := []struct {
 		name         string
@@ -122,22 +152,13 @@ func TestBasicNav(t *testing.T) {
 }
 
 func TestCreateCourse(t *testing.T) {
-	startServer()
+	server := startServer()
+	defer server.Close()
 
-	client := newTestClient(t)
-	resp := client.post("/signup/test", "")
+	client := newTestClient(t).createTestUser()
+
+	resp := client.get("/teacher")
 	assert.Equal(t, 200, resp.StatusCode)
-
-	client = client.login(1)
-	resp = client.get("/teacher")
-	assert.Equal(t, 200, resp.StatusCode)
-
-	body := bodyText(t, resp)
-	assert.Contains(t, body, "/teacher/course/create")
-	sampleCourseName := "sample course name"
-	assert.NotContains(t, body, sampleCourseName)
-
-	formData := url.Values{}
 
 	course := db.NewCourse(-1, "hello", "goodbye")
 	modules := []db.Module{
@@ -145,16 +166,11 @@ func TestCreateCourse(t *testing.T) {
 		db.NewModule(-1, -1, "module title2", "module description2"),
 	}
 
-	formData.Set("title", course.Title)
-	formData.Set("description", course.Description)
-	for _, module := range modules {
-		formData.Add("module-title[]", module.Title)
-		formData.Add("module-id[]", "-1")
-		formData.Add("module-description[]", module.Description)
-	}
+	body := bodyText(t, resp)
+	assert.Contains(t, body, createCourseRoute)
+	assert.NotContains(t, body, course.Title)
 
-	resp = client.post("/teacher/course/create", formData.Encode())
-	assert.Equal(t, 200, resp.StatusCode)
+	client.createCourse(course, modules)
 
 	resp = client.get("/teacher")
 	assert.Equal(t, 200, resp.StatusCode)
