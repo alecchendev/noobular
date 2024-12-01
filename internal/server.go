@@ -40,7 +40,7 @@ func initRouter(dbClient *db.DbClient, renderer Renderer, webAuthn *webauthn.Web
 
 	mux.Handle("/student", newHandlerMap().Get(authRequiredHandler(handleStudentPage)))
 	mux.Handle("/student/course", newHandlerMap().Get(authRequiredHandler(handleStudentCoursesPage)))
-	mux.Handle("/student/course/{courseId}/module/{moduleId}/block/{blockIdx}", newHandlerMap().Get(authRequiredHandler(handleTakeModulePage)))
+	mux.Handle("/student/course/{courseId}/module/{moduleId}", newHandlerMap().Get(authRequiredHandler(handleTakeModulePage)))
 	mux.Handle("/student/course/{courseId}/module/{moduleId}/block/{blockIdx}/piece", newHandlerMap().Get(authRequiredHandler(handleTakeModule)))
 	mux.Handle("/student/course/{courseId}/module/{moduleId}/block/{blockIdx}/answer", newHandlerMap().Post(authRequiredHandler(handleAnswerQuestion)))
 

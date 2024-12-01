@@ -63,32 +63,37 @@ func handleStudentCoursesPage(w http.ResponseWriter, r *http.Request, ctx Handle
 
 // Take module page
 
-func getTakeModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) (UiTakeModule, error) {
-	// courseId, err := strconv.Atoi(r.PathValue("courseId"))
-	// if err != nil {
-	//	return UiTakeModule{}, err
-	// }
+type takeModuleRequest struct {
+	moduleId int
+	blockIdx int
+}
+
+func parseTakeModuleRequest(r *http.Request) (takeModuleRequest, error) {
 	moduleId, err := strconv.Atoi(r.PathValue("moduleId"))
 	if err != nil {
-		return UiTakeModule{}, err
+		return takeModuleRequest{}, err
 	}
 	blockIdx, err := strconv.Atoi(r.PathValue("blockIdx"))
 	if err != nil {
-		return UiTakeModule{}, err
+		return takeModuleRequest{}, err
 	}
-	module, err := ctx.dbClient.GetModule(moduleId)
+	return takeModuleRequest{moduleId, blockIdx}, nil
+}
+
+func getTakeModule(req takeModuleRequest, ctx HandlerContext, userId int64) (UiTakeModule, error) {
+	module, err := ctx.dbClient.GetModule(req.moduleId)
 	if err != nil {
 		return UiTakeModule{}, err
 	}
 	// TODO: add restrictions, i.e. you cannot take a question before a previous one
-	blockCount, err := ctx.dbClient.GetBlockCount(moduleId)
+	blockCount, err := ctx.dbClient.GetBlockCount(req.moduleId)
 	if err != nil {
 		return UiTakeModule{}, err
 	}
-	if blockIdx >= blockCount {
-		return UiTakeModule{}, fmt.Errorf("Block index %d is out of bounds (>=%d) for module %d", blockIdx, blockCount, moduleId)
+	if req.blockIdx >= blockCount {
+		return UiTakeModule{}, fmt.Errorf("Block index %d is out of bounds (>=%d) for module %d", req.blockIdx, blockCount, req.moduleId)
 	}
-	block, err := ctx.dbClient.GetBlock(moduleId, blockIdx)
+	block, err := ctx.dbClient.GetBlock(req.moduleId, req.blockIdx)
 	if err != nil {
 		return UiTakeModule{}, err
 	}
@@ -121,7 +126,7 @@ func getTakeModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext, u
 			BlockType:       string(db.QuestionBlockType),
 			Content:         template.HTML(""),
 			BlockCount:      blockCount,
-			BlockIndex:      blockIdx,
+			BlockIndex:      req.blockIdx,
 			ChosenChoiceId:  choiceId,
 			CorrectChoiceId: correctChoiceId,
 			Question:        NewUiQuestion(question, choices, explanationContent),
@@ -141,7 +146,7 @@ func getTakeModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext, u
 			BlockType:       string(db.ContentBlockType),
 			Content:         template.HTML(buf.String()),
 			BlockCount:      blockCount,
-			BlockIndex:      blockIdx,
+			BlockIndex:      req.blockIdx,
 			ChosenChoiceId:  -1,
 			CorrectChoiceId: -1,
 			Question:        EmptyQuestion(),
@@ -153,7 +158,11 @@ func getTakeModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext, u
 }
 
 func handleTakeModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
-	module, err := getTakeModule(w, r, ctx, userId)
+	moduleId, err := strconv.Atoi(r.PathValue("moduleId"))
+	if err != nil {
+		return err
+	}
+	module, err := getTakeModule(takeModuleRequest{moduleId, 0}, ctx, userId)
 	if err != nil {
 		return err
 	}
@@ -161,7 +170,11 @@ func handleTakeModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 }
 
 func handleTakeModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
-	module, err := getTakeModule(w, r, ctx, userId)
+	req, err := parseTakeModuleRequest(r)
+	if err != nil {
+		return err
+	}
+	module, err := getTakeModule(req, ctx, userId)
 	if err != nil {
 		return err
 	}
@@ -169,7 +182,11 @@ func handleTakeModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 }
 
 func handleAnswerQuestion(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
-	uiTakeModule, err := getTakeModule(w, r, ctx, userId)
+	req, err := parseTakeModuleRequest(r)
+	if err != nil {
+		return err
+	}
+	uiTakeModule, err := getTakeModule(req, ctx, userId)
 	if err != nil {
 		return err
 	}

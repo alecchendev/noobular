@@ -213,12 +213,11 @@
 <button id="submit-button">Done</button>
 </a>
 {{ else }}
-<!-- TODO scroll to new content on load -->
 <button
 	id="submit-button"
 	hx-get="/student/course/{{ $.Module.CourseId }}/module/{{ $.Module.Id }}/block/{{ Increment $.BlockIndex }}/piece"
 	hx-target="#submit-button"
-	hx-swap="outerHTML show:#block-{{ Increment $.BlockIndex }}:top settle:100ms transition:true"
+	hx-swap="outerHTML show:#block-{{ Increment $.BlockIndex }}:top settle:50ms transition:true"
 	hx-select-oob="#header"
 >Next</button>
 {{ end }}
