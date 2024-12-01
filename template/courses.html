@@ -126,16 +126,6 @@ html {
 					<h3 class="module-title">{{.Title}}</h3>
 					{{ if and $.LoggedIn $.Editor }}
 					<a class="edit-module-link" href="/teacher/course/{{$course.Id}}/module/{{.Id}}/edit">Edit</a>
-					{{ else if or $.Browsing (not $.LoggedIn) }}
-					{{ else }}
-					<a class="edit-module-link" href="/student/course/{{$course.Id}}/module/{{.Id}}">
-					{{ if eq .NextBlockIdx 0 }}
-						Start
-					{{ else if lt .NextBlockIdx .BlockCount }}
-						Continue
-					{{ else if ge .NextBlockIdx .BlockCount }}
-						Review
-					{{ end }}
 					</a>
 					{{ end }}
 				</div>
@@ -164,5 +154,5 @@ html {
 	class="edit-course-link"
 	href="#"
 	hx-post="/student/course/{{ .Id }}"
->Take</a>
+>Enroll</a>
 {{ end }}

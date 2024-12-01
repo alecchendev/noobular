@@ -111,16 +111,16 @@
 	<h1>👋 Hey, {{ .Username }}!</h1>
 	{{ if not .HasCourse }}
 	<a href="/browse">Check out some courses here!</a>
-	{{ if gt (len .Courses) 0 }}
-	<h3 class="enrolled-courses-header">Enrolled courses:</h3>
-	<div class="course-links">
-	{{ range $course := .Courses }}
-		<a class="course-link" href="/student/course/{{$course.Id}}">
-			{{$course.Title}}
-		</a>
-	{{ end }}
-	</div>
-	{{ end }}
+		{{ if gt (len .Courses) 0 }}
+		<h3 class="enrolled-courses-header">Enrolled courses:</h3>
+		<div class="course-links">
+			{{ range $course := .Courses }}
+				<a class="course-link" href="/student/course/{{$course.Id}}">
+					{{$course.Title}}
+				</a>
+			{{ end }}
+		</div>
+		{{ end }}
 	{{ else }}
 	<div class="student-course-container">
 		<div class="student-course-left">

@@ -125,21 +125,6 @@ func EmptyCourse() UiCourse {
 	return UiCourse{-1, "", "", []UiModule{}}
 }
 
-type UiCourseStudent struct {
-	Id          int
-	Title       string
-	Description string
-	Modules     []UiModuleStudent
-}
-
-func NewUiCourseStudent(c db.Course, modules []db.Module) UiCourseStudent {
-	uiModules := make([]UiModuleStudent, len(modules))
-	for i, module := range modules {
-		uiModules[i] = UiModuleStudent{module.Id, module.CourseId, module.Title, module.Description, -1, -1}
-	}
-	return UiCourseStudent{c.Id, c.Title, c.Description, uiModules}
-}
-
 type UiModule struct {
 	Id          int
 	CourseId    int
@@ -165,15 +150,6 @@ func (m UiModule) ElementText() string {
 
 func (m UiModule) IsEmpty() bool {
 	return m.Id == -1
-}
-
-type UiModuleStudent struct {
-	Id           int
-	CourseId     int
-	Title        string
-	Description  string
-	BlockCount   int
-	NextBlockIdx int
 }
 
 type UiBlock struct {
@@ -308,21 +284,6 @@ type CoursePageArgs struct {
 	Courses     []UiCourse
 }
 
-func (c CoursePageArgs) Browsing() bool {
-	return true
-}
-
-type CoursePageArgsStudent struct {
-	NewCourseId int
-	Editor      bool
-	LoggedIn    bool
-	Courses     []UiCourseStudent
-}
-
-func (c CoursePageArgsStudent) Browsing() bool {
-	return false
-}
-
 type StudentPageArgs struct {
 	Username string
 	Courses  []UiCourse
@@ -334,7 +295,7 @@ func (a StudentPageArgs) HasCourse() bool {
 
 type StudentCoursePageArgs struct {
 	Username string
-	Course   UiCourseStudent
+	Course   UiCourse
 }
 
 func (a StudentCoursePageArgs) HasCourse() bool {
@@ -351,10 +312,6 @@ func (r *Renderer) RenderStudentCoursePage(w http.ResponseWriter, args StudentCo
 
 func (r *Renderer) RenderTeacherCoursePage(w http.ResponseWriter, courses []UiCourse, newCourseId int) error {
 	return r.templates["courses.html"].ExecuteTemplate(w, "page.html", NewPageArgs(true, true, CoursePageArgs{newCourseId, true, true, courses}))
-}
-
-func (r *Renderer) RenderStudentCoursesPage(w http.ResponseWriter, courses []UiCourseStudent) error {
-	return r.templates["courses.html"].ExecuteTemplate(w, "page.html", NewPageArgs(true, true, CoursePageArgsStudent{0, false, true, courses}))
 }
 
 func (r *Renderer) RenderCreateCoursePage(w http.ResponseWriter) error {

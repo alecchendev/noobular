@@ -2,7 +2,6 @@ package internal
 
 import (
 	"bytes"
-	"database/sql"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -51,32 +50,13 @@ func handleStudentCoursePage(w http.ResponseWriter, r *http.Request, ctx Handler
 	if err != nil {
 		return err
 	}
-	uiModules := make([]UiModuleStudent, len(modules))
+	uiModules := make([]UiModule, len(modules))
 	for j, module := range modules {
-		blockCount, err := ctx.dbClient.GetBlockCount(module.Id)
-		if err != nil {
-			return err
-		}
-		visit, err := ctx.dbClient.GetVisit(userId, module.Id)
-		var nextBlockIdx int
-		if err == sql.ErrNoRows {
-			nextBlockIdx = -1
-		} else if err != nil {
-			return err
-		}
-		nextBlockIdx = visit.BlockIndex
-		uiModules[j] = UiModuleStudent{
-			module.Id,
-			module.CourseId,
-			module.Title,
-			module.Description,
-			blockCount,
-			nextBlockIdx,
-		}
+		uiModules[j] = NewUiModule(module)
 	}
 	return ctx.renderer.RenderStudentCoursePage(w, StudentCoursePageArgs{
 		Username:    user.Username,
-		Course:      UiCourseStudent{course.Id, course.Title, course.Description, uiModules},
+		Course:      NewUiCourse(course, uiModules),
 	})
 }
 
