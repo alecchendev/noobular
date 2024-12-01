@@ -20,7 +20,12 @@ func handleStudentPage(w http.ResponseWriter, r *http.Request, ctx HandlerContex
 	if err != nil {
 		return err
 	}
-	return ctx.renderer.RenderStudentPage(w, StudentPageArgs{user.Username})
+	courses, err := ctx.dbClient.GetEnrolledCourses(userId)
+	uiCourses := make([]UiCourse, len(courses))
+	for i, course := range courses {
+		uiCourses[i] = NewUiCourse(course, []UiModule{})
+	}
+	return ctx.renderer.RenderStudentPage(w, StudentPageArgs{user.Username, uiCourses})
 }
 
 // Student course page

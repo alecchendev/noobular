@@ -227,3 +227,33 @@ func (c *DbClient) DeleteCourse(userId int64, courseId int) error {
 	}
 	return tx.Commit()
 }
+
+const getEnrolledCoursesQuery = `
+select c.id, c.title, c.description
+from courses c
+join enrollments e on c.id = e.course_id
+where e.user_id = ?
+order by c.id;
+`
+
+func (c *DbClient) GetEnrolledCourses(userId int64) ([]Course, error) {
+	courseRows, err := c.db.Query(getEnrolledCoursesQuery, userId)
+	if err != nil {
+		return nil, err
+	}
+	defer courseRows.Close()
+
+	var courses []Course
+	for courseRows.Next() {
+		var course Course
+		err := courseRows.Scan(&course.Id, &course.Title, &course.Description)
+		if err != nil {
+			return nil, err
+		}
+		courses = append(courses, course)
+	}
+	if err := courseRows.Err(); err != nil {
+		return nil, err
+	}
+	return courses, nil
+}

@@ -57,30 +57,3 @@ func (c *DbClient) GetEnrollment(userId int64, courseId int) (Enrollment, error)
 	}
 	return enrollment, nil
 }
-
-const getEnrollmentsQuery = `
-select e.id, e.user_id, e.course_id
-from enrollments e
-where e.user_id = ?;
-`
-
-func (c *DbClient) GetEnrollments(userId int64) ([]Enrollment, error) {
-	rows, err := c.db.Query(getEnrollmentsQuery, userId)
-	if err != nil {
-		return []Enrollment{}, err
-	}
-	defer rows.Close()
-	enrollments := []Enrollment{}
-	for rows.Next() {
-		var enrollment Enrollment
-		err := rows.Scan(&enrollment.Id, &enrollment.UserId, &enrollment.CourseId)
-		if err != nil {
-			return []Enrollment{}, err
-		}
-		enrollments = append(enrollments, enrollment)
-	}
-	if err := rows.Err(); err != nil {
-		return []Enrollment{}, err
-	}
-	return enrollments, nil
-}

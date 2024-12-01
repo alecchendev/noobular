@@ -117,6 +117,10 @@ type UiCourse struct {
 	Modules     []UiModule
 }
 
+func NewUiCourse(c db.Course, modules []UiModule) UiCourse {
+	return UiCourse{c.Id, c.Title, c.Description, modules}
+}
+
 func EmptyCourse() UiCourse {
 	return UiCourse{-1, "", "", []UiModule{}}
 }
@@ -126,6 +130,14 @@ type UiCourseStudent struct {
 	Title       string
 	Description string
 	Modules     []UiModuleStudent
+}
+
+func NewUiCourseStudent(c db.Course, modules []db.Module) UiCourseStudent {
+	uiModules := make([]UiModuleStudent, len(modules))
+	for i, module := range modules {
+		uiModules[i] = UiModuleStudent{module.Id, module.CourseId, module.Title, module.Description, -1, -1}
+	}
+	return UiCourseStudent{c.Id, c.Title, c.Description, uiModules}
 }
 
 type UiModule struct {
@@ -313,6 +325,7 @@ func (c CoursePageArgsStudent) Browsing() bool {
 
 type StudentPageArgs struct {
 	Username string
+	Courses  []UiCourse
 }
 
 func (a StudentPageArgs) HasCourse() bool {
