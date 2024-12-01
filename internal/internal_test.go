@@ -142,7 +142,7 @@ func editModuleForm(module db.Module, blocks []blockInput) url.Values {
 			question := block.block.(internal.UiQuestion)
 			formData.Add("question-title[]", question.QuestionText)
 			formData.Add("question-idx[]", strconv.Itoa(question.Idx))
-			formData.Add("question-explanation[]", question.Explanation)
+			formData.Add("question-explanation[]", question.Explanation.Content)
 			for _, choice := range question.Choices {
 				formData.Add("choice-title[]", choice.ChoiceText)
 				formData.Add("choice-idx[]", strconv.Itoa(choice.Idx))
@@ -262,13 +262,13 @@ func TestEditModule(t *testing.T) {
 	assert.Contains(t, body, editModuleRoute(module.CourseId, module.Id))
 
 	blocks := []blockInput{
-		{db.QuestionBlockType, internal.NewUiQuestion(db.NewQuestion(-1, -1, "qname1"), []db.Choice{
+		{db.QuestionBlockType, internal.NewUiQuestionEdit(db.NewQuestion(-1, -1, "qname1"), []db.Choice{
 			db.NewChoice(-1, -1, "qchoice1", false),
 			db.NewChoice(-1, -1, "qchoice2", true),
 			db.NewChoice(-1, -1, "qchoice3", false),
 		}, db.NewContent(-1, "qexplanation1"))},
 		{db.ContentBlockType, db.NewContent(-1, "qcontent1")},
-		{db.QuestionBlockType, internal.NewUiQuestion(db.NewQuestion(-1, -1, "qname2"), []db.Choice{
+		{db.QuestionBlockType, internal.NewUiQuestionEdit(db.NewQuestion(-1, -1, "qname2"), []db.Choice{
 			db.NewChoice(-1, -1, "qchoice4", false),
 			db.NewChoice(-1, -1, "qchoice5", false),
 			db.NewChoice(-1, -1, "qchoice6", true),
@@ -290,7 +290,7 @@ func TestEditModule(t *testing.T) {
 		case db.QuestionBlockType:
 			question := block.block.(internal.UiQuestion)
 			assert.Contains(t, body, question.QuestionText)
-			assert.Contains(t, body, question.Explanation)
+			assert.Contains(t, body, question.Explanation.Content)
 			for _, choice := range question.Choices {
 				assert.Contains(t, body, choice.ChoiceText)
 			}

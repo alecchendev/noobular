@@ -265,7 +265,7 @@ func handleEditModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 			if err != nil {
 				return err
 			}
-			uiBlock.Question = NewUiQuestion(question, choices, explanation)
+			uiBlock.Question = NewUiQuestionEdit(question, choices, explanation)
 		} else {
 			return fmt.Errorf("invalid block type: %s", block.BlockType)
 		}

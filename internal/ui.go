@@ -170,26 +170,74 @@ type UiBlock struct {
 	Question  UiQuestion
 }
 
+func NewUiBlockQuestion(question UiQuestion) UiBlock {
+	return UiBlock{db.QuestionBlockType, EmptyContent(), question}
+}
+
+func NewUiBlockContent(content UiContent) UiBlock {
+	return UiBlock{db.ContentBlockType, content, EmptyQuestion()}
+}
+
 type UiQuestion struct {
 	Id int
 	// This is a random integer created to differentiate questions in the UI.
 	Idx          int
 	QuestionText string
 	Choices      []UiChoice
-	Explanation  string
+	Explanation  UiContent
 }
 
-func NewUiQuestion(q db.Question, choices []db.Choice, explanation db.Content) UiQuestion {
+func NewUiQuestionEdit(q db.Question, choices []db.Choice, explanation db.Content) UiQuestion {
 	questionIdx := rand.Int()
 	uiChoices := make([]UiChoice, len(choices))
 	for i, choice := range choices {
 		uiChoices[i] = NewUiChoice(questionIdx, choice)
 	}
-	return UiQuestion{q.Id, questionIdx, q.QuestionText, uiChoices, explanation.Content}
+	return UiQuestion{q.Id, questionIdx, q.QuestionText, uiChoices, NewUiContent(explanation)}
+}
+
+func NewUiQuestionTake(q db.Question, choices []db.Choice, explanation UiContent) UiQuestion {
+	questionIdx := rand.Int()
+	uiChoices := make([]UiChoice, len(choices))
+	for i, choice := range choices {
+		uiChoices[i] = NewUiChoice(questionIdx, choice)
+	}
+	return UiQuestion{q.Id, questionIdx, q.QuestionText, uiChoices, explanation}
+}
+
+func NewUiQuestionAnswered(q db.Question, choices []db.Choice, chosenChoiceId int, explanation UiContent) UiQuestion {
+	questionIdx := rand.Int()
+	uiChoices := make([]UiChoice, len(choices))
+	for i, choice := range choices {
+		if choice.Id == chosenChoiceId {
+			uiChoices[i] = NewUiChoiceChosen(questionIdx, choice)
+		} else {
+			uiChoices[i] = NewUiChoice(questionIdx, choice)
+		}
+	}
+	return UiQuestion{q.Id, questionIdx, q.QuestionText, uiChoices, explanation}
+}
+
+func (q UiQuestion) Answered() bool {
+	for _, choice := range q.Choices {
+		if choice.Chosen {
+			return true
+		}
+	}
+	return false
+}
+
+func (q UiQuestion) AnsweredCorrectly() bool {
+	for _, choice := range q.Choices {
+		if choice.Chosen && choice.IsCorrect {
+			return true
+		}
+	}
+	return false
 }
 
 func EmptyQuestion() UiQuestion {
-	return UiQuestion{-1, rand.Int(), "", []UiChoice{}, ""}
+	return UiQuestion{-1, rand.Int(), "", []UiChoice{}, EmptyContent()}
 }
 
 func (q UiQuestion) ElementType() string {
@@ -212,15 +260,20 @@ type UiChoice struct {
 	/// so that label elements can be associated with certain choices.
 	Idx        int
 	ChoiceText string
+	Chosen     bool
 	IsCorrect  bool
 }
 
 func NewUiChoice(questionIdx int, c db.Choice) UiChoice {
-	return UiChoice{c.Id, questionIdx, rand.Int(), c.ChoiceText, c.Correct}
+	return UiChoice{c.Id, questionIdx, rand.Int(), c.ChoiceText, false, c.Correct}
+}
+
+func NewUiChoiceChosen(questionIdx int, c db.Choice) UiChoice {
+	return UiChoice{c.Id, questionIdx, rand.Int(), c.ChoiceText, true, c.Correct}
 }
 
 func EmptyChoice(questionIdx int) UiChoice {
-	return UiChoice{-1, questionIdx, rand.Int(), "", false}
+	return UiChoice{-1, questionIdx, rand.Int(), "", false, false}
 }
 
 func (c UiChoice) ElementType() string {
@@ -302,14 +355,19 @@ type UiContent struct {
 	// This is a random integer created to differentiate questions in the UI.
 	Idx     int
 	Content string
+	ContentTmpl template.HTML
 }
 
 func NewUiContent(content db.Content) UiContent {
-	return UiContent{content.Id, rand.Int(), content.Content}
+	return UiContent{content.Id, rand.Int(), content.Content, template.HTML("")}
+}
+
+func NewUiContentRendered(content db.Content, tmpl template.HTML) UiContent {
+	return UiContent{content.Id, rand.Int(), content.Content, tmpl}
 }
 
 func EmptyContent() UiContent {
-	return UiContent{-1, rand.Int(), ""}
+	return UiContent{-1, rand.Int(), "", template.HTML("")}
 }
 
 func (c UiContent) ElementType() string {
@@ -351,14 +409,9 @@ func (r *Renderer) RenderModuleEdited(w http.ResponseWriter) error {
 
 type UiTakeModule struct {
 	Module          UiModule
-	BlockType       string
-	Content         template.HTML
+	Block           UiBlock
 	BlockCount      int
 	BlockIndex      int
-	ChosenChoiceId  int
-	CorrectChoiceId int
-	Question        UiQuestion
-	Explanation     template.HTML
 }
 
 func (r *Renderer) RenderTakeModulePage(w http.ResponseWriter, module UiTakeModule) error {
@@ -370,16 +423,6 @@ func (r *Renderer) RenderTakeModule(w http.ResponseWriter, module UiTakeModule) 
 	return r.templates["take_module.html"].ExecuteTemplate(w, "content", module)
 }
 
-type UiSubmittedAnswer struct {
-	Module          UiModule
-	BlockCount      int
-	BlockIndex      int
-	ChosenChoiceId  int
-	CorrectChoiceId int
-	Question        UiQuestion
-	Explanation     template.HTML
-}
-
-func (r *Renderer) RenderQuestionSubmitted(w http.ResponseWriter, module UiSubmittedAnswer) error {
+func (r *Renderer) RenderQuestionSubmitted(w http.ResponseWriter, module UiTakeModule) error {
 	return r.templates["take_module.html"].ExecuteTemplate(w, "question_submitted", module)
 }

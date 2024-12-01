@@ -128,10 +128,10 @@
 	</div>
 </div>
 
-{{ if eq .BlockType "content" }}
+{{ if eq .Block.BlockType "content" }}
 	{{ template "content_block" . }}
-{{ else if eq .BlockType "question" }}
-	{{ if eq .ChosenChoiceId -1 }}
+{{ else if eq .Block.BlockType "question" }}
+	{{ if not .Block.Question.Answered }}
 		{{ template "question_form" . }}
 	{{ else }}
 		{{ template "question_submitted" . }}
@@ -142,9 +142,9 @@
 
 {{ define "content_block" }}
 <div id="block-{{ .BlockIndex }}" class="block">
-	{{ if not (eq .Content "") }}
+	{{ if not (eq .Block.Content.ContentTmpl "") }}
 		<div class="explanation">
-			{{ .Content }}
+			{{ .Block.Content.ContentTmpl }}
 		</div>
 	{{ end }}
 </div>
@@ -159,9 +159,9 @@
 	hx-swap="outerHTML"
 >
 	<div id="block-{{ .BlockIndex }}" class="block">
-		<h2>{{ .Question.QuestionText }}</h2>
+		<h2>{{ .Block.Question.QuestionText }}</h2>
 		<div class="choices">
-		{{ range $choice := .Question.Choices }}
+		{{ range $choice := .Block.Question.Choices }}
 			<div class="choice">
 				<input type="radio" id="{{ $choice.Id }}" name="choice" value="{{ $choice.Id }}" required>
 				<label for="{{ $choice.Id }}">{{ $choice.ChoiceText }}</label>
@@ -175,30 +175,30 @@
 
 {{ define "question_submitted" }}
 <div id="block-{{ .BlockIndex }}" class="block">
-	<h2>{{ .Question.QuestionText }}</h2>
+	<h2>{{ .Block.Question.QuestionText }}</h2>
 	<div class="choices">
-	{{ range $choice := .Question.Choices }}
+	{{ range $choice := .Block.Question.Choices }}
 		<div class="choice">
 			<input type="radio" id="{{ $choice.Id }}" name="choice" value="{{ $choice.Id }}" disabled>
 			<label for="{{ $choice.Id }}">
 				{{ $choice.ChoiceText }}
-				{{ if eq $choice.Id $.ChosenChoiceId }} (Chosen){{ end }}
+				{{ if $choice.Chosen }} (Chosen){{ end }}
 				{{ if $choice.IsCorrect }} (Correct){{ end }}
 			</label>
 		</div>
 	{{ end }}
 	</div>
 
-	{{ if eq .ChosenChoiceId .CorrectChoiceId }}
+	{{ if .Block.Question.AnsweredCorrectly }}
 		<h3 class="green">Correct!</h3>
 	{{ else }}
 		<h3 class="red">Incorrect.</h3>
 	{{ end }}
 
-	{{ if not (eq .Explanation "") }}
+	{{ if not (eq .Block.Question.Explanation.ContentTmpl "") }}
 		<h3>Explanation</h3>
 		<div class="explanation">
-			{{ .Explanation }}
+			{{ .Block.Question.Explanation.ContentTmpl }}
 		</div>
 	{{ end }}
 </div>

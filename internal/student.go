@@ -108,29 +108,24 @@ func getTakeModule(req takeModuleRequest, ctx HandlerContext, userId int64) (UiT
 			return UiTakeModule{}, err
 		}
 		choices, err := ctx.dbClient.GetChoicesForQuestion(question.Id)
-		correctChoiceId := -1
-		for _, choice := range choices {
-			if choice.Correct {
-				correctChoiceId = choice.Id
-				break
-			}
-		}
 		explanationContent, err := ctx.dbClient.GetExplanationForQuestion(question.Id)
 		var buf bytes.Buffer
 		if err := goldmark.Convert([]byte(explanationContent.Content), &buf); err != nil {
 			return UiTakeModule{}, err
 		}
 		explanation := template.HTML(buf.String())
+		var uiQuestion UiQuestion
+		if choiceId == -1 {
+			uiQuestion = NewUiQuestionTake(question, choices, NewUiContentRendered(explanationContent, explanation))
+		} else {
+			uiQuestion = NewUiQuestionAnswered(question, choices, choiceId, NewUiContentRendered(explanationContent, explanation))
+		}
+		uiBlock := NewUiBlockQuestion(uiQuestion)
 		return UiTakeModule{
 			Module:          NewUiModule(module),
-			BlockType:       string(db.QuestionBlockType),
-			Content:         template.HTML(""),
+			Block:		 uiBlock,
 			BlockCount:      blockCount,
 			BlockIndex:      req.blockIdx,
-			ChosenChoiceId:  choiceId,
-			CorrectChoiceId: correctChoiceId,
-			Question:        NewUiQuestion(question, choices, explanationContent),
-			Explanation:     explanation,
 		}, nil
 	} else if block.BlockType == db.ContentBlockType {
 		content, err := ctx.dbClient.GetContentFromBlock(block.Id)
@@ -141,16 +136,12 @@ func getTakeModule(req takeModuleRequest, ctx HandlerContext, userId int64) (UiT
 		if err := goldmark.Convert([]byte(content.Content), &buf); err != nil {
 			return UiTakeModule{}, err
 		}
+		uiBlock := NewUiBlockContent(NewUiContentRendered(content, template.HTML(buf.String())))
 		return UiTakeModule{
 			Module:          NewUiModule(module),
-			BlockType:       string(db.ContentBlockType),
-			Content:         template.HTML(buf.String()),
+			Block:		 uiBlock,
 			BlockCount:      blockCount,
 			BlockIndex:      req.blockIdx,
-			ChosenChoiceId:  -1,
-			CorrectChoiceId: -1,
-			Question:        EmptyQuestion(),
-			Explanation:     template.HTML(""),
 		}, nil
 	} else {
 		return UiTakeModule{}, fmt.Errorf("Unknown block type %s", block.BlockType)
@@ -190,6 +181,9 @@ func handleAnswerQuestion(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	if err != nil {
 		return err
 	}
+	if uiTakeModule.Block.BlockType != db.QuestionBlockType {
+		return fmt.Errorf("Tried to submit answer, but block at index %d for module %d is not a question block", req.blockIdx, req.moduleId)
+	}
 	err = r.ParseForm()
 	if err != nil {
 		return err
@@ -198,21 +192,16 @@ func handleAnswerQuestion(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	if err != nil {
 		return err
 	}
+	err = ctx.dbClient.StoreAnswer(userId, uiTakeModule.Block.Question.Id, choiceId)
 	if err != nil {
 		return err
 	}
-	err = ctx.dbClient.StoreAnswer(userId, uiTakeModule.Question.Id, choiceId)
-	if err != nil {
-		return err
+	for i, choice := range uiTakeModule.Block.Question.Choices {
+		if choice.Id == choiceId {
+			uiTakeModule.Block.Question.Choices[i].Chosen = true
+			break
+		}
 	}
 
-	return ctx.renderer.RenderQuestionSubmitted(w, UiSubmittedAnswer{
-		Module:          uiTakeModule.Module,
-		BlockCount:      uiTakeModule.BlockCount,
-		BlockIndex:      uiTakeModule.BlockIndex,
-		ChosenChoiceId:  choiceId,
-		CorrectChoiceId: uiTakeModule.CorrectChoiceId,
-		Question:        uiTakeModule.Question,
-		Explanation:     uiTakeModule.Explanation,
-	})
+	return ctx.renderer.RenderQuestionSubmitted(w, uiTakeModule)
 }
