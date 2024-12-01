@@ -89,13 +89,19 @@ func (c *DbClient) EditCourse(courseId int, title string, description string, mo
 			}
 			moduleId = module.Id
 		} else {
-			err = UpdateModuleMetadata(tx, moduleId, moduleTitle, moduleDescription)
+			// No need to instert new module version just to change the name.
+			version, err := GetLatestModuleVersion(tx, moduleId)
+			if err != nil {
+				tx.Rollback()
+				return Course{}, []Module{}, err
+			}
+			err = UpdateModuleVersionMetadata(tx, version.Id, moduleTitle, moduleDescription)
 			if err != nil {
 				tx.Rollback()
 				return Course{}, []Module{}, err
 			}
 		}
-		module := Module{moduleId, course.Id, moduleTitle, moduleDescription}
+		module := Module{moduleId, course.Id}
 		modules[i] = module
 	}
 	err = tx.Commit()

@@ -132,8 +132,8 @@ type UiModule struct {
 	Description string
 }
 
-func NewUiModule(m db.Module) UiModule {
-	return UiModule{m.Id, m.CourseId, m.Title, m.Description}
+func NewUiModule(courseId int, version db.ModuleVersion) UiModule {
+	return UiModule{version.ModuleId, courseId, version.Title, version.Description}
 }
 
 func EmptyModule() UiModule {

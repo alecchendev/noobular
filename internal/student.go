@@ -46,13 +46,13 @@ func handleStudentCoursePage(w http.ResponseWriter, r *http.Request, ctx Handler
 	if err != nil {
 		return err
 	}
-	modules, err := ctx.dbClient.GetModules(course.Id, true)
+	moduleVersions, err := ctx.dbClient.GetLatestModuleVersionsForCourse(course.Id, true)
 	if err != nil {
 		return err
 	}
-	uiModules := make([]UiModule, len(modules))
-	for j, module := range modules {
-		uiModules[j] = NewUiModule(module)
+	uiModules := make([]UiModule, len(moduleVersions))
+	for j, moduleVersion := range moduleVersions {
+		uiModules[j] = NewUiModule(courseId, moduleVersion)
 	}
 	return ctx.renderer.RenderStudentCoursePage(w, StudentCoursePageArgs{
 		Username:    user.Username,
@@ -103,11 +103,15 @@ func getModule(ctx HandlerContext, moduleId int, userId int64) (UiModule, db.Vis
 	if err != nil {
 		return UiModule{}, db.Visit{}, 0, err
 	}
+	moduleVersion, err := ctx.dbClient.GetModuleVersion(visit.ModuleVersionId)
+	if err != nil {
+		return UiModule{}, db.Visit{}, 0, err
+	}
 	blockCount, err := ctx.dbClient.GetBlockCount(visit.ModuleVersionId)
 	if err != nil {
 		return UiModule{}, db.Visit{}, 0, err
 	}
-	return NewUiModule(module), visit, blockCount, nil
+	return NewUiModule(module.CourseId, moduleVersion), visit, blockCount, nil
 }
 
 func getBlock(ctx HandlerContext, moduleVersionId int64, blockIdx int, userId int64) (UiBlock, error) {

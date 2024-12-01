@@ -112,13 +112,13 @@ func (c testClient) createTestUser() testClient {
 
 const createCourseRoute = "/teacher/course/create"
 
-func (c testClient) createCourse(course db.Course, modules []db.Module) {
+func (c testClient) createCourse(course db.Course, modules []db.ModuleVersion) {
 	formData := createCourseForm(course, modules)
 	resp := c.post(createCourseRoute, formData.Encode())
 	assert.Equal(c.t, 200, resp.StatusCode)
 }
 
-func createCourseForm(course db.Course, modules []db.Module) url.Values {
+func createCourseForm(course db.Course, modules []db.ModuleVersion) url.Values {
 	formData := url.Values{}
 	formData.Set("title", course.Title)
 	formData.Set("description", course.Description)
@@ -142,16 +142,16 @@ func editModuleRoute(courseId, moduleId int) string {
 	return fmt.Sprintf("/teacher/course/%d/module/%d", courseId, moduleId)
 }
 
-func (c testClient) editModule(module db.Module, blocks []blockInput) {
-	formData := editModuleForm(module, blocks)
-	resp := c.put(editModuleRoute(module.CourseId, module.Id), formData.Encode())
+func (c testClient) editModule(courseId int, moduleVersion db.ModuleVersion, blocks []blockInput) {
+	formData := editModuleForm(moduleVersion, blocks)
+	resp := c.put(editModuleRoute(courseId, moduleVersion.ModuleId), formData.Encode())
 	assert.Equal(c.t, 200, resp.StatusCode)
 }
 
-func editModuleForm(module db.Module, blocks []blockInput) url.Values {
+func editModuleForm(moduleVersion db.ModuleVersion, blocks []blockInput) url.Values {
 	formData := url.Values{}
-	formData.Set("title", module.Title)
-	formData.Set("description", module.Description)
+	formData.Set("title", moduleVersion.Title)
+	formData.Set("description", moduleVersion.Description)
 	for _, block := range blocks {
 		formData.Add("block-type[]", string(block.blockType))
 		switch block.blockType {
@@ -232,9 +232,9 @@ func TestCreateCourse(t *testing.T) {
 	assert.Equal(t, 200, resp.StatusCode)
 
 	course := db.NewCourse(-1, "hello", "goodbye")
-	modules := []db.Module{
-		db.NewModule(-1, -1, "module title1", "module description1"),
-		db.NewModule(-1, -1, "module title2", "module description2"),
+	modules := []db.ModuleVersion{
+		db.NewModuleVersion(-1, -1, 0, "module title1", "module description1"),
+		db.NewModuleVersion(-1, -1, 0, "module title2", "module description2"),
 	}
 
 	body := bodyText(t, resp)
@@ -262,23 +262,26 @@ func TestEditModule(t *testing.T) {
 	client := newTestClient(t).login(user.Id)
 
 	course := db.NewCourse(-1, "hello", "goodbye")
-	modules := []db.Module{
-		db.NewModule(-1, -1, "module title1", "module description1"),
+	modules := []db.ModuleVersion{
+		db.NewModuleVersion(-1, -1, 0, "module title1", "module description1"),
 	}
 	client.createCourse(course, modules)
 
-	module := db.NewModule(1, 1, "new title", "new description")
+	courseId := 1
+	moduleId := 1
 
 	resp := client.get("/teacher")
 	assert.Equal(t, 200, resp.StatusCode)
 	body := bodyText(t, resp)
-	editModulePageLink := editModulePageRoute(module.CourseId, module.Id)
+	editModulePageLink := editModulePageRoute(courseId, moduleId)
 	assert.Contains(t, body, editModulePageLink)
 
 	resp = client.get(editModulePageLink)
 	assert.Equal(t, 200, resp.StatusCode)
 	body = bodyText(t, resp)
-	assert.Contains(t, body, editModuleRoute(module.CourseId, module.Id))
+	assert.Contains(t, body, editModuleRoute(courseId, moduleId))
+
+	newModuleVersion := db.NewModuleVersion(2, 1, 1, "new title", "new description")
 
 	blocks := []blockInput{
 		{db.QuestionBlockType, internal.NewUiQuestionEdit(db.NewQuestion(-1, -1, "qname1"), []db.Choice{
@@ -295,15 +298,15 @@ func TestEditModule(t *testing.T) {
 		{db.ContentBlockType, db.NewContent(-1, "qcontent1")},
 	}
 
-	client.editModule(module, blocks)
+	client.editModule(courseId, newModuleVersion, blocks)
 
 	// Check that if we revisit the edit module page
 	// all of our changes are reflected
 	resp = client.get(editModulePageLink)
 	assert.Equal(t, 200, resp.StatusCode)
 	body = bodyText(t, resp)
-	assert.Contains(t, body, module.Title)
-	assert.Contains(t, body, module.Description)
+	assert.Contains(t, body, newModuleVersion.Title)
+	assert.Contains(t, body, newModuleVersion.Description)
 	for _, block := range blocks {
 		switch block.blockType {
 		case db.QuestionBlockType:

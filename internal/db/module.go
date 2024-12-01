@@ -6,13 +6,10 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-// TODO: delete title and description once module versions is working
 const createModuleTable = `
 create table if not exists modules (
 	id integer primary key autoincrement,
 	course_id integer not null,
-	title text not null,
-	description text not null,
 	foreign key (course_id) references courses(id) on delete cascade
 );
 `
@@ -20,17 +17,15 @@ create table if not exists modules (
 type Module struct {
 	Id          int
 	CourseId    int
-	Title       string
-	Description string
 }
 
-func NewModule(id int, courseId int, title string, description string) Module {
-	return Module{id, courseId, title, description}
+func NewModule(id int, courseId int) Module {
+	return Module{id, courseId}
 }
 
 const insertModuleQuery = `
-insert into modules(course_id, title, description)
-values(?, ?, ?);
+insert into modules(course_id)
+values(?);
 `
 
 func (c *DbClient) CreateModule(courseId int, moduleTitle string, moduleDescription string) (Module, error) {
@@ -51,7 +46,7 @@ func (c *DbClient) CreateModule(courseId int, moduleTitle string, moduleDescript
 }
 
 func CreateModule(tx *sql.Tx, courseId int, moduleTitle string, moduleDescription string) (Module, error) {
-	res, err := tx.Exec(insertModuleQuery, courseId, moduleTitle, moduleDescription)
+	res, err := tx.Exec(insertModuleQuery, courseId)
 	if err != nil {
 		return Module{}, err
 	}
@@ -63,7 +58,7 @@ func CreateModule(tx *sql.Tx, courseId int, moduleTitle string, moduleDescriptio
 	if err != nil {
 		return Module{}, err
 	}
-	return Module{int(moduleId), courseId, moduleTitle, moduleDescription}, nil
+	return Module{int(moduleId), courseId}, nil
 }
 
 const getModulesQuery = `
@@ -97,7 +92,7 @@ func (c *DbClient) GetModules(courseId int, requireHasBlocks bool) ([]Module, er
 	modules := []Module{}
 	for moduleRows.Next() {
 		var module Module
-		err := moduleRows.Scan(&module.Id, &module.CourseId, &module.Title, &module.Description)
+		err := moduleRows.Scan(&module.Id, &module.CourseId)
 		if err != nil {
 			return nil, err
 		}
@@ -107,17 +102,6 @@ func (c *DbClient) GetModules(courseId int, requireHasBlocks bool) ([]Module, er
 		return nil, err
 	}
 	return modules, nil
-}
-
-const updateModuleQuery = `
-update modules
-set title = ?, description = ?
-where id = ?;
-`
-
-func UpdateModuleMetadata(tx *sql.Tx, moduleId int, title string, description string) error {
-	_, err := tx.Exec(updateModuleQuery, title, description, moduleId)
-	return err
 }
 
 const deleteContentForModuleQuery = `
@@ -151,7 +135,7 @@ where m.id = ?
 func (c *DbClient) GetModule(moduleId int) (Module, error) {
 	moduleRow := c.db.QueryRow(getModuleQuery, moduleId)
 	var module Module
-	err := moduleRow.Scan(&module.Id, &module.CourseId, &module.Title, &module.Description)
+	err := moduleRow.Scan(&module.Id, &module.CourseId)
 	if err != nil {
 		return Module{}, err
 	}
