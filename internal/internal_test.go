@@ -40,6 +40,11 @@ type testContext struct {
 	db *db.DbClient
 }
 
+func (c testContext) Close() {
+	c.server.Close()
+	c.db.Close()
+}
+
 func (c testContext) createUser() db.User {
 	user, err := c.db.CreateUser("test")
 	assert.Nil(c.t, err)
@@ -179,7 +184,7 @@ func bodyText(t *testing.T, resp *http.Response) string {
 
 func TestBasicNav(t *testing.T) {
 	ctx := startServer()
-	defer ctx.server.Close()
+	defer ctx.Close()
 
 	tests := []struct {
 		name         string
@@ -218,7 +223,7 @@ func TestBasicNav(t *testing.T) {
 
 func TestCreateCourse(t *testing.T) {
 	ctx := startServer()
-	defer ctx.server.Close()
+	defer ctx.Close()
 
 	user := ctx.createUser()
 	client := newTestClient(t).login(user.Id)
@@ -251,7 +256,7 @@ func TestCreateCourse(t *testing.T) {
 
 func TestEditModule(t *testing.T) {
 	ctx := startServer()
-	defer ctx.server.Close()
+	defer ctx.Close()
 
 	user := ctx.createUser()
 	client := newTestClient(t).login(user.Id)

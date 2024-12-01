@@ -75,12 +75,18 @@ values(?, ?, ?, ?);
 `
 
 func InsertModuleVersion(tx *sql.Tx, moduleId int, title string, description string) (ModuleVersion, error) {
+	latestVersionNumber := int64(0)
 	latestVersion, err := GetLatestModuleVersion(tx, moduleId)
+	if err != nil && err != sql.ErrNoRows {
+		return ModuleVersion{}, err
+	} else if err == nil {
+		latestVersionNumber = latestVersion.VersionNumber
+	}
 	// There's technically a race here. If two transactions try to insert
 	// a module version at the same time, there could be a conflict.
 	// Going to choose not to handle this for now, since someone would have to
 	// be doing something pretty abnormal for this to happen.
-	newVersionNumber := latestVersion.VersionNumber + 1
+	newVersionNumber := latestVersionNumber + 1
 	res, err := tx.Exec(insertModuleVersionQuery, moduleId, newVersionNumber, title, description)
 	if err != nil {
 		return ModuleVersion{}, err

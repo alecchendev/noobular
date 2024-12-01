@@ -235,14 +235,13 @@ func handleEditModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	if err != nil {
 		return err
 	}
-	module, err := ctx.dbClient.GetModule(moduleId)
-	if err != nil {
-		return err
-	}
 	moduleVersion, err := ctx.dbClient.GetLatestModuleVersion(moduleId)
+	if err != nil {
+		return fmt.Errorf("Error getting module version: %w", err)
+	}
 	blocks, err := ctx.dbClient.GetBlocks(moduleVersion.Id)
 	if err != nil {
-		return err
+		return fmt.Errorf("Error getting blocks: %w", err)
 	}
 	uiBlocks := make([]UiBlock, len(blocks))
 	for _, block := range blocks {
@@ -276,8 +275,8 @@ func handleEditModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 		CourseId:    courseId,
 		CourseTitle: course.Title,
 		ModuleId:    moduleId,
-		ModuleTitle: module.Title,
-		ModuleDesc:  module.Description,
+		ModuleTitle: moduleVersion.Title,
+		ModuleDesc:  moduleVersion.Description,
 		Blocks:      uiBlocks,
 	})
 }

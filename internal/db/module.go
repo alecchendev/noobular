@@ -59,6 +59,10 @@ func CreateModule(tx *sql.Tx, courseId int, moduleTitle string, moduleDescriptio
 	if err != nil {
 		return Module{}, err
 	}
+	_, err = InsertModuleVersion(tx, int(moduleId), moduleTitle, moduleDescription)
+	if err != nil {
+		return Module{}, err
+	}
 	return Module{int(moduleId), courseId, moduleTitle, moduleDescription}, nil
 }
 
