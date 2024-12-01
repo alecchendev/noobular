@@ -106,7 +106,7 @@ func handleEditCoursePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	if err != nil {
 		return err
 	}
-	course, err := ctx.dbClient.GetCourse(userId, courseId)
+	course, err := ctx.dbClient.GetEditCourse(userId, courseId)
 	if err != nil {
 		return err
 	}
@@ -231,7 +231,7 @@ func handleEditModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	if err != nil {
 		return err
 	}
-	course, err := ctx.dbClient.GetCourse(userId, courseId)
+	course, err := ctx.dbClient.GetEditCourse(userId, courseId)
 	if err != nil {
 		return err
 	}

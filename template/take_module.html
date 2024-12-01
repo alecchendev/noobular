@@ -1,6 +1,11 @@
 {{ define "title" }}Module: {{ .Module.Title }}{{ end }}
 {{ define "style" }}
 
+.take-module-body {
+	max-width: 800px;
+	padding-bottom: 300px;
+}
+
 #header {
 	display: flex;
 	flex-direction: row;
@@ -106,6 +111,7 @@
 {{ end }}
 {{ define "content" }}
 
+<div class="take-module-body">
 <div id="header">
 	<div class="progress-bar">
 		{{ range $i := NumRange .BlockCount }}
@@ -136,6 +142,7 @@
 	{{ template "block" . }}
 {{ end }}
 
+</div>
 {{ end }}
 
 {{ define "content_block" }}

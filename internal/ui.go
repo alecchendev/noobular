@@ -315,7 +315,24 @@ type StudentPageArgs struct {
 	Username string
 }
 
+func (a StudentPageArgs) HasCourse() bool {
+	return false
+}
+
+type StudentCoursePageArgs struct {
+	Username string
+	Course   UiCourseStudent
+}
+
+func (a StudentCoursePageArgs) HasCourse() bool {
+	return true
+}
+
 func (r *Renderer) RenderStudentPage(w http.ResponseWriter, args StudentPageArgs) error {
+	return r.templates["student.html"].ExecuteTemplate(w, "page.html", NewPageArgs(true, true, args))
+}
+
+func (r *Renderer) RenderStudentCoursePage(w http.ResponseWriter, args StudentCoursePageArgs) error {
 	return r.templates["student.html"].ExecuteTemplate(w, "page.html", NewPageArgs(true, true, args))
 }
 
@@ -323,7 +340,7 @@ func (r *Renderer) RenderTeacherCoursePage(w http.ResponseWriter, courses []UiCo
 	return r.templates["courses.html"].ExecuteTemplate(w, "page.html", NewPageArgs(true, true, CoursePageArgs{newCourseId, true, true, courses}))
 }
 
-func (r *Renderer) RenderStudentCoursePage(w http.ResponseWriter, courses []UiCourseStudent) error {
+func (r *Renderer) RenderStudentCoursesPage(w http.ResponseWriter, courses []UiCourseStudent) error {
 	return r.templates["courses.html"].ExecuteTemplate(w, "page.html", NewPageArgs(true, true, CoursePageArgsStudent{0, false, true, courses}))
 }
 

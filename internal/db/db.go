@@ -57,10 +57,11 @@ func initDb(db *sql.DB) {
 		createContentBlockTable,
 		createContentTable,
 		createExplanationTable,
-		createVisitTable,
 		createUserTable,
 		createCredentialTable,
 		createSessionTable,
+		createVisitTable,
+		createEnrollmentTable,
 	}
 	for _, stmt := range stmts {
 		_, err := tx.Exec(stmt)

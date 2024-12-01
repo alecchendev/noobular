@@ -105,6 +105,22 @@ func (c *DbClient) EditCourse(courseId int, title string, description string, mo
 	return course, modules, nil
 }
 
+const getCourseQuery = `
+select c.id, c.title, c.description
+from courses c
+where c.id = ?;
+`
+
+func (c *DbClient) GetCourse(courseId int) (Course, error) {
+	row := c.db.QueryRow(getCourseQuery, courseId)
+	var course Course
+	err := row.Scan(&course.Id, &course.Title, &course.Description)
+	if err != nil {
+		return Course{}, err
+	}
+	return course, nil
+}
+
 const getCoursesQuery = `
 select c.id, c.title, c.description
 from courses c
@@ -156,20 +172,20 @@ func (c *DbClient) GetCourses(userId int64, forStudent bool) ([]Course, error) {
 	return courses, nil
 }
 
-const getCourseQuery = `
+const getEditCourseQuery = `
 select c.id, c.title, c.description
 from courses c
 where c.user_id = ? and c.id = ?;
 `
 
-func (c *DbClient) GetCourse(userId int64, courseId int) (Course, error) {
-	row := c.db.QueryRow(getCourseQuery, userId, courseId)
-	var course Course
-	err := row.Scan(&course.Id, &course.Title, &course.Description)
-	if err != nil {
-		return Course{}, err
-	}
-	return course, nil
+func (c *DbClient) GetEditCourse(userId int64, courseId int) (Course, error) {
+       row := c.db.QueryRow(getEditCourseQuery, userId, courseId)
+       var course Course
+       err := row.Scan(&course.Id, &course.Title, &course.Description)
+       if err != nil {
+               return Course{}, err
+       }
+       return course, nil
 }
 
 const getModuleCourseQuery = `

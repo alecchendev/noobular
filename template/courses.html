@@ -105,6 +105,9 @@ html {
 				{{ if $.Editor }}
 				<a class="edit-course-link" href="/teacher/course/{{$course.Id}}/edit">Edit</a>
 				{{ template "delete_course_link" $course }}
+				{{ else if $.LoggedIn }}
+				{{ template "take_course_link" $course }}
+				{{ else }}
 				{{ end }}
 			</div>
 		</div>
@@ -153,5 +156,13 @@ html {
 	hx-confirm="Note: Deleting this course will also delete all its modules and associated content. Are you sure you want to delete this course?"
 	hx-target="closest .course"
 	hx-swap="outerHTML"
-	>Delete</a>
+>Delete</a>
+{{ end }}
+
+{{ define "take_course_link" }}
+<a
+	class="edit-course-link"
+	href="#"
+	hx-post="/student/course/{{ .Id }}"
+>Take</a>
 {{ end }}

@@ -23,45 +23,71 @@ func handleStudentPage(w http.ResponseWriter, r *http.Request, ctx HandlerContex
 	return ctx.renderer.RenderStudentPage(w, StudentPageArgs{user.Username})
 }
 
-// Courses page
+// Student course page
 
-func handleStudentCoursesPage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
-	courses, err := ctx.dbClient.GetCourses(-1, true)
+func handleStudentCoursePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
+	courseId, err := strconv.Atoi(r.PathValue("courseId"))
 	if err != nil {
 		return err
 	}
-	uiCourses := make([]UiCourseStudent, len(courses))
-	for i, course := range courses {
-		modules, err := ctx.dbClient.GetModules(course.Id, true)
+	_, err = ctx.dbClient.GetEnrollment(userId, courseId)
+	if err != nil {
+		return err
+	}
+	user, err := ctx.dbClient.GetUser(userId)
+	if err != nil {
+		return err
+	}
+	course, err := ctx.dbClient.GetCourse(courseId)
+	if err != nil {
+		return err
+	}
+	modules, err := ctx.dbClient.GetModules(course.Id, true)
+	if err != nil {
+		return err
+	}
+	uiModules := make([]UiModuleStudent, len(modules))
+	for j, module := range modules {
+		blockCount, err := ctx.dbClient.GetBlockCount(module.Id)
 		if err != nil {
 			return err
 		}
-		uiModules := make([]UiModuleStudent, len(modules))
-		for j, module := range modules {
-			blockCount, err := ctx.dbClient.GetBlockCount(module.Id)
-			if err != nil {
-				return err
-			}
-			visit, err := ctx.dbClient.GetVisit(userId, module.Id)
-			var nextBlockIdx int
-			if err == sql.ErrNoRows {
-				nextBlockIdx = -1
-			} else if err != nil {
-				return err
-			}
-			nextBlockIdx = visit.BlockIndex
-			uiModules[j] = UiModuleStudent{
-				module.Id,
-				module.CourseId,
-				module.Title,
-				module.Description,
-				blockCount,
-				nextBlockIdx,
-			}
+		visit, err := ctx.dbClient.GetVisit(userId, module.Id)
+		var nextBlockIdx int
+		if err == sql.ErrNoRows {
+			nextBlockIdx = -1
+		} else if err != nil {
+			return err
 		}
-		uiCourses[i] = UiCourseStudent{course.Id, course.Title, course.Description, uiModules}
+		nextBlockIdx = visit.BlockIndex
+		uiModules[j] = UiModuleStudent{
+			module.Id,
+			module.CourseId,
+			module.Title,
+			module.Description,
+			blockCount,
+			nextBlockIdx,
+		}
 	}
-	return ctx.renderer.RenderStudentCoursePage(w, uiCourses)
+	return ctx.renderer.RenderStudentCoursePage(w, StudentCoursePageArgs{
+		Username:    user.Username,
+		Course:      UiCourseStudent{course.Id, course.Title, course.Description, uiModules},
+	})
+}
+
+// Take course
+
+func handleTakeCourse(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
+	courseId, err := strconv.Atoi(r.PathValue("courseId"))
+	if err != nil {
+		return err
+	}
+	_, err = ctx.dbClient.InsertEnrollment(userId, courseId)
+	if err != nil {
+		return err
+	}
+	w.Header().Add("HX-Redirect", fmt.Sprintf("/student/course/%d", courseId))
+	return nil
 }
 
 // Take module page
