@@ -10,10 +10,11 @@ import (
 const createBlockTable = `
 create table if not exists blocks (
 	id integer primary key autoincrement,
-	module_id integer not null,
+	module_version_id integer not null,
 	block_index integer not null,
 	block_type text not null,
-	foreign key (module_id) references modules(id) on delete cascade
+	foreign key (module_version_id) references module_versions(id) on delete cascade,
+	constraint block_ unique(module_version_id, block_index) on conflict fail
 );
 `
 
@@ -25,23 +26,23 @@ const (
 )
 
 type Block struct {
-	Id         int
-	ModuleId   int
-	BlockIndex int
-	BlockType  BlockType
+	Id              int
+	ModuleVersionId int64
+	BlockIndex      int
+	BlockType       BlockType
 }
 
-func NewBlock(id int, moduleId int, blockIdx int, blockType BlockType) Block {
-	return Block{id, moduleId, blockIdx, blockType}
+func NewBlock(id int, moduleVersionId int64, blockIdx int, blockType BlockType) Block {
+	return Block{id, moduleVersionId, blockIdx, blockType}
 }
 
 const insertBlockQuery = `
-insert into blocks(module_id, block_index, block_type)
+insert into blocks(module_version_id, block_index, block_type)
 values(?, ?, ?);
 `
 
-func InsertBlock(tx *sql.Tx, moduleId int, blockIdx int, blockType BlockType) (int64, error) {
-	res, err := tx.Exec(insertBlockQuery, moduleId, blockIdx, blockType)
+func InsertBlock(tx *sql.Tx, moduleVersionId int64, blockIdx int, blockType BlockType) (int64, error) {
+	res, err := tx.Exec(insertBlockQuery, moduleVersionId, blockIdx, blockType)
 	if err != nil {
 		return 0, err
 	}
@@ -49,14 +50,14 @@ func InsertBlock(tx *sql.Tx, moduleId int, blockIdx int, blockType BlockType) (i
 }
 
 const getBlocksQuery = `
-select b.id, b.module_id, b.block_index, b.block_type
+select b.id, b.module_version_id, b.block_index, b.block_type
 from blocks b
-where b.module_id = ?
+where b.module_version_id = ?
 order by b.block_index;
 `
 
-func (c *DbClient) GetBlocks(moduleId int) ([]Block, error) {
-	blockRows, err := c.db.Query(getBlocksQuery, moduleId)
+func (c *DbClient) GetBlocks(moduleVersionId int64) ([]Block, error) {
+	blockRows, err := c.db.Query(getBlocksQuery, moduleVersionId)
 	if err != nil {
 		return nil, err
 	}
@@ -64,7 +65,7 @@ func (c *DbClient) GetBlocks(moduleId int) ([]Block, error) {
 	blocks := []Block{}
 	for blockRows.Next() {
 		var block Block
-		err := blockRows.Scan(&block.Id, &block.ModuleId, &block.BlockIndex, &block.BlockType)
+		err := blockRows.Scan(&block.Id, &block.ModuleVersionId, &block.BlockIndex, &block.BlockType)
 		if err != nil {
 			return nil, err
 		}
@@ -77,16 +78,16 @@ func (c *DbClient) GetBlocks(moduleId int) ([]Block, error) {
 }
 
 const getBlockQuery = `
-select b.id, b.module_id, b.block_index, b.block_type
+select b.id, b.module_version_id, b.block_index, b.block_type
 from blocks b
 where b.block_index = ?
-and b.module_id = ?;
+and b.module_version_id = ?;
 `
 
-func (c *DbClient) GetBlock(moduleId int, blockIdx int) (Block, error) {
-	blockRow := c.db.QueryRow(getBlockQuery, blockIdx, moduleId)
+func (c *DbClient) GetBlock(moduleVersionId int64, blockIdx int) (Block, error) {
+	blockRow := c.db.QueryRow(getBlockQuery, blockIdx, moduleVersionId)
 	block := Block{}
-	err := blockRow.Scan(&block.Id, &block.ModuleId, &block.BlockIndex, &block.BlockType)
+	err := blockRow.Scan(&block.Id, &block.ModuleVersionId, &block.BlockIndex, &block.BlockType)
 	if err != nil {
 		return Block{}, err
 	}
@@ -96,11 +97,11 @@ func (c *DbClient) GetBlock(moduleId int, blockIdx int) (Block, error) {
 const getBlockCountQuery = `
 select count(*)
 from blocks b
-where b.module_id = ?;
+where b.module_version_id = ?;
 `
 
-func (c *DbClient) GetBlockCount(moduleId int) (int, error) {
-	row := c.db.QueryRow(getBlockCountQuery, moduleId)
+func (c *DbClient) GetBlockCount(moduleVersionId int64) (int, error) {
+	row := c.db.QueryRow(getBlockCountQuery, moduleVersionId)
 	var blockCount int
 	err := row.Scan(&blockCount)
 	if err != nil {
@@ -111,10 +112,10 @@ func (c *DbClient) GetBlockCount(moduleId int) (int, error) {
 
 const deleteBlockQuery = `
 delete from blocks
-where module_id = ?;
+where module_version_id = ?;
 `
 
-func DeleteBlocks(tx *sql.Tx, moduleId int) error {
-	_, err := tx.Exec(deleteBlockQuery, moduleId)
+func DeleteBlocks(tx *sql.Tx, moduleVersionId int64) error {
+	_, err := tx.Exec(deleteBlockQuery, moduleVersionId)
 	return err
 }

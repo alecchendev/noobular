@@ -2,11 +2,11 @@ package db
 
 import (
 	"database/sql"
-	"fmt"
 
 	_ "github.com/mattn/go-sqlite3"
 )
 
+// TODO: delete title and description once module versions is working
 const createModuleTable = `
 create table if not exists modules (
 	id integer primary key autoincrement,
@@ -72,7 +72,8 @@ order by m.id;
 const getModulesWithBlocksQuery = `
 select distinct m.id, m.course_id, m.title, m.description
 from modules m
-join blocks b on m.id = b.module_id
+join module_versions mv on m.id = mv.module_id
+join blocks b on mv.id = b.module_version_id
 where m.course_id = ?
 order by m.id;
 `
@@ -117,7 +118,9 @@ func UpdateModuleMetadata(tx *sql.Tx, moduleId int, title string, description st
 
 const deleteContentForModuleQuery = `
 with module_block_ids as (
-	select id from blocks where module_id = ?
+	select b.id from blocks b
+	join module_versions mv on b.module_version_id = mv.id
+	where mv.module_id = ?
 )
 delete from content
 where id in (
@@ -133,65 +136,6 @@ or id in (
 func DeleteContentForModule(tx *sql.Tx, moduleId int) error {
 	_, err := tx.Exec(deleteContentForModuleQuery, moduleId)
 	return err
-}
-
-func (c *DbClient) EditModule(moduleId int, title string, description string, blockTypes []string, contents []string, questions []string, choices [][]string, correctChoiceIdxs []int, explanations []string) error {
-	tx, err := c.db.Begin()
-	if err != nil {
-		return err
-	}
-	err = UpdateModuleMetadata(tx, moduleId, title, description)
-	if err != nil {
-		tx.Rollback()
-		return err
-	}
-	// Delete all content pieces, and questions and choices for this module (deleting questions cascades to choices)
-	err = DeleteContentForModule(tx, moduleId)
-	if err != nil {
-		tx.Rollback()
-		return err
-	}
-	err = DeleteBlocks(tx, moduleId)
-	if err != nil {
-		tx.Rollback()
-		return err
-	}
-	err = DeleteVisitsForModule(tx, moduleId)
-	if err != nil {
-		tx.Rollback()
-		return err
-	}
-	questionIdx := 0
-	contentIdx := 0
-	for i, blockType := range blockTypes {
-		blockId, err := InsertBlock(tx, moduleId, i, BlockType(blockType))
-		if err != nil {
-			tx.Rollback()
-			return err
-		}
-		if blockType == string(ContentBlockType) {
-			err = InsertContentBlock(tx, blockId, contents[contentIdx])
-			if err != nil {
-				tx.Rollback()
-				return err
-			}
-			contentIdx += 1
-		} else if blockType == string(QuestionBlockType) {
-			err = InsertQuestion(tx, blockId, questions[questionIdx], choices[questionIdx], correctChoiceIdxs[questionIdx], explanations[questionIdx])
-			if err != nil {
-				tx.Rollback()
-				return err
-			}
-			questionIdx += 1
-		} else {
-			return fmt.Errorf("invalid block type: %s", blockType)
-		}
-	}
-	err = tx.Commit()
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 const getModuleQuery = `

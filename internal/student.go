@@ -99,21 +99,21 @@ func getModule(ctx HandlerContext, moduleId int, userId int64) (UiModule, db.Vis
 	if err != nil {
 		return UiModule{}, db.Visit{}, 0, err
 	}
-	blockCount, err := ctx.dbClient.GetBlockCount(moduleId)
+	visit, err := ctx.dbClient.GetOrCreateVisit(userId, moduleId)
 	if err != nil {
 		return UiModule{}, db.Visit{}, 0, err
 	}
-	visit, err := ctx.dbClient.GetOrCreateVisit(userId, moduleId)
+	blockCount, err := ctx.dbClient.GetBlockCount(visit.ModuleVersionId)
 	if err != nil {
 		return UiModule{}, db.Visit{}, 0, err
 	}
 	return NewUiModule(module), visit, blockCount, nil
 }
 
-func getBlock(ctx HandlerContext, moduleId int, blockIdx int, userId int64) (UiBlock, error) {
-	block, err := ctx.dbClient.GetBlock(moduleId, blockIdx)
+func getBlock(ctx HandlerContext, moduleVersionId int64, blockIdx int, userId int64) (UiBlock, error) {
+	block, err := ctx.dbClient.GetBlock(moduleVersionId, blockIdx)
 	if err != nil {
-		return UiBlock{}, fmt.Errorf("Error getting block %d for module %d: %v", blockIdx, moduleId, err)
+		return UiBlock{}, fmt.Errorf("Error getting block %d for module %d: %v", blockIdx, moduleVersionId, err)
 	}
 	// TODO: use a html sanitizer like blue monday?
 	if block.BlockType == db.QuestionBlockType {
@@ -174,7 +174,7 @@ func handleTakeModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	nBlocks := min(visit.BlockIndex + 1, blockCount)
 	uiBlocks := make([]UiBlock, nBlocks)
 	for blockIdx := 0; blockIdx < nBlocks; blockIdx++ {
-		uiBlock, err := getBlock(ctx, moduleId, blockIdx, userId)
+		uiBlock, err := getBlock(ctx, visit.ModuleVersionId, blockIdx, userId)
 		if err != nil {
 			return fmt.Errorf("Error getting block %d for module %d: %v", blockIdx, moduleId, err)
 		}
@@ -189,27 +189,27 @@ func handleTakeModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	return ctx.renderer.RenderTakeModulePage(w, uiModule)
 }
 
-func getTakeModule(req takeModuleRequest, ctx HandlerContext, userId int64) (UiTakeModule, error) {
+func getTakeModule(req takeModuleRequest, ctx HandlerContext, userId int64) (UiTakeModule, db.Visit, error) {
 	module, visit, blockCount, err := getModule(ctx, req.moduleId, userId)
 	if err != nil {
-		return UiTakeModule{}, err
+		return UiTakeModule{}, db.Visit{}, err
 	}
 	if req.blockIdx >= blockCount {
-		return UiTakeModule{}, fmt.Errorf("Block index %d is out of bounds (>=%d) for module %d", req.blockIdx, blockCount, req.moduleId)
+		return UiTakeModule{}, db.Visit{}, fmt.Errorf("Block index %d is out of bounds (>=%d) for module %d", req.blockIdx, blockCount, req.moduleId)
 	}
 	if req.blockIdx > visit.BlockIndex + 1 {
-		return UiTakeModule{}, fmt.Errorf("Block index %d is ahead of visit block index %d for module %d", req.blockIdx, visit.BlockIndex, req.moduleId)
+		return UiTakeModule{}, db.Visit{}, fmt.Errorf("Block index %d is ahead of visit block index %d for module %d", req.blockIdx, visit.BlockIndex, req.moduleId)
 	}
-	uiBlock, err := getBlock(ctx, req.moduleId, req.blockIdx, userId)
+	uiBlock, err := getBlock(ctx, visit.ModuleVersionId, req.blockIdx, userId)
 	if err != nil {
-		return UiTakeModule{}, err
+		return UiTakeModule{}, db.Visit{}, err
 	}
 	return UiTakeModule{
 		Module:          module,
 		Block:		 uiBlock,
 		BlockCount:      blockCount,
 		VisitIndex:      visit.BlockIndex,
-	}, nil
+	}, visit, nil
 }
 
 func handleTakeModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
@@ -217,11 +217,11 @@ func handleTakeModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 	if err != nil {
 		return err
 	}
-	module, err := getTakeModule(req, ctx, userId)
+	module, visit, err := getTakeModule(req, ctx, userId)
 	if err != nil {
 		return err
 	}
-	err = ctx.dbClient.UpdateVisit(userId, req.moduleId, req.blockIdx)
+	err = ctx.dbClient.UpdateVisit(userId, visit.ModuleVersionId, req.blockIdx)
 	if err != nil {
 		return err
 	}
@@ -234,7 +234,7 @@ func handleAnswerQuestion(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	if err != nil {
 		return err
 	}
-	uiTakeModule, err := getTakeModule(req, ctx, userId)
+	uiTakeModule, _, err := getTakeModule(req, ctx, userId)
 	if err != nil {
 		return err
 	}
@@ -275,14 +275,14 @@ func handleCompleteModule(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	if err != nil {
 		return err
 	}
-	blockCount, err := ctx.dbClient.GetBlockCount(moduleId)
+	blockCount, err := ctx.dbClient.GetBlockCount(visit.ModuleVersionId)
 	if err != nil {
 		return err
 	}
 	if visit.BlockIndex < blockCount - 1 {
 		return fmt.Errorf("Tried to complete module %d, but only at block index %d", moduleId, visit.BlockIndex)
 	}
-	err = ctx.dbClient.UpdateVisit(userId, moduleId, blockCount)
+	err = ctx.dbClient.UpdateVisit(userId, visit.ModuleVersionId, blockCount)
 	if err != nil {
 		return err
 	}

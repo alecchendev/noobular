@@ -50,6 +50,7 @@ func initDb(db *sql.DB) {
 	stmts := []string{
 		createCourseTable,
 		createModuleTable,
+		createModuleVersionTable,
 		createBlockTable,
 		createQuestionTable,
 		createChoiceTable,

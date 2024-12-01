@@ -16,7 +16,7 @@ func handleTeacherCoursesPage(w http.ResponseWriter, r *http.Request, ctx Handle
 	if err != nil {
 		newCourseId = -1
 	}
-	courses, err := ctx.dbClient.GetCourses(userId, false)
+	courses, err := ctx.dbClient.GetCourses(userId)
 	if err != nil {
 		return err
 	}
@@ -239,7 +239,8 @@ func handleEditModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	if err != nil {
 		return err
 	}
-	blocks, err := ctx.dbClient.GetBlocks(moduleId)
+	moduleVersion, err := ctx.dbClient.GetLatestModuleVersion(moduleId)
+	blocks, err := ctx.dbClient.GetBlocks(moduleVersion.Id)
 	if err != nil {
 		return err
 	}
@@ -390,7 +391,7 @@ func handleEditModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 	if err != nil {
 		return fmt.Errorf("Module %d not found", req.moduleId)
 	}
-	err = ctx.dbClient.EditModule(req.moduleId, req.title, req.description, req.blockTypes, req.contents, req.questions, req.choicesByQuestion, req.correctChoiceIdxs, req.explanations)
+	err = ctx.dbClient.CreateModuleVersion(req.moduleId, req.title, req.description, req.blockTypes, req.contents, req.questions, req.choicesByQuestion, req.correctChoiceIdxs, req.explanations)
 	if err != nil {
 		return err
 	}

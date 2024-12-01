@@ -121,12 +121,6 @@ func (c *DbClient) GetCourse(courseId int) (Course, error) {
 	return course, nil
 }
 
-const getCoursesQuery = `
-select c.id, c.title, c.description
-from courses c
-order by c.id;
-`
-
 const getUserCoursesQuery = `
 select c.id, c.title, c.description
 from courses c
@@ -138,19 +132,18 @@ const getCoursesWithModulesWithBlocksQuery = `
 select distinct c.id, c.title, c.description
 from courses c
 join modules m on c.id = m.course_id
-join blocks b on m.id = b.module_id
+join module_versions mv on m.id = mv.module_id
+join blocks b on mv.id = b.module_version_id
 order by c.id;
 `
 
-func (c *DbClient) GetCourses(userId int64, forStudent bool) ([]Course, error) {
+func (c *DbClient) GetCourses(userId int64) ([]Course, error) {
 	var courseRows *sql.Rows
 	var err error
-	if forStudent {
-		courseRows, err = c.db.Query(getCoursesWithModulesWithBlocksQuery)
-	} else if userId != -1 {
+	if userId != -1 {
 		courseRows, err = c.db.Query(getUserCoursesQuery, userId)
 	} else {
-		courseRows, err = c.db.Query(getCoursesQuery)
+		courseRows, err = c.db.Query(getCoursesWithModulesWithBlocksQuery)
 	}
 	if err != nil {
 		return nil, err

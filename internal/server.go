@@ -36,7 +36,7 @@ func initRouter(dbClient *db.DbClient, renderer Renderer, webAuthn *webauthn.Web
 	mux.Handle("/signup/finish", newHandlerMap().Post(authRejectedHandler(handleSignupFinish)))
 	mux.Handle("/signin/begin", newHandlerMap().Get(authRejectedHandler(handleSigninBegin)))
 	mux.Handle("/signin/finish", newHandlerMap().Post(authRejectedHandler(handleSigninFinish)))
-	mux.Handle("/logout", newHandlerMap().Get(authRequiredHandler(handleLogout)))
+	mux.Handle("/logout", newHandlerMap().Get(authOptionalHandler(handleLogout)))
 
 	mux.Handle("/student", newHandlerMap().Get(authRequiredHandler(handleStudentPage)))
 	mux.Handle("/student/course/{courseId}", newHandlerMap().Get(authRequiredHandler(handleStudentCoursePage)).Post(authRequiredHandler(handleTakeCourse)))
@@ -157,7 +157,7 @@ func handleHomePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, 
 
 func handleBrowsePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, loggedIn bool) error {
 	// Copied from teacher's course page
-	courses, err := ctx.dbClient.GetCourses(-1, false)
+	courses, err := ctx.dbClient.GetCourses(-1)
 	if err != nil {
 		return err
 	}

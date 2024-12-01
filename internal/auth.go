@@ -84,8 +84,8 @@ func handleSigninPage(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 
 // Log out
 
-func handleLogout(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
-	cookie, err := CreateAuthCookie(ctx.jwtSecret, userId)
+func handleLogout(w http.ResponseWriter, r *http.Request, ctx HandlerContext, _ bool) error {
+	cookie, err := CreateAuthCookie(ctx.jwtSecret, 0)
 	if err != nil {
 		return err
 	}
