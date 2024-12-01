@@ -55,10 +55,6 @@ func initRouter(dbClient *db.DbClient, renderer Renderer, webAuthn *webauthn.Web
 	mux.Handle("/ui/{questionIdx}/choice", newHandlerMap().Get(handleAddChoice))
 	mux.Handle("/ui/{element}", newHandlerMap().Get(handleAddElement).Delete(handleDeleteElement))
 
-	// Test handlers
-	// TODO: turn this off in production/find a better way to make test fixtures
-	mux.Handle("/signup/test", newHandlerMap().Post(authRejectedHandler(handleCreateTestUser)))
-
 	return mux
 }
 
@@ -178,13 +174,4 @@ func handleBrowsePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 		uiCourses[i] = UiCourse{course.Id, course.Title, course.Description, uiModules}
 	}
 	return ctx.renderer.RenderBrowsePage(w, uiCourses, loggedIn)
-}
-
-func handleCreateTestUser(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
-	user, err := ctx.dbClient.CreateUser("test")
-	if err != nil {
-		return err
-	}
-	log.Println("Created test user", user)
-	return nil
 }

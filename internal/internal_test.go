@@ -19,7 +19,7 @@ import (
 const testUrl = "http://localhost:8080"
 const testJwtSecretHex = "5b0c060a53f2c6cd88dde0993fac31648ae75fe092b56571e6b51da56a8e4e87"
 
-func testServer() *http.Server {
+func testServer(dbClient *db.DbClient) *http.Server {
 	jwtSecret, _ := hex.DecodeString(testJwtSecretHex)
 	urlStr := testUrl
 	urlUrl, _ := url.Parse(urlStr)
@@ -31,19 +31,31 @@ func testServer() *http.Server {
 
 	port := 8080
 	renderer := internal.NewRenderer("..")
-	dbClient := db.NewMemoryDbClient()
 	return internal.NewServer(dbClient, renderer, webAuthn, jwtSecret, port)
 }
 
-func startServer() *http.Server {
-	server := testServer()
+type testContext struct {
+	t *testing.T
+	server *http.Server
+	db *db.DbClient
+}
+
+func (c testContext) createUser() db.User {
+	user, err := c.db.CreateUser("test")
+	assert.Nil(c.t, err)
+	return user
+}
+
+func startServer() testContext {
+	dbClient := db.NewMemoryDbClient()
+	server := testServer(dbClient)
 	ready := make(chan struct{})
 	go func() {
 		close(ready)
 		server.ListenAndServe()
 	}()
 	<-ready
-	return server
+	return testContext{server: server, db: dbClient}
 }
 
 type testClient struct {
@@ -166,8 +178,8 @@ func bodyText(t *testing.T, resp *http.Response) string {
 }
 
 func TestBasicNav(t *testing.T) {
-	server := startServer()
-	defer server.Close()
+	ctx := startServer()
+	defer ctx.server.Close()
 
 	tests := []struct {
 		name         string
@@ -205,10 +217,11 @@ func TestBasicNav(t *testing.T) {
 }
 
 func TestCreateCourse(t *testing.T) {
-	server := startServer()
-	defer server.Close()
+	ctx := startServer()
+	defer ctx.server.Close()
 
-	client := newTestClient(t).createTestUser()
+	user := ctx.createUser()
+	client := newTestClient(t).login(user.Id)
 
 	resp := client.get("/teacher")
 	assert.Equal(t, 200, resp.StatusCode)
@@ -237,10 +250,11 @@ func TestCreateCourse(t *testing.T) {
 }
 
 func TestEditModule(t *testing.T) {
-	server := startServer()
-	defer server.Close()
+	ctx := startServer()
+	defer ctx.server.Close()
 
-	client := newTestClient(t).createTestUser()
+	user := ctx.createUser()
+	client := newTestClient(t).login(user.Id)
 
 	course := db.NewCourse(-1, "hello", "goodbye")
 	modules := []db.Module{
@@ -301,8 +315,5 @@ func TestEditModule(t *testing.T) {
 	}
 }
 
-// TODO: more test coverage
-// - Need to figure out a way to get the db clients synced up
-// because assert the db state will be really useful
-
 // Edge case to test: editing a module after parts have been created, then refreshing
+// Nvm, when the module system is done this will change so might as well just test then
