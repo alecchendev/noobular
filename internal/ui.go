@@ -11,13 +11,13 @@ import (
 
 type Renderer struct {
 	projectRootDir string
-	templates map[string]*template.Template
+	templates      map[string]*template.Template
 }
 
 func NewRenderer(projectRootDir string) Renderer {
 	return Renderer{
 		projectRootDir: projectRootDir,
-		templates: initTemplates(projectRootDir),
+		templates:      initTemplates(projectRootDir),
 	}
 }
 
@@ -51,14 +51,14 @@ func initTemplates(projectRootDir string) map[string]*template.Template {
 		},
 	}
 	filePaths := map[string][]string{
-		"index.html": {"page.html", "index.html"},
-		"signup.html": {"page.html", "signup.html"},
-		"student.html": {"page.html", "student.html"},
-		"courses.html": {"page.html", "courses.html"},
+		"index.html":         {"page.html", "index.html"},
+		"signup.html":        {"page.html", "signup.html"},
+		"student.html":       {"page.html", "student.html"},
+		"courses.html":       {"page.html", "courses.html"},
 		"create_course.html": {"page.html", "create_course.html", "add_element.html", "created_course_response.html", "edited_course_response.html"},
-		"edit_module.html": {"page.html", "edit_module.html", "add_element.html", "edited_module_response.html"},
-		"take_module.html": {"page.html", "take_module.html"},
-		"add_element.html": {"add_element.html"},
+		"edit_module.html":   {"page.html", "edit_module.html", "add_element.html", "edited_module_response.html"},
+		"take_module.html":   {"page.html", "take_module.html"},
+		"add_element.html":   {"add_element.html"},
 	}
 	templates := make(map[string]*template.Template)
 	for name, paths := range filePaths {
@@ -156,26 +156,27 @@ func (m UiModule) IsEmpty() bool {
 }
 
 type UiModuleStudent struct {
-	Id                        int
-	CourseId                  int
-	Title                     string
-	Description               string
-	QuestionCount             int
-	NextUnansweredQuestionIdx int
+	Id           int
+	CourseId     int
+	Title        string
+	Description  string
+	BlockCount   int
+	NextBlockIdx int
 }
 
 type UiBlock struct {
-	BlockType db.BlockType
-	Content   UiContent
-	Question  UiQuestion
+	BlockType  db.BlockType
+	BlockIndex int
+	Content    UiContent
+	Question   UiQuestion
 }
 
-func NewUiBlockQuestion(question UiQuestion) UiBlock {
-	return UiBlock{db.QuestionBlockType, EmptyContent(), question}
+func NewUiBlockQuestion(question UiQuestion, idx int) UiBlock {
+	return UiBlock{db.QuestionBlockType, idx, EmptyContent(), question}
 }
 
-func NewUiBlockContent(content UiContent) UiBlock {
-	return UiBlock{db.ContentBlockType, content, EmptyQuestion()}
+func NewUiBlockContent(content UiContent, idx int) UiBlock {
+	return UiBlock{db.ContentBlockType, idx, content, EmptyQuestion()}
 }
 
 type UiQuestion struct {
@@ -353,8 +354,8 @@ func (r *Renderer) RenderNewQuestion(w http.ResponseWriter, question UiQuestion)
 type UiContent struct {
 	Id int
 	// This is a random integer created to differentiate questions in the UI.
-	Idx     int
-	Content string
+	Idx         int
+	Content     string
 	ContentTmpl template.HTML
 }
 
@@ -407,15 +408,44 @@ func (r *Renderer) RenderModuleEdited(w http.ResponseWriter) error {
 	return r.templates["edit_module.html"].ExecuteTemplate(w, "edited_module_response.html", nil)
 }
 
-type UiTakeModule struct {
-	Module          UiModule
-	Block           UiBlock
-	BlockCount      int
-	BlockIndex      int
+type UiTakeModulePage struct {
+	Module     UiModule
+	Blocks     []UiBlock
+	BlockCount int
+	VisitIndex int
 }
 
-func (r *Renderer) RenderTakeModulePage(w http.ResponseWriter, module UiTakeModule) error {
+func (u UiTakeModulePage) IsPage() bool {
+	return true
+}
+
+func (u UiTakeModulePage) ModuleBlock(index int) UiTakeModule {
+	return UiTakeModule{
+		Module:     u.Module,
+		Block:      u.Blocks[index],
+		BlockCount: u.BlockCount,
+		VisitIndex: u.VisitIndex,
+	}
+}
+
+func (r *Renderer) RenderTakeModulePage(w http.ResponseWriter, module UiTakeModulePage) error {
 	return r.templates["take_module.html"].ExecuteTemplate(w, "page.html", NewPageArgs(false, true, module))
+}
+
+type UiTakeModule struct {
+	Module     UiModule
+	Block      UiBlock
+	BlockCount int
+	VisitIndex int
+}
+
+func (u UiTakeModule) IsPage() bool {
+	return false
+}
+
+func (u UiTakeModule) ShowNextButton() bool {
+	return u.Block.BlockIndex == u.VisitIndex ||
+		(u.VisitIndex == u.BlockCount && u.Block.BlockIndex == u.BlockCount-1)
 }
 
 // Renders just the content, i.e. the header + content, not the full page.

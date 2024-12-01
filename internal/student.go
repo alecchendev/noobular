@@ -2,6 +2,7 @@ package internal
 
 import (
 	"bytes"
+	"database/sql"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -37,23 +38,25 @@ func handleStudentCoursesPage(w http.ResponseWriter, r *http.Request, ctx Handle
 		}
 		uiModules := make([]UiModuleStudent, len(modules))
 		for j, module := range modules {
-			questionCount, err := ctx.dbClient.GetQuestionCount(module.Id)
+			blockCount, err := ctx.dbClient.GetBlockCount(module.Id)
 			if err != nil {
 				return err
 			}
-			// TODO: this is broken. We should store the latest
-			// block they got to.
-			nextUnansweredQuestionIdx, err := ctx.dbClient.GetNextUnansweredQuestionIdx(userId, module.Id)
-			if err != nil {
+			visit, err := ctx.dbClient.GetVisit(userId, module.Id)
+			var nextBlockIdx int
+			if err == sql.ErrNoRows {
+				nextBlockIdx = -1
+			} else if err != nil {
 				return err
 			}
+			nextBlockIdx = visit.BlockIndex
 			uiModules[j] = UiModuleStudent{
 				module.Id,
 				module.CourseId,
 				module.Title,
 				module.Description,
-				questionCount,
-				nextUnansweredQuestionIdx,
+				blockCount,
+				nextBlockIdx,
 			}
 		}
 		uiCourses[i] = UiCourseStudent{course.Id, course.Title, course.Description, uiModules}
@@ -80,38 +83,42 @@ func parseTakeModuleRequest(r *http.Request) (takeModuleRequest, error) {
 	return takeModuleRequest{moduleId, blockIdx}, nil
 }
 
-func getTakeModule(req takeModuleRequest, ctx HandlerContext, userId int64) (UiTakeModule, error) {
-	module, err := ctx.dbClient.GetModule(req.moduleId)
+func getModule(ctx HandlerContext, moduleId int, userId int64) (UiModule, db.Visit, int, error) {
+	module, err := ctx.dbClient.GetModule(moduleId)
 	if err != nil {
-		return UiTakeModule{}, err
+		return UiModule{}, db.Visit{}, 0, err
 	}
-	// TODO: add restrictions, i.e. you cannot take a question before a previous one
-	blockCount, err := ctx.dbClient.GetBlockCount(req.moduleId)
+	blockCount, err := ctx.dbClient.GetBlockCount(moduleId)
 	if err != nil {
-		return UiTakeModule{}, err
+		return UiModule{}, db.Visit{}, 0, err
 	}
-	if req.blockIdx >= blockCount {
-		return UiTakeModule{}, fmt.Errorf("Block index %d is out of bounds (>=%d) for module %d", req.blockIdx, blockCount, req.moduleId)
-	}
-	block, err := ctx.dbClient.GetBlock(req.moduleId, req.blockIdx)
+	visit, err := ctx.dbClient.GetOrCreateVisit(userId, moduleId)
 	if err != nil {
-		return UiTakeModule{}, err
+		return UiModule{}, db.Visit{}, 0, err
+	}
+	return NewUiModule(module), visit, blockCount, nil
+}
+
+func getBlock(ctx HandlerContext, moduleId int, blockIdx int, userId int64) (UiBlock, error) {
+	block, err := ctx.dbClient.GetBlock(moduleId, blockIdx)
+	if err != nil {
+		return UiBlock{}, err
 	}
 	// TODO: use a html sanitizer like blue monday?
 	if block.BlockType == db.QuestionBlockType {
 		question, err := ctx.dbClient.GetQuestionFromBlock(block.Id)
 		if err != nil {
-			return UiTakeModule{}, err
+			return UiBlock{}, err
 		}
 		choiceId, err := ctx.dbClient.GetAnswer(userId, question.Id)
 		if err != nil {
-			return UiTakeModule{}, err
+			return UiBlock{}, err
 		}
 		choices, err := ctx.dbClient.GetChoicesForQuestion(question.Id)
 		explanationContent, err := ctx.dbClient.GetExplanationForQuestion(question.Id)
 		var buf bytes.Buffer
 		if err := goldmark.Convert([]byte(explanationContent.Content), &buf); err != nil {
-			return UiTakeModule{}, err
+			return UiBlock{}, err
 		}
 		explanation := template.HTML(buf.String())
 		var uiQuestion UiQuestion
@@ -120,31 +127,21 @@ func getTakeModule(req takeModuleRequest, ctx HandlerContext, userId int64) (UiT
 		} else {
 			uiQuestion = NewUiQuestionAnswered(question, choices, choiceId, NewUiContentRendered(explanationContent, explanation))
 		}
-		uiBlock := NewUiBlockQuestion(uiQuestion)
-		return UiTakeModule{
-			Module:          NewUiModule(module),
-			Block:		 uiBlock,
-			BlockCount:      blockCount,
-			BlockIndex:      req.blockIdx,
-		}, nil
+		uiBlock := NewUiBlockQuestion(uiQuestion, blockIdx)
+		return uiBlock, nil
 	} else if block.BlockType == db.ContentBlockType {
 		content, err := ctx.dbClient.GetContentFromBlock(block.Id)
 		if err != nil {
-			return UiTakeModule{}, err
+			return UiBlock{}, err
 		}
 		var buf bytes.Buffer
 		if err := goldmark.Convert([]byte(content.Content), &buf); err != nil {
-			return UiTakeModule{}, err
+			return UiBlock{}, err
 		}
-		uiBlock := NewUiBlockContent(NewUiContentRendered(content, template.HTML(buf.String())))
-		return UiTakeModule{
-			Module:          NewUiModule(module),
-			Block:		 uiBlock,
-			BlockCount:      blockCount,
-			BlockIndex:      req.blockIdx,
-		}, nil
+		uiBlock := NewUiBlockContent(NewUiContentRendered(content, template.HTML(buf.String())), blockIdx)
+		return uiBlock, nil
 	} else {
-		return UiTakeModule{}, fmt.Errorf("Unknown block type %s", block.BlockType)
+		return UiBlock{}, fmt.Errorf("Unknown block type %s", block.BlockType)
 	}
 }
 
@@ -153,11 +150,52 @@ func handleTakeModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	if err != nil {
 		return err
 	}
-	module, err := getTakeModule(takeModuleRequest{moduleId, 0}, ctx, userId)
+	module, visit, blockCount, err := getModule(ctx, moduleId, userId)
 	if err != nil {
 		return err
 	}
-	return ctx.renderer.RenderTakeModulePage(w, module)
+	if visit.BlockIndex > blockCount {
+		return fmt.Errorf("Block index %d is out of bounds (>=%d) for module %d", visit.BlockIndex, blockCount, moduleId)
+	}
+	nBlocks := min(visit.BlockIndex + 1, blockCount)
+	uiBlocks := make([]UiBlock, nBlocks)
+	for blockIdx := 0; blockIdx < nBlocks; blockIdx++ {
+		uiBlock, err := getBlock(ctx, moduleId, blockIdx, userId)
+		if err != nil {
+			return err
+		}
+		uiBlocks[blockIdx] = uiBlock
+	}
+	uiModule := UiTakeModulePage{
+		Module:          module,
+		Blocks:		 uiBlocks,
+		BlockCount:      blockCount,
+		VisitIndex:      visit.BlockIndex,
+	}
+	return ctx.renderer.RenderTakeModulePage(w, uiModule)
+}
+
+func getTakeModule(req takeModuleRequest, ctx HandlerContext, userId int64) (UiTakeModule, error) {
+	module, visit, blockCount, err := getModule(ctx, req.moduleId, userId)
+	if err != nil {
+		return UiTakeModule{}, err
+	}
+	if req.blockIdx >= blockCount {
+		return UiTakeModule{}, fmt.Errorf("Block index %d is out of bounds (>=%d) for module %d", req.blockIdx, blockCount, req.moduleId)
+	}
+	if req.blockIdx > visit.BlockIndex + 1 {
+		return UiTakeModule{}, fmt.Errorf("Block index %d is ahead of visit block index %d for module %d", req.blockIdx, visit.BlockIndex, req.moduleId)
+	}
+	uiBlock, err := getBlock(ctx, req.moduleId, req.blockIdx, userId)
+	if err != nil {
+		return UiTakeModule{}, err
+	}
+	return UiTakeModule{
+		Module:          module,
+		Block:		 uiBlock,
+		BlockCount:      blockCount,
+		VisitIndex:      visit.BlockIndex,
+	}, nil
 }
 
 func handleTakeModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
@@ -169,6 +207,11 @@ func handleTakeModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 	if err != nil {
 		return err
 	}
+	err = ctx.dbClient.UpdateVisit(userId, req.moduleId, req.blockIdx)
+	if err != nil {
+		return err
+	}
+	module.VisitIndex = req.blockIdx
 	return ctx.renderer.RenderTakeModule(w, module)
 }
 
@@ -202,6 +245,29 @@ func handleAnswerQuestion(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 			break
 		}
 	}
-
 	return ctx.renderer.RenderQuestionSubmitted(w, uiTakeModule)
+}
+
+func handleCompleteModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
+	moduleId, err := strconv.Atoi(r.PathValue("moduleId"))
+	if err != nil {
+		return err
+	}
+	visit, err := ctx.dbClient.GetVisit(userId, moduleId)
+	if err != nil {
+		return err
+	}
+	blockCount, err := ctx.dbClient.GetBlockCount(moduleId)
+	if err != nil {
+		return err
+	}
+	if visit.BlockIndex < blockCount - 1 {
+		return fmt.Errorf("Tried to complete module %d, but only at block index %d", moduleId, visit.BlockIndex)
+	}
+	err = ctx.dbClient.UpdateVisit(userId, moduleId, blockCount)
+	if err != nil {
+		return err
+	}
+	w.Header().Add("HX-Redirect", "/student/course")
+	return nil
 }

@@ -114,9 +114,9 @@
 				class="progress-bar-button"
 			>
 			<div
-				{{ if lt $i $.BlockIndex }}
+				{{ if lt $i $.VisitIndex }}
 				class="progress-bar-button-span green-bg"
-				{{ else if eq $i $.BlockIndex }}
+				{{ else if eq $i $.VisitIndex }}
 				class="progress-bar-button-span blue-bg"
 				{{ else }}
 				class="progress-bar-button-span gray-bg"
@@ -128,6 +128,30 @@
 	</div>
 </div>
 
+{{ if .IsPage }}
+	{{ range $i := NumRange (len .Blocks) }}
+		{{ template "block" ($.ModuleBlock $i) }}
+	{{ end }}
+{{ else }}
+	{{ template "block" . }}
+{{ end }}
+
+{{ end }}
+
+{{ define "content_block" }}
+<div id="block-{{ .Block.BlockIndex }}" class="block">
+	{{ if not (eq .Block.Content.ContentTmpl "") }}
+		<div class="explanation">
+			{{ .Block.Content.ContentTmpl }}
+		</div>
+	{{ end }}
+</div>
+{{ if .ShowNextButton }}
+{{ template "next_button" . }}
+{{ end }}
+{{ end }}
+
+{{ define "block" }}
 {{ if eq .Block.BlockType "content" }}
 	{{ template "content_block" . }}
 {{ else if eq .Block.BlockType "question" }}
@@ -137,28 +161,16 @@
 		{{ template "question_submitted" . }}
 	{{ end }}
 {{ end }}
-
-{{ end }}
-
-{{ define "content_block" }}
-<div id="block-{{ .BlockIndex }}" class="block">
-	{{ if not (eq .Block.Content.ContentTmpl "") }}
-		<div class="explanation">
-			{{ .Block.Content.ContentTmpl }}
-		</div>
-	{{ end }}
-</div>
-{{ template "next_button" . }}
 {{ end }}
 
 {{ define "question_form" }}
 <form
 	id="question-form"
-	hx-post="/student/course/{{ .Module.CourseId }}/module/{{ .Module.Id }}/block/{{ .BlockIndex }}/answer"
+	hx-post="/student/course/{{ $.Module.CourseId }}/module/{{ $.Module.Id }}/block/{{ .Block.BlockIndex }}/answer"
 	hx-target="#question-form"
 	hx-swap="outerHTML"
 >
-	<div id="block-{{ .BlockIndex }}" class="block">
+	<div id="block-{{ .Block.BlockIndex }}" class="block">
 		<h2>{{ .Block.Question.QuestionText }}</h2>
 		<div class="choices">
 		{{ range $choice := .Block.Question.Choices }}
@@ -174,7 +186,7 @@
 {{ end }}
 
 {{ define "question_submitted" }}
-<div id="block-{{ .BlockIndex }}" class="block">
+<div id="block-{{ .Block.BlockIndex }}" class="block">
 	<h2>{{ .Block.Question.QuestionText }}</h2>
 	<div class="choices">
 	{{ range $choice := .Block.Question.Choices }}
@@ -203,21 +215,24 @@
 	{{ end }}
 </div>
 
+{{ if .ShowNextButton }}
 {{ template "next_button" . }}
+{{ end }}
 
 {{ end }}
 
 {{ define "next_button" }}
-{{ if eq (Increment $.BlockIndex) $.BlockCount }}
-<a href="/student/course">
-<button id="submit-button">Done</button>
-</a>
+{{ if eq (Increment .Block.BlockIndex) $.BlockCount }}
+<button
+	id="submit-button"
+	hx-put="/student/course/{{ $.Module.CourseId }}/module/{{ $.Module.Id }}/complete"
+>Done</button>
 {{ else }}
 <button
 	id="submit-button"
-	hx-get="/student/course/{{ $.Module.CourseId }}/module/{{ $.Module.Id }}/block/{{ Increment $.BlockIndex }}/piece"
+	hx-get="/student/course/{{ $.Module.CourseId }}/module/{{ $.Module.Id }}/block/{{ Increment .Block.BlockIndex }}/piece"
 	hx-target="#submit-button"
-	hx-swap="outerHTML show:#block-{{ Increment $.BlockIndex }}:top settle:50ms transition:true"
+	hx-swap="outerHTML show:#block-{{ Increment .Block.BlockIndex }}:top settle:50ms transition:true"
 	hx-select-oob="#header"
 >Next</button>
 {{ end }}

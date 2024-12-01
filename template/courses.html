@@ -126,11 +126,11 @@ html {
 					{{ else if or $.Browsing (not $.LoggedIn) }}
 					{{ else }}
 					<a class="edit-module-link" href="/student/course/{{$course.Id}}/module/{{.Id}}">
-					{{ if eq .NextUnansweredQuestionIdx 0 }}
+					{{ if eq .NextBlockIdx 0 }}
 						Start
-					{{ else if lt .NextUnansweredQuestionIdx .QuestionCount }}
+					{{ else if lt .NextBlockIdx .BlockCount }}
 						Continue
-					{{ else if eq .NextUnansweredQuestionIdx .QuestionCount }}
+					{{ else if ge .NextBlockIdx .BlockCount }}
 						Review
 					{{ end }}
 					</a>

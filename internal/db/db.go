@@ -57,6 +57,7 @@ func initDb(db *sql.DB) {
 		createContentBlockTable,
 		createContentTable,
 		createExplanationTable,
+		createVisitTable,
 		createUserTable,
 		createCredentialTable,
 		createSessionTable,
