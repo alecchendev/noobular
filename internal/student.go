@@ -133,23 +133,26 @@ func getModule(ctx HandlerContext, moduleId int, userId int64) (UiModule, db.Vis
 func getBlock(ctx HandlerContext, moduleId int, blockIdx int, userId int64) (UiBlock, error) {
 	block, err := ctx.dbClient.GetBlock(moduleId, blockIdx)
 	if err != nil {
-		return UiBlock{}, err
+		return UiBlock{}, fmt.Errorf("Error getting block %d for module %d: %v", blockIdx, moduleId, err)
 	}
 	// TODO: use a html sanitizer like blue monday?
 	if block.BlockType == db.QuestionBlockType {
 		question, err := ctx.dbClient.GetQuestionFromBlock(block.Id)
 		if err != nil {
-			return UiBlock{}, err
+			return UiBlock{}, fmt.Errorf("Error getting question for block %d: %v", block.Id, err)
 		}
 		choiceId, err := ctx.dbClient.GetAnswer(userId, question.Id)
 		if err != nil {
-			return UiBlock{}, err
+			return UiBlock{}, fmt.Errorf("Error getting answer for question %d: %v", question.Id, err)
 		}
 		choices, err := ctx.dbClient.GetChoicesForQuestion(question.Id)
 		explanationContent, err := ctx.dbClient.GetExplanationForQuestion(question.Id)
+		if err != nil {
+			return UiBlock{}, fmt.Errorf("Error getting explanation for question %d: %v", question.Id, err)
+		}
 		var buf bytes.Buffer
 		if err := goldmark.Convert([]byte(explanationContent.Content), &buf); err != nil {
-			return UiBlock{}, err
+			return UiBlock{}, fmt.Errorf("Error converting explanation content for question %d: %v", question.Id, err)
 		}
 		explanation := template.HTML(buf.String())
 		var uiQuestion UiQuestion
@@ -163,11 +166,11 @@ func getBlock(ctx HandlerContext, moduleId int, blockIdx int, userId int64) (UiB
 	} else if block.BlockType == db.ContentBlockType {
 		content, err := ctx.dbClient.GetContentFromBlock(block.Id)
 		if err != nil {
-			return UiBlock{}, err
+			return UiBlock{}, fmt.Errorf("Error getting content for block %d: %v", block.Id, err)
 		}
 		var buf bytes.Buffer
 		if err := goldmark.Convert([]byte(content.Content), &buf); err != nil {
-			return UiBlock{}, err
+			return UiBlock{}, fmt.Errorf("Error converting content for block %d: %v", block.Id, err)
 		}
 		uiBlock := NewUiBlockContent(NewUiContentRendered(content, template.HTML(buf.String())), blockIdx)
 		return uiBlock, nil
@@ -183,7 +186,7 @@ func handleTakeModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	}
 	module, visit, blockCount, err := getModule(ctx, moduleId, userId)
 	if err != nil {
-		return err
+		return fmt.Errorf("Error getting module %d: %v", moduleId, err)
 	}
 	if visit.BlockIndex > blockCount {
 		return fmt.Errorf("Block index %d is out of bounds (>=%d) for module %d", visit.BlockIndex, blockCount, moduleId)
@@ -193,7 +196,7 @@ func handleTakeModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	for blockIdx := 0; blockIdx < nBlocks; blockIdx++ {
 		uiBlock, err := getBlock(ctx, moduleId, blockIdx, userId)
 		if err != nil {
-			return err
+			return fmt.Errorf("Error getting block %d for module %d: %v", blockIdx, moduleId, err)
 		}
 		uiBlocks[blockIdx] = uiBlock
 	}
@@ -280,6 +283,10 @@ func handleAnswerQuestion(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 }
 
 func handleCompleteModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
+	courseId, err := strconv.Atoi(r.PathValue("courseId"))
+	if err != nil {
+		return err
+	}
 	moduleId, err := strconv.Atoi(r.PathValue("moduleId"))
 	if err != nil {
 		return err
@@ -299,6 +306,6 @@ func handleCompleteModule(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	if err != nil {
 		return err
 	}
-	w.Header().Add("HX-Redirect", "/student/course")
+	w.Header().Add("HX-Redirect", fmt.Sprintf("/student/course/%d", courseId))
 	return nil
 }

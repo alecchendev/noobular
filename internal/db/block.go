@@ -109,3 +109,12 @@ func (c *DbClient) GetBlockCount(moduleId int) (int, error) {
 	return blockCount, nil
 }
 
+const deleteBlockQuery = `
+delete from blocks
+where module_id = ?;
+`
+
+func DeleteBlocks(tx *sql.Tx, moduleId int) error {
+	_, err := tx.Exec(deleteBlockQuery, moduleId)
+	return err
+}

@@ -300,3 +300,9 @@ func TestEditModule(t *testing.T) {
 		}
 	}
 }
+
+// TODO: more test coverage
+// - Need to figure out a way to get the db clients synced up
+// because assert the db state will be really useful
+
+// Edge case to test: editing a module after parts have been created, then refreshing

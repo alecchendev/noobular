@@ -110,7 +110,7 @@
 <div>
 	<h1>👋 Hey, {{ .Username }}!</h1>
 	{{ if not .HasCourse }}
-	<a href="/student/course">Check out some courses here!</a>
+	<a href="/browse">Check out some courses here!</a>
 	{{ if gt (len .Courses) 0 }}
 	<h3 class="enrolled-courses-header">Enrolled courses:</h3>
 	<div class="course-links">

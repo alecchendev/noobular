@@ -132,7 +132,10 @@ or id in (
 
 func DeleteContentForModule(tx *sql.Tx, moduleId int) error {
 	_, err := tx.Exec(deleteContentForModuleQuery, moduleId)
-	return err
+	if err != nil {
+		return err
+	}
+	return DeleteBlocks(tx, moduleId)
 }
 
 func (c *DbClient) EditModule(moduleId int, title string, description string, blockTypes []string, contents []string, questions []string, choices [][]string, correctChoiceIdxs []int, explanations []string) error {
