@@ -90,3 +90,13 @@ func (c *DbClient) UpdateVisit(userId int64, moduleId int, blockIdx int) error {
 	_, err := c.db.Exec(updateVisitQuery, blockIdx, userId, moduleId)
 	return err
 }
+
+const deleteVisitsForModuleQuery = `
+delete from visits
+where module_id = ?;
+`
+
+func DeleteVisitsForModule(tx *sql.Tx, moduleId int) error {
+	_, err := tx.Exec(deleteVisitsForModuleQuery, moduleId)
+	return err
+}
