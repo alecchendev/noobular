@@ -104,27 +104,41 @@ func (c testClient) login(userId int64) testClient {
 	return c
 }
 
-func (c testClient) createTestUser() testClient {
-	resp := c.post("/signup/test", "")
+func (c testClient) getPageBody(path string) string {
+	resp := c.get(path)
 	assert.Equal(c.t, 200, resp.StatusCode)
-	return c.login(1)
+	return bodyText(c.t, resp)
 }
 
 const createCourseRoute = "/teacher/course/create"
 
 func (c testClient) createCourse(course db.Course, modules []db.ModuleVersion) {
-	formData := createCourseForm(course, modules)
+	formData := createOrEditCourseForm(course, modules)
 	resp := c.post(createCourseRoute, formData.Encode())
 	assert.Equal(c.t, 200, resp.StatusCode)
 }
 
-func createCourseForm(course db.Course, modules []db.ModuleVersion) url.Values {
+func editCourseRoute(courseId int) string {
+	return fmt.Sprintf("/teacher/course/%d", courseId)
+}
+
+func editCoursePageRoute(courseId int) string {
+	return fmt.Sprintf("/teacher/course/%d", courseId) + "/edit"
+}
+
+func (c testClient) editCourse(course db.Course, modules []db.ModuleVersion) {
+	formData := createOrEditCourseForm(course, modules)
+	resp := c.put(editCourseRoute(course.Id), formData.Encode())
+	assert.Equal(c.t, 200, resp.StatusCode)
+}
+
+func createOrEditCourseForm(course db.Course, modules []db.ModuleVersion) url.Values {
 	formData := url.Values{}
 	formData.Set("title", course.Title)
 	formData.Set("description", course.Description)
 	for _, module := range modules {
 		formData.Add("module-title[]", module.Title)
-		formData.Add("module-id[]", "-1")
+		formData.Add("module-id[]", strconv.Itoa(module.ModuleId))
 		formData.Add("module-description[]", module.Description)
 	}
 	return formData
@@ -197,19 +211,13 @@ func TestBasicNav(t *testing.T) {
 
 	test := func(t *testing.T, path string, expectedText string) {
 		client := newTestClient(t)
-		resp := client.get(path)
-		assert.Equal(t, 200, resp.StatusCode)
-
-		body := bodyText(t, resp)
+		body := client.getPageBody(path)
 		assert.Contains(t, body, expectedText)
 		assert.Contains(t, body, "Signin")
 		assert.Contains(t, body, "Signup")
 
 		client = client.login(1)
-		resp = client.get(path)
-		assert.Equal(t, 200, resp.StatusCode)
-
-		body = bodyText(t, resp)
+		body = client.getPageBody(path)
 		assert.Contains(t, body, expectedText)
 		assert.Contains(t, body, "Logout")
 	}
@@ -228,8 +236,33 @@ func TestCreateCourse(t *testing.T) {
 	user := ctx.createUser()
 	client := newTestClient(t).login(user.Id)
 
-	resp := client.get("/teacher")
-	assert.Equal(t, 200, resp.StatusCode)
+	course := db.NewCourse(-1, "hello", "goodbye")
+	modules := []db.ModuleVersion{
+		db.NewModuleVersion(-1, -1, 0, "module title1", "module description1"),
+		db.NewModuleVersion(-1, -1, 0, "module title2", "module description2"),
+	}
+
+	body := client.getPageBody("/teacher")
+	assert.Contains(t, body, createCourseRoute)
+	assert.NotContains(t, body, course.Title)
+
+	client.createCourse(course, modules)
+
+	body = client.getPageBody("/teacher")
+	assert.Contains(t, body, course.Title)
+	assert.Contains(t, body, course.Description)
+	for _, module := range modules {
+		assert.Contains(t, body, module.Title)
+		assert.Contains(t, body, module.Description)
+	}
+}
+
+func TestEditCourse(t *testing.T) {
+	ctx := startServer()
+	defer ctx.Close()
+
+	user := ctx.createUser()
+	client := newTestClient(t).login(user.Id)
 
 	course := db.NewCourse(-1, "hello", "goodbye")
 	modules := []db.ModuleVersion{
@@ -237,20 +270,27 @@ func TestCreateCourse(t *testing.T) {
 		db.NewModuleVersion(-1, -1, 0, "module title2", "module description2"),
 	}
 
-	body := bodyText(t, resp)
-	assert.Contains(t, body, createCourseRoute)
-	assert.NotContains(t, body, course.Title)
-
 	client.createCourse(course, modules)
+	courseId := 1
 
-	resp = client.get("/teacher")
-	assert.Equal(t, 200, resp.StatusCode)
-	body = bodyText(t, resp)
-	assert.Contains(t, body, course.Title)
-	assert.Contains(t, body, course.Description)
-	for _, module := range modules {
-		assert.Contains(t, body, module.Title)
-		assert.Contains(t, body, module.Description)
+	body := client.getPageBody("/teacher")
+	assert.Contains(t, body, editCourseRoute(courseId))
+
+	newCourse := db.NewCourse(courseId, "new title", "new description")
+	newModules := []db.ModuleVersion{
+		db.NewModuleVersion(-1, 1, 1, "new module title1", "new module description1"),
+		db.NewModuleVersion(-1, 2, 1, "new module title2", "new module description2"),
+	}
+	client.editCourse(newCourse, newModules)
+
+	for _, route := range []string{"/teacher", editCoursePageRoute(courseId)} {
+		body = client.getPageBody(route)
+		assert.Contains(t, body, newCourse.Title)
+		assert.Contains(t, body, newCourse.Description)
+		for _, module := range newModules {
+			assert.Contains(t, body, module.Title)
+			assert.Contains(t, body, module.Description)
+		}
 	}
 }
 
@@ -270,15 +310,11 @@ func TestEditModule(t *testing.T) {
 	courseId := 1
 	moduleId := 1
 
-	resp := client.get("/teacher")
-	assert.Equal(t, 200, resp.StatusCode)
-	body := bodyText(t, resp)
+	body := client.getPageBody("/teacher")
 	editModulePageLink := editModulePageRoute(courseId, moduleId)
 	assert.Contains(t, body, editModulePageLink)
 
-	resp = client.get(editModulePageLink)
-	assert.Equal(t, 200, resp.StatusCode)
-	body = bodyText(t, resp)
+	body = client.getPageBody(editModulePageLink)
 	assert.Contains(t, body, editModuleRoute(courseId, moduleId))
 
 	newModuleVersion := db.NewModuleVersion(2, 1, 1, "new title", "new description")
@@ -302,9 +338,7 @@ func TestEditModule(t *testing.T) {
 
 	// Check that if we revisit the edit module page
 	// all of our changes are reflected
-	resp = client.get(editModulePageLink)
-	assert.Equal(t, 200, resp.StatusCode)
-	body = bodyText(t, resp)
+	body = client.getPageBody(editModulePageLink)
 	assert.Contains(t, body, newModuleVersion.Title)
 	assert.Contains(t, body, newModuleVersion.Description)
 	for _, block := range blocks {
@@ -322,6 +356,3 @@ func TestEditModule(t *testing.T) {
 		}
 	}
 }
-
-// Edge case to test: editing a module after parts have been created, then refreshing
-// Nvm, when the module system is done this will change so might as well just test then
