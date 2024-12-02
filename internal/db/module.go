@@ -62,14 +62,14 @@ func CreateModule(tx *sql.Tx, courseId int, moduleTitle string, moduleDescriptio
 }
 
 const getModulesQuery = `
-select m.id, m.course_id, m.title, m.description
+select m.id, m.course_id
 from modules m
 where m.course_id = ?
 order by m.id;
 `
 
 const getModulesWithBlocksQuery = `
-select distinct m.id, m.course_id, m.title, m.description
+select distinct m.id, m.course_id
 from modules m
 join module_versions mv on m.id = mv.module_id
 join blocks b on mv.id = b.module_version_id
@@ -127,7 +127,7 @@ func DeleteContentForModule(tx *sql.Tx, moduleId int) error {
 }
 
 const getModuleQuery = `
-select m.id, m.course_id, m.title, m.description
+select m.id, m.course_id
 from modules m
 where m.id = ?
 `

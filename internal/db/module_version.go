@@ -84,6 +84,7 @@ func (c *DbClient) GetLatestModuleVersion(moduleId int) (ModuleVersion, error) {
 	return version, nil
 }
 
+// TODO: these queries are just too much
 const getLatestModuleVersionsForCourseQuery = `
 select mv.id, mv.module_id, mv.version_number, mv.title, mv.description
 from module_versions mv
@@ -106,8 +107,11 @@ join (
     from module_versions
     group by module_id
 ) latest_mv on mv.module_id = latest_mv.module_id and mv.version_number = latest_mv.latest_version
-join blocks b on mv.id = b.module_version_id
-where m.course_id = ?
+where m.course_id = ? and (
+	select count(*)
+	from blocks b
+	where b.module_version_id = mv.id
+) > 0
 order by mv.version_number desc;
 `
 
