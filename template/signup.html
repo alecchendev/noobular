@@ -1,7 +1,7 @@
 {{ define "title" }}Signup{{ end }}
 {{ define "style" }}
 #signup-container {
-	width: 50%;
+	max-width: 400px;
 	height: 80vh;
 	display: flex;
 	margin: auto;
@@ -12,14 +12,36 @@
 h1 {
 	width: 100%;
 	text-align: left;
-	margin-bottom: 1.5rem;
+	margin-bottom: 0;
 }
 
-form {
-	width: 100%;
-	display: flex;
-	flex-direction: column;
+.password-question {
+	width: fit-content;
 }
+
+.password-question p {
+	margin-bottom: 0;
+}
+    
+.password-question .passkey-blurb {
+	visibility: hidden;
+	width: 300px;
+	background-color: white;
+	border: 1px solid #e0e0e0;
+	border-radius: 10px;
+	position: absolute;
+	z-index: 1;
+	padding: 1rem;
+}
+
+.passkey-blurb p {
+	margin: 0;
+}
+    
+.password-question:hover .passkey-blurb {
+	  visibility: visible;
+}
+
 
 #username {
 	width: 100%;
@@ -27,6 +49,7 @@ form {
 	border: 1px solid #e0e0e0;
 	padding: 1rem;
 	font-size: 1.2rem;
+	margin-top: 1rem;
 }
 
 /* Copied from create_course.html */
@@ -198,23 +221,26 @@ form {
 	<h1>Signin</h1>
 	{{ else }}
 	<h1>Signup</h1>
+	<span class="password-question"><p>How come I don't need a password? ℹ️</p>
+		<span class="passkey-blurb"><p>We use passkeys! Compared to passwords, they're easier to use + more secure. Your browser or operating system may already have a builtin passkey manager, otherwise you may use third-party credential managers like <a href="https://1password.com/">1Password</a> or <a href="https://bitwarden.com">bitwarden</a>.</p></span>
+	</span>
 	{{ end }}
-		<input type="text" id="username" name="username"
+	<input type="text" id="username" name="username"
+	{{ if .Signin }}
+	placeholder="Username"
+	{{ else }}
+	placeholder="What should we call you?"
+	{{ end }}
+	required autofocus>
+	<button
 		{{ if .Signin }}
-		placeholder="Username"
+		id="webauthn-sign-in"
 		{{ else }}
-		placeholder="What should we call you?"
+		id="webauthn-sign-up"
 		{{ end }}
-		required autofocus>
-		<button
-			{{ if .Signin }}
-			id="webauthn-sign-in"
-			{{ else }}
-			id="webauthn-sign-up"
-			{{ end }}
-			class="submit-button"
-			type="submit"
-		>Submit</button>
+		class="submit-button"
+		type="submit"
+	>Submit</button>
 </div>
 
 {{ end }}
