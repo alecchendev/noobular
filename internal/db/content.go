@@ -4,12 +4,14 @@ import (
 	"database/sql"
 
 	_ "github.com/mattn/go-sqlite3"
+	"golang.org/x/crypto/blake2b"
 )
 
 
 const createContentTable = `
 create table if not exists content (
 	id integer primary key autoincrement,
+	hash blob not null unique check (length(hash) = 16),
 	content text not null
 );
 `
@@ -34,12 +36,20 @@ func NewContent(id int, content string) Content {
 }
 
 const insertContentQuery = `
-insert into content(content)
-values(?);
+insert into content(hash, content)
+values(?, ?);
 `
 
 func InsertContent(tx *sql.Tx, content string) (int64, error) {
-	res, err := tx.Exec(insertContentQuery, content)
+	hash32 := blake2b.Sum256([]byte(content))
+	hash := hash32[:16]
+	// If content already exists, no need to store duplicate.
+	row := tx.QueryRow("select id from content where hash = ?", hash)
+	var id int64
+	if row.Scan(&id) == nil {
+		return id, nil
+	}
+	res, err := tx.Exec(insertContentQuery, hash, content)
 	if err != nil {
 		return 0, err
 	}
@@ -88,6 +98,31 @@ func (c *DbClient) GetContentFromBlock(blockId int) (Content, error) {
 	err := contentRow.Scan(&content.Id, &content.Content)
 	if err != nil {
 		return Content{}, err
+	}
+	return content, nil
+}
+
+// Test queries
+
+const getAllContentQuery = `
+select id, content
+from content;
+`
+
+func (c *DbClient) GetAllContent() ([]Content, error) {
+	rows, err := c.db.Query(getAllContentQuery)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var content []Content
+	for rows.Next() {
+		var c Content
+		err := rows.Scan(&c.Id, &c.Content)
+		if err != nil {
+			return nil, err
+		}
+		content = append(content, c)
 	}
 	return content, nil
 }

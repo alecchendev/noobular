@@ -148,6 +148,44 @@ type blockInput struct {
 	block interface{}
 }
 
+func newQuestionBlockInput(question internal.UiQuestion) blockInput {
+	return blockInput{db.QuestionBlockType, question}
+}
+
+func newContentBlockInput(content string) blockInput {
+	return blockInput{db.ContentBlockType, db.NewContent(-1, content)}
+}
+
+type uiQuestionBuilder struct {
+	t *testing.T
+	questionText string
+	choices []db.Choice
+	explanation string
+}
+
+func newUiQuestionBuilder(t *testing.T) uiQuestionBuilder {
+	return uiQuestionBuilder{t: t}
+}
+
+func (b uiQuestionBuilder) text(text string) uiQuestionBuilder {
+	b.questionText = text
+	return b
+}
+
+func (b uiQuestionBuilder) choice(choiceText string, isCorrect bool) uiQuestionBuilder {
+	b.choices = append(b.choices, db.NewChoice(-1, -1, choiceText, isCorrect))
+	return b
+}
+
+func (b uiQuestionBuilder) explain(text string) uiQuestionBuilder {
+	b.explanation = text
+	return b
+}
+
+func (b uiQuestionBuilder) build() internal.UiQuestion {
+	return internal.NewUiQuestionEdit(db.NewQuestion(-1, -1, b.questionText), b.choices, db.NewContent(-1, b.explanation))
+}
+
 func editModulePageRoute(courseId, moduleId int) string {
 	return editModuleRoute(courseId, moduleId) + "/edit"
 }
@@ -320,18 +358,22 @@ func TestEditModule(t *testing.T) {
 	newModuleVersion := db.NewModuleVersion(2, 1, 1, "new title", "new description")
 
 	blocks := []blockInput{
-		{db.QuestionBlockType, internal.NewUiQuestionEdit(db.NewQuestion(-1, -1, "qname1"), []db.Choice{
-			db.NewChoice(-1, -1, "qchoice1", false),
-			db.NewChoice(-1, -1, "qchoice2", true),
-			db.NewChoice(-1, -1, "qchoice3", false),
-		}, db.NewContent(-1, "qexplanation1"))},
-		{db.ContentBlockType, db.NewContent(-1, "qcontent1")},
-		{db.QuestionBlockType, internal.NewUiQuestionEdit(db.NewQuestion(-1, -1, "qname2"), []db.Choice{
-			db.NewChoice(-1, -1, "qchoice4", false),
-			db.NewChoice(-1, -1, "qchoice5", false),
-			db.NewChoice(-1, -1, "qchoice6", true),
-		}, db.NewContent(-1, "qexplanation2"))},
-		{db.ContentBlockType, db.NewContent(-1, "qcontent1")},
+		newQuestionBlockInput(newUiQuestionBuilder(t).
+			text("qname1").
+			choice("qchoice1", false).
+			choice("qchoice2", true).
+			choice("qchoice3", false).
+			explain("qexplanation1").
+			build()),
+		newContentBlockInput("qcontent1"),
+		newQuestionBlockInput(newUiQuestionBuilder(t).
+			text("qname2").
+			choice("qchoice4", false).
+			choice("qchoice5", false).
+			choice("qchoice6", true).
+			explain("qexplanation2").
+			build()),
+		newContentBlockInput("qcontent1"),
 	}
 
 	client.editModule(courseId, newModuleVersion, blocks)
@@ -355,4 +397,50 @@ func TestEditModule(t *testing.T) {
 			assert.Contains(t, body, content.Content)
 		}
 	}
+}
+
+func TestNoDuplicateContent(t *testing.T) {
+	ctx := startServer()
+	defer ctx.Close()
+
+	user := ctx.createUser()
+	client := newTestClient(t).login(user.Id)
+
+	course := db.NewCourse(-1, "hello", "goodbye")
+	modules := []db.ModuleVersion{
+		db.NewModuleVersion(-1, -1, 0, "module title1", "module description1"),
+	}
+	client.createCourse(course, modules)
+
+	courseId := 1
+	moduleId := 1
+
+	newModuleVersion := db.NewModuleVersion(2, moduleId, 1, "new title", "new description")
+	explanation := "qexplanation1"
+	contentStr := "qcontent1"
+	question1 := newUiQuestionBuilder(t).
+		text("qname1").
+		choice("qchoice1", false).
+		choice("qchoice2", true).
+		choice("qchoice3", false).
+		explain(explanation).
+		build()
+	blocks := []blockInput{ newQuestionBlockInput(question1), newContentBlockInput(contentStr) }
+	client.editModule(courseId, newModuleVersion, blocks)
+
+	newModuleVersion2 := db.NewModuleVersion(2, moduleId, 1, "new title2", "new description2")
+	question2 := newUiQuestionBuilder(t).
+		text("qname2").
+		choice("qchoice4", true).
+		explain(explanation).
+		build()
+	blocks2 := []blockInput{ newQuestionBlockInput(question2), newContentBlockInput(contentStr) }
+	client.editModule(courseId, newModuleVersion2, blocks2)
+
+	content, err := ctx.db.GetAllContent()
+	assert.Nil(t, err)
+	assert.Len(t, content, 2)
+	contentStrings := []string{content[0].Content, content[1].Content}
+	assert.Contains(t, contentStrings, explanation)
+	assert.Contains(t, contentStrings, contentStr)
 }

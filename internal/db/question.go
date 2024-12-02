@@ -46,24 +46,13 @@ func InsertQuestion(tx *sql.Tx, blockId int64, question string, choices []string
 			return err
 		}
 	}
-	content, err := GetExplanationForQuestion(tx, questionId)
+	contentId, err := InsertContent(tx, explanation)
 	if err != nil {
 		return err
-	} else if content.Id == -1 && explanation != "" {
-		contentId, err := InsertContent(tx, explanation)
-		if err != nil {
-			return err
-		}
-		err = InsertExplanation(tx, int(questionId), int(contentId))
-		if err != nil {
-			return err
-		}
-	} else {
-		// TODO if explanation is empty, just delete the content row
-		err = UpdateContent(tx, int64(content.Id), explanation)
-		if err != nil {
-			return err
-		}
+	}
+	err = InsertExplanation(tx, int(questionId), int(contentId))
+	if err != nil {
+		return err
 	}
 	return nil
 }

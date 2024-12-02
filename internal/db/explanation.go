@@ -37,16 +37,20 @@ where e.question_id = ?;
 `
 
 func (c *DbClient) GetExplanationForQuestion(questionId int) (Content, error) {
-	explanationRow := c.db.QueryRow(getExplanationContentQuery, questionId)
-	content := Content{}
-	err := explanationRow.Scan(&content.Id, &content.Content)
-	if err != sql.ErrNoRows && err != nil {
+	tx, err := c.db.Begin()
+	if err != nil {
 		return Content{}, err
-	} else if err == sql.ErrNoRows {
-		return Content{ -1, "" }, nil
-	} else {
-		return content, nil
 	}
+	defer tx.Rollback()
+	content, err := GetExplanationForQuestion(tx, int64(questionId))
+	if err != nil {
+		return Content{}, err
+	}
+	err = tx.Commit()
+	if err != nil {
+		return Content{}, err
+	}
+	return content, nil
 }
 
 func GetExplanationForQuestion(tx *sql.Tx, questionId int64) (Content, error) {
