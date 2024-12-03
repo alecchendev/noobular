@@ -1,8 +1,10 @@
 package internal_test
 
 import (
+	"fmt"
 	"noobular/internal"
 	"noobular/internal/db"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -113,62 +115,29 @@ func TestEditModule(t *testing.T) {
 	user := ctx.createUser()
 	client := newTestClient(t).login(user.Id)
 
-	course := db.NewCourse(-1, "hello", "goodbye")
-	modules := []db.ModuleVersion{
-		db.NewModuleVersion(-1, -1, 0, "module title1", "module description1"),
-	}
-	client.createCourse(course, modules)
-
+	_, modules, blockInputs := client.initTestCourse()
 	courseId := 1
-	moduleId := 1
-
-	body := client.getPageBody("/teacher")
-	editModulePageLink := editModulePageRoute(courseId, moduleId)
-	assert.Contains(t, body, editModulePageLink)
-
-	body = client.getPageBody(editModulePageLink)
-	assert.Contains(t, body, editModuleRoute(courseId, moduleId))
-
-	newModuleVersion := db.NewModuleVersion(2, 1, 1, "new title", "new description")
-
-	blocks := []blockInput{
-		newQuestionBlockInput(newUiQuestionBuilder(t).
-			text("qname1").
-			choice("qchoice1", false).
-			choice("qchoice2", true).
-			choice("qchoice3", false).
-			explain("qexplanation1").
-			build()),
-		newContentBlockInput("qcontent1"),
-		newQuestionBlockInput(newUiQuestionBuilder(t).
-			text("qname2").
-			choice("qchoice4", false).
-			choice("qchoice5", false).
-			choice("qchoice6", true).
-			explain("qexplanation2").
-			build()),
-		newContentBlockInput("qcontent1"),
-	}
-
-	client.editModule(courseId, newModuleVersion, blocks)
 
 	// Check that if we revisit the edit module page
 	// all of our changes are reflected
-	body = client.getPageBody(editModulePageLink)
-	assert.Contains(t, body, newModuleVersion.Title)
-	assert.Contains(t, body, newModuleVersion.Description)
-	for _, block := range blocks {
-		switch block.blockType {
-		case db.QuestionBlockType:
-			question := block.block.(internal.UiQuestion)
-			assert.Contains(t, body, question.QuestionText)
-			assert.Contains(t, body, question.Explanation.Content)
-			for _, choice := range question.Choices {
-				assert.Contains(t, body, choice.ChoiceText)
+	for i, module := range modules {
+		editModulePageLink := editModulePageRoute(courseId, module.ModuleId)
+		body := client.getPageBody(editModulePageLink)
+		assert.Contains(t, body, module.Title)
+		assert.Contains(t, body, module.Description)
+		for _, block := range blockInputs[i] {
+			switch block.blockType {
+			case db.QuestionBlockType:
+				question := block.block.(internal.UiQuestion)
+				assert.Contains(t, body, question.QuestionText)
+				assert.Contains(t, body, question.Explanation.Content)
+				for _, choice := range question.Choices {
+					assert.Contains(t, body, choice.ChoiceText)
+				}
+			case db.ContentBlockType:
+				content := block.block.(db.Content)
+				assert.Contains(t, body, content.Content)
 			}
-		case db.ContentBlockType:
-			content := block.block.(db.Content)
-			assert.Contains(t, body, content.Content)
 		}
 	}
 }
@@ -192,7 +161,7 @@ func TestNoDuplicateContent(t *testing.T) {
 	newModuleVersion := db.NewModuleVersion(2, moduleId, 1, "new title", "new description")
 	explanation := "qexplanation1"
 	contentStr := "qcontent1"
-	question1 := newUiQuestionBuilder(t).
+	question1 := newUiQuestionBuilder().
 		text("qname1").
 		choice("qchoice1", false).
 		choice("qchoice2", true).
@@ -203,7 +172,7 @@ func TestNoDuplicateContent(t *testing.T) {
 	client.editModule(courseId, newModuleVersion, blocks)
 
 	newModuleVersion2 := db.NewModuleVersion(2, moduleId, 1, "new title2", "new description2")
-	question2 := newUiQuestionBuilder(t).
+	question2 := newUiQuestionBuilder().
 		text("qname2").
 		choice("qchoice4", true).
 		explain(explanation).
@@ -217,4 +186,23 @@ func TestNoDuplicateContent(t *testing.T) {
 	contentStrings := []string{content[0].Content, content[1].Content}
 	assert.Contains(t, contentStrings, explanation)
 	assert.Contains(t, contentStrings, contentStr)
+}
+
+func TestStudentCoursePage(t *testing.T) {
+	ctx := startServer()
+	defer ctx.Close()
+
+	user := ctx.createUser()
+	client := newTestClient(t).login(user.Id)
+
+	course, modules, _ := client.initTestCourse()
+	courseId := 1
+
+	client.enrollCourse(courseId)
+
+	body := client.getPageBody(fmt.Sprintf("/student/course/%d", courseId))
+	assert.Contains(t, body, course.Title)
+	for _, module := range modules {
+		assert.Equal(t, strings.Count(body, module.Title), 1)
+	}
 }
