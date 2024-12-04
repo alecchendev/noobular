@@ -99,16 +99,16 @@ func (hm HandlerMap) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// to see changes
 		hm.ctx.renderer.refreshTemplates()
 	}
-	if handler, ok := hm.handlers[r.Method]; ok {
-		err := handler(w, r, hm.ctx)
-		if err != nil {
-			log.Println(requestId, err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
-		return
+	handler, ok := hm.handlers[r.Method]
+	if !ok {
+		log.Printf("%s Method %s not allowed for path %s", requestId, r.Method, r.URL.Path)
+		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 	}
-	log.Printf("%s Method %s not allowed for path %s", requestId, r.Method, r.URL.Path)
-	http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+	err = handler(w, r, hm.ctx)
+	if err != nil {
+		log.Println(requestId, err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
 func NewHandlerMap(dbClient *db.DbClient, renderer Renderer, webAuthn *webauthn.WebAuthn, jwtSecret []byte) HandlerMap {
