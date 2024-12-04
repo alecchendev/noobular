@@ -38,10 +38,10 @@ where e.question_id = ?;
 
 func (c *DbClient) GetExplanationForQuestion(questionId int) (Content, error) {
 	tx, err := c.db.Begin()
+	defer tx.Rollback()
 	if err != nil {
 		return Content{}, err
 	}
-	defer tx.Rollback()
 	content, err := GetExplanationForQuestion(tx, int64(questionId))
 	if err != nil {
 		return Content{}, err

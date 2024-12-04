@@ -44,6 +44,7 @@ func NewMemoryDbClient() *DbClient {
 
 func initDb(db *sql.DB) {
 	tx, err := db.Begin()
+	defer tx.Rollback()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -67,7 +68,6 @@ func initDb(db *sql.DB) {
 	for _, stmt := range stmts {
 		_, err := tx.Exec(stmt)
 		if err != nil {
-			tx.Rollback()
 			log.Fatal(err)
 		}
 	}

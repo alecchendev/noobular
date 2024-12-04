@@ -30,12 +30,12 @@ values(?);
 
 func (c *DbClient) CreateModule(courseId int, moduleTitle string, moduleDescription string) (Module, error) {
 	tx, err := c.db.Begin()
+	defer tx.Rollback()
 	if err != nil {
 		return Module{}, err
 	}
 	module, err := CreateModule(tx, courseId, moduleTitle, moduleDescription)
 	if err != nil {
-		tx.Rollback()
 		return Module{}, err
 	}
 	err = tx.Commit()
@@ -129,14 +129,13 @@ func (c *DbClient) GetModule(moduleId int) (Module, error) {
 
 func (c *DbClient) DeleteModule(moduleId int) error {
 	tx, err := c.db.Begin()
+	defer tx.Rollback()
 	err = DeleteContentForModule(tx, moduleId)
 	if err != nil {
-		tx.Rollback()
 		return err
 	}
 	_, err = tx.Exec("delete from modules where id = ?;", moduleId)
 	if err != nil {
-		tx.Rollback()
 		return err
 	}
 	return tx.Commit()

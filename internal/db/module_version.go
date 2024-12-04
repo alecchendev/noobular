@@ -115,12 +115,12 @@ func InsertModuleVersion(tx *sql.Tx, moduleId int, title string, description str
 
 func (c *DbClient) CreateModuleVersion(moduleId int, title string, description string, blockTypes []string, contents []string, questions []string, choices [][]string, correctChoiceIdxs []int, explanations []string) error {
 	tx, err := c.db.Begin()
+	defer tx.Rollback()
 	if err != nil {
 		return err
 	}
 	version, err := InsertModuleVersion(tx, moduleId, title, description)
 	if err != nil {
-		tx.Rollback()
 		return err
 	}
 	questionIdx := 0
@@ -128,20 +128,17 @@ func (c *DbClient) CreateModuleVersion(moduleId int, title string, description s
 	for i, blockType := range blockTypes {
 		blockId, err := InsertBlock(tx, version.Id, i, BlockType(blockType))
 		if err != nil {
-			tx.Rollback()
 			return err
 		}
 		if blockType == string(ContentBlockType) {
 			err = InsertContentBlock(tx, blockId, contents[contentIdx])
 			if err != nil {
-				tx.Rollback()
 				return err
 			}
 			contentIdx += 1
 		} else if blockType == string(QuestionBlockType) {
 			err = InsertQuestion(tx, blockId, questions[questionIdx], choices[questionIdx], correctChoiceIdxs[questionIdx], explanations[questionIdx])
 			if err != nil {
-				tx.Rollback()
 				return err
 			}
 			questionIdx += 1

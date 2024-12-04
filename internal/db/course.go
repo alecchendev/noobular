@@ -2,7 +2,6 @@ package db
 
 import (
 	"database/sql"
-	"fmt"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -51,13 +50,10 @@ where id = ? and user_id = ?;
 `
 
 func (c *DbClient) EditCourse(userId int64, courseId int, title string, description string, moduleIds []int, moduleTitles []string, moduleDescriptions []string) (Course, []Module, error) {
-	if len(moduleTitles) != len(moduleDescriptions) || len(moduleTitles) != len(moduleIds) {
-		return Course{}, []Module{}, fmt.Errorf("moduleTitles, moduleDescriptions, and moduleIds must have the same length, got titles: %d, descs: %d, ids: %d", len(moduleTitles), len(moduleDescriptions), len(moduleIds))
-	}
 	tx, err := c.db.Begin()
+	defer tx.Rollback()
 	_, err = tx.Exec(updateCourseQuery, title, description, courseId, userId)
 	if err != nil {
-		tx.Rollback()
 		return Course{}, []Module{}, err
 	}
 	course := Course{courseId, title, description}
@@ -70,7 +66,6 @@ func (c *DbClient) EditCourse(userId int64, courseId int, title string, descript
 		if moduleId == -1 {
 			module, err := CreateModule(tx, courseId, moduleTitle, moduleDescription)
 			if err != nil {
-				tx.Rollback()
 				return Course{}, []Module{}, err
 			}
 			moduleId = module.Id
@@ -78,12 +73,10 @@ func (c *DbClient) EditCourse(userId int64, courseId int, title string, descript
 			// No need to instert new module version just to change the name.
 			version, err := GetLatestModuleVersion(tx, moduleId)
 			if err != nil {
-				tx.Rollback()
 				return Course{}, []Module{}, err
 			}
 			err = UpdateModuleVersionMetadata(tx, version.Id, moduleTitle, moduleDescription)
 			if err != nil {
-				tx.Rollback()
 				return Course{}, []Module{}, err
 			}
 		}
@@ -200,17 +193,16 @@ where user_id = ? and id = ?;
 
 func (c *DbClient) DeleteCourse(userId int64, courseId int) error {
 	tx, err := c.db.Begin()
+	defer tx.Rollback()
 	modules, err := c.GetModules(courseId)
 	for _, module := range modules {
 		_, err = tx.Exec(deleteContentForModuleQuery, module.Id)
 		if err != nil {
-			tx.Rollback()
 			return err
 		}
 	}
 	_, err = tx.Exec(deleteCourseQuery, userId, courseId)
 	if err != nil {
-		tx.Rollback()
 		return err
 	}
 	return tx.Commit()
