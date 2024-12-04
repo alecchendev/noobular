@@ -168,6 +168,12 @@ func parseEditCourseRequest(r *http.Request) (editCourseRequest, error) {
 	}
 	moduleTitles := r.Form["module-title[]"]
 	moduleDescriptions := r.Form["module-description[]"]
+	moduleIdCount := len(moduleIds)
+	moduleTitleCount := len(moduleTitles)
+	moduleDescriptionCount := len(moduleDescriptions)
+	if moduleIdCount != moduleTitleCount || moduleTitleCount != moduleDescriptionCount {
+		return editCourseRequest{}, fmt.Errorf("Edit course module data lengths are misaligned: %d module ids, %d moduleTitles, %d motule descriptions", moduleIdCount, moduleTitleCount, moduleDescriptionCount)
+	}
 	return editCourseRequest{courseId, title, description, moduleIds, moduleTitles, moduleDescriptions}, nil
 }
 
@@ -176,7 +182,39 @@ func handleEditCourse(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 	if err != nil {
 		return err
 	}
-	_, _, err = ctx.dbClient.EditCourse(user.Id, req.courseId, req.title, req.description, req.moduleIds, req.moduleTitles, req.moduleDescriptions)
+	tx, err := ctx.dbClient.Begin()
+	defer tx.Rollback()
+	course, err := db.EditCourse(tx, user.Id, req.courseId, req.title, req.description)
+	if err != nil {
+		return err
+	}
+	modules := make([]db.Module, len(req.moduleTitles))
+	for i := 0; i < len(req.moduleTitles); i++ {
+		moduleId := req.moduleIds[i]
+		moduleTitle := req.moduleTitles[i]
+		moduleDescription := req.moduleDescriptions[i]
+		// -1 means this is a new module
+		if moduleId == -1 {
+			module, err := db.CreateModule(tx, req.courseId, moduleTitle, moduleDescription)
+			if err != nil {
+				return err
+			}
+			moduleId = module.Id
+		} else {
+			// No need to instert new module version just to change the name.
+			version, err := db.GetLatestModuleVersion(tx, moduleId)
+			if err != nil {
+				return err
+			}
+			err = db.UpdateModuleVersionMetadata(tx, version.Id, moduleTitle, moduleDescription)
+			if err != nil {
+				return err
+			}
+		}
+		module := db.NewModule(moduleId, course.Id)
+		modules[i] = module
+	}
+	err = tx.Commit()
 	if err != nil {
 		return err
 	}

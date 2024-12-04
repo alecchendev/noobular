@@ -49,45 +49,12 @@ set title = ?, description = ?
 where id = ? and user_id = ?;
 `
 
-func (c *DbClient) EditCourse(userId int64, courseId int, title string, description string, moduleIds []int, moduleTitles []string, moduleDescriptions []string) (Course, []Module, error) {
-	tx, err := c.db.Begin()
-	defer tx.Rollback()
-	_, err = tx.Exec(updateCourseQuery, title, description, courseId, userId)
+func EditCourse(tx *sql.Tx, userId int64, courseId int, title string, description string) (Course, error) {
+	_, err := tx.Exec(updateCourseQuery, title, description, courseId, userId)
 	if err != nil {
-		return Course{}, []Module{}, err
+		return Course{}, err
 	}
-	course := Course{courseId, title, description}
-	modules := make([]Module, len(moduleTitles))
-	for i := 0; i < len(moduleTitles); i++ {
-		moduleId := moduleIds[i]
-		moduleTitle := moduleTitles[i]
-		moduleDescription := moduleDescriptions[i]
-		// -1 means this is a new module
-		if moduleId == -1 {
-			module, err := CreateModule(tx, courseId, moduleTitle, moduleDescription)
-			if err != nil {
-				return Course{}, []Module{}, err
-			}
-			moduleId = module.Id
-		} else {
-			// No need to instert new module version just to change the name.
-			version, err := GetLatestModuleVersion(tx, moduleId)
-			if err != nil {
-				return Course{}, []Module{}, err
-			}
-			err = UpdateModuleVersionMetadata(tx, version.Id, moduleTitle, moduleDescription)
-			if err != nil {
-				return Course{}, []Module{}, err
-			}
-		}
-		module := Module{moduleId, course.Id}
-		modules[i] = module
-	}
-	err = tx.Commit()
-	if err != nil {
-		return Course{}, []Module{}, err
-	}
-	return course, modules, nil
+	return NewCourse(courseId, title, description), nil
 }
 
 const getCourseQuery = `

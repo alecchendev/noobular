@@ -74,6 +74,10 @@ func initDb(db *sql.DB) {
 	tx.Commit()
 }
 
+func (c *DbClient) Begin() (*sql.Tx, error) {
+	return c.db.Begin()
+}
+
 func (c *DbClient) Close() {
 	c.db.Close()
 }
