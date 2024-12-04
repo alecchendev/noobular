@@ -14,12 +14,11 @@ import (
 
 // Student page
 
-func handleStudentPage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
-	user, err := ctx.dbClient.GetUser(userId)
+func handleStudentPage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
+	courses, err := ctx.dbClient.GetEnrolledCourses(user.Id)
 	if err != nil {
 		return err
 	}
-	courses, err := ctx.dbClient.GetEnrolledCourses(userId)
 	uiCourses := make([]UiCourse, len(courses))
 	for i, course := range courses {
 		uiCourses[i] = NewUiCourse(course, []UiModule{})
@@ -29,16 +28,12 @@ func handleStudentPage(w http.ResponseWriter, r *http.Request, ctx HandlerContex
 
 // Student course page
 
-func handleStudentCoursePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
+func handleStudentCoursePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
 	courseId, err := strconv.Atoi(r.PathValue("courseId"))
 	if err != nil {
 		return err
 	}
-	_, err = ctx.dbClient.GetEnrollment(userId, courseId)
-	if err != nil {
-		return err
-	}
-	user, err := ctx.dbClient.GetUser(userId)
+	_, err = ctx.dbClient.GetEnrollment(user.Id, courseId)
 	if err != nil {
 		return err
 	}
@@ -62,12 +57,12 @@ func handleStudentCoursePage(w http.ResponseWriter, r *http.Request, ctx Handler
 
 // Take course
 
-func handleTakeCourse(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
+func handleTakeCourse(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
 	courseId, err := strconv.Atoi(r.PathValue("courseId"))
 	if err != nil {
 		return err
 	}
-	_, err = ctx.dbClient.InsertEnrollment(userId, courseId)
+	_, err = ctx.dbClient.InsertEnrollment(user.Id, courseId)
 	if err != nil {
 		return err
 	}
@@ -163,12 +158,12 @@ func getBlock(ctx HandlerContext, moduleVersionId int64, blockIdx int, userId in
 	}
 }
 
-func handleTakeModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
+func handleTakeModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
 	moduleId, err := strconv.Atoi(r.PathValue("moduleId"))
 	if err != nil {
 		return err
 	}
-	module, visit, blockCount, err := getModule(ctx, moduleId, userId)
+	module, visit, blockCount, err := getModule(ctx, moduleId, user.Id)
 	if err != nil {
 		return fmt.Errorf("Error getting module %d: %v", moduleId, err)
 	}
@@ -178,7 +173,7 @@ func handleTakeModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	nBlocks := min(visit.BlockIndex + 1, blockCount)
 	uiBlocks := make([]UiBlock, nBlocks)
 	for blockIdx := 0; blockIdx < nBlocks; blockIdx++ {
-		uiBlock, err := getBlock(ctx, visit.ModuleVersionId, blockIdx, userId)
+		uiBlock, err := getBlock(ctx, visit.ModuleVersionId, blockIdx, user.Id)
 		if err != nil {
 			return fmt.Errorf("Error getting block %d for module %d: %v", blockIdx, moduleId, err)
 		}
@@ -216,16 +211,16 @@ func getTakeModule(req takeModuleRequest, ctx HandlerContext, userId int64) (UiT
 	}, visit, nil
 }
 
-func handleTakeModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
+func handleTakeModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
 	req, err := parseTakeModuleRequest(r)
 	if err != nil {
 		return err
 	}
-	module, visit, err := getTakeModule(req, ctx, userId)
+	module, visit, err := getTakeModule(req, ctx, user.Id)
 	if err != nil {
 		return err
 	}
-	err = ctx.dbClient.UpdateVisit(userId, visit.ModuleVersionId, req.blockIdx)
+	err = ctx.dbClient.UpdateVisit(user.Id, visit.ModuleVersionId, req.blockIdx)
 	if err != nil {
 		return err
 	}
@@ -233,12 +228,12 @@ func handleTakeModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 	return ctx.renderer.RenderTakeModule(w, module)
 }
 
-func handleAnswerQuestion(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
+func handleAnswerQuestion(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
 	req, err := parseTakeModuleRequest(r)
 	if err != nil {
 		return err
 	}
-	uiTakeModule, _, err := getTakeModule(req, ctx, userId)
+	uiTakeModule, _, err := getTakeModule(req, ctx, user.Id)
 	if err != nil {
 		return err
 	}
@@ -253,7 +248,7 @@ func handleAnswerQuestion(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	if err != nil {
 		return err
 	}
-	err = ctx.dbClient.StoreAnswer(userId, uiTakeModule.Block.Question.Id, choiceId)
+	err = ctx.dbClient.StoreAnswer(user.Id, uiTakeModule.Block.Question.Id, choiceId)
 	if err != nil {
 		return err
 	}
@@ -266,7 +261,7 @@ func handleAnswerQuestion(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	return ctx.renderer.RenderQuestionSubmitted(w, uiTakeModule)
 }
 
-func handleCompleteModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
+func handleCompleteModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
 	courseId, err := strconv.Atoi(r.PathValue("courseId"))
 	if err != nil {
 		return err
@@ -275,7 +270,7 @@ func handleCompleteModule(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	if err != nil {
 		return err
 	}
-	visit, err := ctx.dbClient.GetVisit(userId, moduleId)
+	visit, err := ctx.dbClient.GetVisit(user.Id, moduleId)
 	if err != nil {
 		return err
 	}
@@ -286,7 +281,7 @@ func handleCompleteModule(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	if visit.BlockIndex < blockCount - 1 {
 		return fmt.Errorf("Tried to complete module %d, but only at block index %d", moduleId, visit.BlockIndex)
 	}
-	err = ctx.dbClient.UpdateVisit(userId, visit.ModuleVersionId, blockCount)
+	err = ctx.dbClient.UpdateVisit(user.Id, visit.ModuleVersionId, blockCount)
 	if err != nil {
 		return err
 	}

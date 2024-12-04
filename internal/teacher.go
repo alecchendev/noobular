@@ -11,12 +11,12 @@ import (
 
 // Courses page
 
-func handleTeacherCoursesPage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
+func handleTeacherCoursesPage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
 	newCourseId, err := strconv.Atoi(r.URL.Query().Get("newCourse"))
 	if err != nil {
 		newCourseId = -1
 	}
-	courses, err := ctx.dbClient.GetCourses(userId)
+	courses, err := ctx.dbClient.GetCourses(user.Id)
 	if err != nil {
 		return err
 	}
@@ -37,12 +37,12 @@ func handleTeacherCoursesPage(w http.ResponseWriter, r *http.Request, ctx Handle
 
 // Delete course (on teacher courses page)
 
-func handleDeleteCourse(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
+func handleDeleteCourse(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
 	courseId, err := strconv.Atoi(r.PathValue("courseId"))
 	if err != nil {
 		return err
 	}
-	err = ctx.dbClient.DeleteCourse(userId, courseId)
+	err = ctx.dbClient.DeleteCourse(user.Id, courseId)
 	if err != nil {
 		return err
 	}
@@ -51,7 +51,7 @@ func handleDeleteCourse(w http.ResponseWriter, r *http.Request, ctx HandlerConte
 
 // Create course page
 
-func handleCreateCoursePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
+func handleCreateCoursePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
 	return ctx.renderer.RenderCreateCoursePage(w)
 }
 
@@ -86,12 +86,12 @@ func parseCreateCourseRequest(r *http.Request) (createCourseRequest, error) {
 	return createCourseRequest{title, description, moduleTitles, moduleDescriptions}, nil
 }
 
-func handleCreateCourse(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
+func handleCreateCourse(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
 	req, err := parseCreateCourseRequest(r)
 	if err != nil {
 		return err
 	}
-	course, _, err := ctx.dbClient.CreateCourse(userId, req.title, req.description, req.moduleTitles, req.moduleDescriptions)
+	course, _, err := ctx.dbClient.CreateCourse(user.Id, req.title, req.description, req.moduleTitles, req.moduleDescriptions)
 	if err != nil {
 		return err
 	}
@@ -101,12 +101,12 @@ func handleCreateCourse(w http.ResponseWriter, r *http.Request, ctx HandlerConte
 
 // Edit course page
 
-func handleEditCoursePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
+func handleEditCoursePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
 	courseId, err := strconv.Atoi(r.PathValue("courseId"))
 	if err != nil {
 		return err
 	}
-	course, err := ctx.dbClient.GetEditCourse(userId, courseId)
+	course, err := ctx.dbClient.GetEditCourse(user.Id, courseId)
 	if err != nil {
 		return err
 	}
@@ -155,12 +155,12 @@ func parseEditCourseRequest(r *http.Request) (editCourseRequest, error) {
 	return editCourseRequest{courseId, title, description, moduleIds, moduleTitles, moduleDescriptions}, nil
 }
 
-func handleEditCourse(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
+func handleEditCourse(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
 	req, err := parseEditCourseRequest(r)
 	if err != nil {
 		return err
 	}
-	_, _, err = ctx.dbClient.EditCourse(req.courseId, req.title, req.description, req.moduleIds, req.moduleTitles, req.moduleDescriptions)
+	_, _, err = ctx.dbClient.EditCourse(user.Id, req.courseId, req.title, req.description, req.moduleIds, req.moduleTitles, req.moduleDescriptions)
 	if err != nil {
 		return err
 	}
@@ -202,12 +202,12 @@ func handleDeleteElement(w http.ResponseWriter, r *http.Request, ctx HandlerCont
 	return nil
 }
 
-func handleDeleteModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
+func handleDeleteModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
 	moduleId, err := strconv.Atoi(r.PathValue("moduleId"))
 	if err != nil {
 		return err
 	}
-	_, err = ctx.dbClient.GetModuleCourse(userId, moduleId)
+	_, err = ctx.dbClient.GetModuleCourse(user.Id, moduleId)
 	if err != nil {
 		return err
 	}
@@ -221,7 +221,7 @@ func handleDeleteModule(w http.ResponseWriter, r *http.Request, ctx HandlerConte
 
 // Edit module page
 
-func handleEditModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
+func handleEditModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
 	// Get courseId and moduleId from "/course/:courseId/module/:moduleId/edit"
 	courseId, err := strconv.Atoi(r.PathValue("courseId"))
 	if err != nil {
@@ -231,7 +231,7 @@ func handleEditModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	if err != nil {
 		return err
 	}
-	course, err := ctx.dbClient.GetEditCourse(userId, courseId)
+	course, err := ctx.dbClient.GetEditCourse(user.Id, courseId)
 	if err != nil {
 		return err
 	}
@@ -381,12 +381,12 @@ func parseEditModuleRequest(r *http.Request) (editModuleRequest, error) {
 	}, nil
 }
 
-func handleEditModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext, userId int64) error {
+func handleEditModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
 	req, err := parseEditModuleRequest(r)
 	if err != nil {
 		return err
 	}
-	_, err = ctx.dbClient.GetModuleCourse(userId, req.moduleId)
+	_, err = ctx.dbClient.GetModuleCourse(user.Id, req.moduleId)
 	if err != nil {
 		return fmt.Errorf("Module %d not found", req.moduleId)
 	}

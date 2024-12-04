@@ -36,7 +36,7 @@ func authRequiredHandler(handler UserHandler) HandlerMapHandler {
 			http.Redirect(w, r, "/signin", http.StatusSeeOther)
 			return nil
 		}
-		_, err = ctx.dbClient.GetUser(userId)
+		user, err := ctx.dbClient.GetUser(userId)
 		if err == sql.ErrNoRows {
 			log.Println("User not found")
 			http.Redirect(w, r, "/signup", http.StatusSeeOther)
@@ -47,7 +47,7 @@ func authRequiredHandler(handler UserHandler) HandlerMapHandler {
 			http.Redirect(w, r, "/signin", http.StatusSeeOther)
 			return nil
 		}
-		return handler(w, r, ctx, userId)
+		return handler(w, r, ctx, user)
 	}
 }
 

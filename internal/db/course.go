@@ -61,15 +61,15 @@ func (c *DbClient) CreateCourse(userId int64, title string, description string, 
 const updateCourseQuery = `
 update courses
 set title = ?, description = ?
-where id = ?;
+where id = ? and user_id = ?;
 `
 
-func (c *DbClient) EditCourse(courseId int, title string, description string, moduleIds []int, moduleTitles []string, moduleDescriptions []string) (Course, []Module, error) {
+func (c *DbClient) EditCourse(userId int64, courseId int, title string, description string, moduleIds []int, moduleTitles []string, moduleDescriptions []string) (Course, []Module, error) {
 	if len(moduleTitles) != len(moduleDescriptions) || len(moduleTitles) != len(moduleIds) {
 		return Course{}, []Module{}, fmt.Errorf("moduleTitles, moduleDescriptions, and moduleIds must have the same length, got titles: %d, descs: %d, ids: %d", len(moduleTitles), len(moduleDescriptions), len(moduleIds))
 	}
 	tx, err := c.db.Begin()
-	_, err = tx.Exec(updateCourseQuery, title, description, courseId)
+	_, err = tx.Exec(updateCourseQuery, title, description, courseId, userId)
 	if err != nil {
 		tx.Rollback()
 		return Course{}, []Module{}, err

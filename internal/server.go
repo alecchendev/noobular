@@ -139,7 +139,7 @@ func (hm HandlerMap) Delete(handler HandlerMapHandler) HandlerMap {
 	return hm
 }
 
-type UserHandler func(http.ResponseWriter, *http.Request, HandlerContext, int64) error
+type UserHandler func(http.ResponseWriter, *http.Request, HandlerContext, db.User) error
 
 type AnyoneHandler func(http.ResponseWriter, *http.Request, HandlerContext, bool) error
 
