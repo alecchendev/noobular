@@ -444,7 +444,39 @@ func handleEditModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 	if err != nil {
 		return fmt.Errorf("Module %d not found", req.moduleId)
 	}
-	err = ctx.dbClient.CreateModuleVersion(req.moduleId, req.title, req.description, req.blockTypes, req.contents, req.questions, req.choicesByQuestion, req.correctChoiceIdxs, req.explanations)
+	tx, err := ctx.dbClient.Begin()
+	defer tx.Rollback()
+	if err != nil {
+		return err
+	}
+	version, err := db.InsertModuleVersion(tx, req.moduleId, req.title, req.description)
+	if err != nil {
+		return err
+	}
+	questionIdx := 0
+	contentIdx := 0
+	for i, blockType := range req.blockTypes {
+		blockId, err := db.InsertBlock(tx, version.Id, i, db.BlockType(blockType))
+		if err != nil {
+			return err
+		}
+		if db.BlockType(blockType) == db.ContentBlockType {
+			err = db.InsertContentBlock(tx, blockId, req.contents[contentIdx])
+			if err != nil {
+				return err
+			}
+			contentIdx += 1
+		} else if db.BlockType(blockType) == db.QuestionBlockType {
+			err = db.InsertQuestion(tx, blockId, req.questions[questionIdx], req.choicesByQuestion[questionIdx], req.correctChoiceIdxs[questionIdx], req.explanations[questionIdx])
+			if err != nil {
+				return err
+			}
+			questionIdx += 1
+		} else {
+			return fmt.Errorf("invalid block type: %s", blockType)
+		}
+	}
+	err = tx.Commit()
 	if err != nil {
 		return err
 	}
