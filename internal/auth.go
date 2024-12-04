@@ -70,6 +70,14 @@ func authRejectedHandler(handler HandlerMapHandler) HandlerMapHandler {
 	}
 }
 
+type WebAuthnHandler func(http.ResponseWriter, *http.Request, HandlerContext, *webauthn.WebAuthn) error
+
+func withWebAuthn(webAuthn *webauthn.WebAuthn, handler WebAuthnHandler) HandlerMapHandler {
+	return func(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
+		return handler(w, r, ctx, webAuthn)
+	}
+}
+
 // Sign up page
 
 func handleSignupPage(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
@@ -164,7 +172,7 @@ func CreateAuthCookie(jwtSecret []byte, userId int64) (http.Cookie, error) {
 
 // Webauthn sign up
 
-func handleSignupBegin(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
+func handleSignupBegin(w http.ResponseWriter, r *http.Request, ctx HandlerContext, webAuthn *webauthn.WebAuthn) error {
 	username := r.URL.Query().Get("username")
 	if username == "" {
 		return fmt.Errorf("empty username")
@@ -175,14 +183,14 @@ func handleSignupBegin(w http.ResponseWriter, r *http.Request, ctx HandlerContex
 	}
 
 	// Begin registration
-	options, session, err := ctx.webAuthn.BeginRegistration(&webAuthnUser)
+	options, session, err := webAuthn.BeginRegistration(&webAuthnUser)
 	if err != nil {
 		return fmt.Errorf("Error beginning registration: %v", err)
 	}
 	return SaveSessionAndReturnOpts(w, ctx, webAuthnUser, options, session)
 }
 
-func handleSignupFinish(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
+func handleSignupFinish(w http.ResponseWriter, r *http.Request, ctx HandlerContext, webAuthn *webauthn.WebAuthn) error {
 	username := r.URL.Query().Get("username")
 	if username == "" {
 		return fmt.Errorf("empty username")
@@ -202,7 +210,7 @@ func handleSignupFinish(w http.ResponseWriter, r *http.Request, ctx HandlerConte
 		return fmt.Errorf("Error unmarshalling session: %v", err)
 	}
 
-	webAuthnCredential, err := ctx.webAuthn.FinishRegistration(&webAuthnUser, session, r)
+	webAuthnCredential, err := webAuthn.FinishRegistration(&webAuthnUser, session, r)
 	if err != nil {
 		return fmt.Errorf("Error finishing registration: %v", err)
 	}
@@ -226,7 +234,7 @@ func handleSignupFinish(w http.ResponseWriter, r *http.Request, ctx HandlerConte
 
 // Webauthn sign in
 
-func handleSigninBegin(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
+func handleSigninBegin(w http.ResponseWriter, r *http.Request, ctx HandlerContext, webAuthn *webauthn.WebAuthn) error {
 	username := r.URL.Query().Get("username")
 	if username == "" {
 		return fmt.Errorf("empty username")
@@ -237,14 +245,14 @@ func handleSigninBegin(w http.ResponseWriter, r *http.Request, ctx HandlerContex
 	}
 
 	// Begin registration
-	options, session, err := ctx.webAuthn.BeginLogin(&webAuthnUser)
+	options, session, err := webAuthn.BeginLogin(&webAuthnUser)
 	if err != nil {
 		return fmt.Errorf("Error beginning registration: %v", err)
 	}
 	return SaveSessionAndReturnOpts(w, ctx, webAuthnUser, options, session)
 }
 
-func handleSigninFinish(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
+func handleSigninFinish(w http.ResponseWriter, r *http.Request, ctx HandlerContext, webAuthn *webauthn.WebAuthn) error {
 	username := r.URL.Query().Get("username")
 	if username == "" {
 		return fmt.Errorf("empty username")
@@ -264,7 +272,7 @@ func handleSigninFinish(w http.ResponseWriter, r *http.Request, ctx HandlerConte
 		return fmt.Errorf("Error unmarshalling session: %v", err)
 	}
 
-	webAuthnCredential, err := ctx.webAuthn.FinishLogin(&webAuthnUser, session, r)
+	webAuthnCredential, err := webAuthn.FinishLogin(&webAuthnUser, session, r)
 	if err != nil {
 		return fmt.Errorf("Error finishing registration: %v", err)
 	}

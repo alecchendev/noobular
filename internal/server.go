@@ -21,7 +21,7 @@ func NewServer(dbClient *db.DbClient, renderer Renderer, webAuthn *webauthn.WebA
 
 func initRouter(dbClient *db.DbClient, renderer Renderer, webAuthn *webauthn.WebAuthn, jwtSecret []byte) *http.ServeMux {
 	newHandlerMap := func() HandlerMap {
-		return NewHandlerMap(dbClient, renderer, webAuthn, jwtSecret)
+		return NewHandlerMap(dbClient, renderer, jwtSecret)
 	}
 	mux := http.NewServeMux()
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
@@ -32,10 +32,10 @@ func initRouter(dbClient *db.DbClient, renderer Renderer, webAuthn *webauthn.Web
 
 	mux.Handle("/signup", newHandlerMap().Get(authRejectedHandler(handleSignupPage)))
 	mux.Handle("/signin", newHandlerMap().Get(authRejectedHandler(handleSigninPage)))
-	mux.Handle("/signup/begin", newHandlerMap().Get(authRejectedHandler(handleSignupBegin)))
-	mux.Handle("/signup/finish", newHandlerMap().Post(authRejectedHandler(handleSignupFinish)))
-	mux.Handle("/signin/begin", newHandlerMap().Get(authRejectedHandler(handleSigninBegin)))
-	mux.Handle("/signin/finish", newHandlerMap().Post(authRejectedHandler(handleSigninFinish)))
+	mux.Handle("/signup/begin", newHandlerMap().Get(authRejectedHandler(withWebAuthn(webAuthn, handleSignupBegin))))
+	mux.Handle("/signup/finish", newHandlerMap().Post(authRejectedHandler(withWebAuthn(webAuthn, handleSignupFinish))))
+	mux.Handle("/signin/begin", newHandlerMap().Get(authRejectedHandler(withWebAuthn(webAuthn, handleSigninBegin))))
+	mux.Handle("/signin/finish", newHandlerMap().Post(authRejectedHandler(withWebAuthn(webAuthn, handleSigninFinish))))
 	mux.Handle("/logout", newHandlerMap().Get(authOptionalHandler(handleLogout)))
 
 	mux.Handle("/student", newHandlerMap().Get(authRequiredHandler(handleStudentPage)))
@@ -62,12 +62,11 @@ func initRouter(dbClient *db.DbClient, renderer Renderer, webAuthn *webauthn.Web
 type HandlerContext struct {
 	dbClient     *db.DbClient
 	renderer     Renderer
-	webAuthn     *webauthn.WebAuthn
 	jwtSecret    []byte
 }
 
-func NewHandlerContext(dbClient *db.DbClient, renderer Renderer, webAuthn *webauthn.WebAuthn, jwtSecret []byte) HandlerContext {
-	return HandlerContext{dbClient, renderer, webAuthn, jwtSecret}
+func NewHandlerContext(dbClient *db.DbClient, renderer Renderer, jwtSecret []byte) HandlerContext {
+	return HandlerContext{dbClient, renderer, jwtSecret}
 }
 
 // Basically an http.Handle but returns an error
@@ -111,10 +110,10 @@ func (hm HandlerMap) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func NewHandlerMap(dbClient *db.DbClient, renderer Renderer, webAuthn *webauthn.WebAuthn, jwtSecret []byte) HandlerMap {
+func NewHandlerMap(dbClient *db.DbClient, renderer Renderer, jwtSecret []byte) HandlerMap {
 	return HandlerMap{
 		handlers:        make(map[string]HandlerMapHandler),
-		ctx:             NewHandlerContext(dbClient, renderer, webAuthn, jwtSecret),
+		ctx:             NewHandlerContext(dbClient, renderer, jwtSecret),
 		reloadTemplates: true,
 	}
 }
