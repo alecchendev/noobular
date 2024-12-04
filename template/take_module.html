@@ -162,7 +162,9 @@
 {{ if eq .Block.BlockType "content" }}
 	{{ template "content_block" . }}
 {{ else if eq .Block.BlockType "question" }}
-	{{ if not .Block.Question.Answered }}
+	{{ if .Preview }}
+		{{ template "question_submitted" . }}
+	{{ else if not .Block.Question.Answered }}
 		{{ template "question_form" . }}
 	{{ else }}
 		{{ template "question_submitted" . }}
@@ -208,7 +210,9 @@
 	{{ end }}
 	</div>
 
-	{{ if .Block.Question.AnsweredCorrectly }}
+	{{ if .Preview }}
+		<h3>Correct!/Incorrect!</h3>
+	{{ else if .Block.Question.AnsweredCorrectly }}
 		<h3 class="green">Correct!</h3>
 	{{ else }}
 		<h3 class="red">Incorrect.</h3>
@@ -230,10 +234,14 @@
 
 {{ define "next_button" }}
 {{ if eq (Increment .Block.BlockIndex) $.BlockCount }}
-<button
-	id="submit-button"
-	hx-put="/student/course/{{ $.Module.CourseId }}/module/{{ $.Module.Id }}/complete"
->Done</button>
+	{{ if .Preview }}
+	<a href="/teacher"><button id="submit-button">Back</button></a>
+	{{ else }}
+	<button
+		id="submit-button"
+		hx-put="/student/course/{{ $.Module.CourseId }}/module/{{ $.Module.Id }}/complete"
+	>Done</button>
+	{{ end }}
 {{ else }}
 <button
 	id="submit-button"

@@ -61,8 +61,8 @@ func handleStudentCoursePage(w http.ResponseWriter, r *http.Request, ctx Handler
 		uiModules = append(uiModules, NewUiModule(course.Id, moduleVersion))
 	}
 	return ctx.renderer.RenderStudentCoursePage(w, StudentCoursePageArgs{
-		Username:    user.Username,
-		Course:      NewUiCourse(course, uiModules),
+		Username: user.Username,
+		Course:   NewUiCourse(course, uiModules),
 	})
 }
 
@@ -131,10 +131,6 @@ func getBlock(ctx HandlerContext, moduleVersionId int64, blockIdx int, userId in
 		if err != nil {
 			return UiBlock{}, fmt.Errorf("Error getting question for block %d: %v", block.Id, err)
 		}
-		choiceId, err := ctx.dbClient.GetAnswer(userId, question.Id)
-		if err != nil {
-			return UiBlock{}, fmt.Errorf("Error getting answer for question %d: %v", question.Id, err)
-		}
 		choices, err := ctx.dbClient.GetChoicesForQuestion(question.Id)
 		explanationContent, err := ctx.dbClient.GetExplanationForQuestion(question.Id)
 		if err != nil {
@@ -145,6 +141,10 @@ func getBlock(ctx HandlerContext, moduleVersionId int64, blockIdx int, userId in
 			return UiBlock{}, fmt.Errorf("Error converting explanation content for question %d: %v", question.Id, err)
 		}
 		explanation := template.HTML(buf.String())
+		choiceId, err := ctx.dbClient.GetAnswer(userId, question.Id)
+		if err != nil {
+			return UiBlock{}, fmt.Errorf("Error getting answer for question %d: %v", question.Id, err)
+		}
 		var uiQuestion UiQuestion
 		if choiceId == -1 {
 			uiQuestion = NewUiQuestionTake(question, choices, NewUiContentRendered(explanationContent, explanation))
@@ -181,7 +181,7 @@ func handleTakeModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	if visit.BlockIndex > blockCount {
 		return fmt.Errorf("Block index %d is out of bounds (>=%d) for module %d", visit.BlockIndex, blockCount, moduleId)
 	}
-	nBlocks := min(visit.BlockIndex + 1, blockCount)
+	nBlocks := min(visit.BlockIndex+1, blockCount)
 	uiBlocks := make([]UiBlock, nBlocks)
 	for blockIdx := 0; blockIdx < nBlocks; blockIdx++ {
 		uiBlock, err := getBlock(ctx, visit.ModuleVersionId, blockIdx, user.Id)
@@ -191,10 +191,11 @@ func handleTakeModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 		uiBlocks[blockIdx] = uiBlock
 	}
 	uiModule := UiTakeModulePage{
-		Module:          module,
-		Blocks:		 uiBlocks,
-		BlockCount:      blockCount,
-		VisitIndex:      visit.BlockIndex,
+		Module:     module,
+		Blocks:     uiBlocks,
+		BlockCount: blockCount,
+		VisitIndex: visit.BlockIndex,
+		Preview:    false,
 	}
 	return ctx.renderer.RenderTakeModulePage(w, uiModule)
 }
@@ -207,7 +208,7 @@ func getTakeModule(req takeModuleRequest, ctx HandlerContext, userId int64) (UiT
 	if req.blockIdx >= blockCount {
 		return UiTakeModule{}, db.Visit{}, fmt.Errorf("Block index %d is out of bounds (>=%d) for module %d", req.blockIdx, blockCount, req.moduleId)
 	}
-	if req.blockIdx > visit.BlockIndex + 1 {
+	if req.blockIdx > visit.BlockIndex+1 {
 		return UiTakeModule{}, db.Visit{}, fmt.Errorf("Block index %d is ahead of visit block index %d for module %d", req.blockIdx, visit.BlockIndex, req.moduleId)
 	}
 	uiBlock, err := getBlock(ctx, visit.ModuleVersionId, req.blockIdx, userId)
@@ -215,10 +216,10 @@ func getTakeModule(req takeModuleRequest, ctx HandlerContext, userId int64) (UiT
 		return UiTakeModule{}, db.Visit{}, err
 	}
 	return UiTakeModule{
-		Module:          module,
-		Block:		 uiBlock,
-		BlockCount:      blockCount,
-		VisitIndex:      visit.BlockIndex,
+		Module:     module,
+		Block:      uiBlock,
+		BlockCount: blockCount,
+		VisitIndex: visit.BlockIndex,
 	}, visit, nil
 }
 
@@ -289,7 +290,7 @@ func handleCompleteModule(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	if err != nil {
 		return err
 	}
-	if visit.BlockIndex < blockCount - 1 {
+	if visit.BlockIndex < blockCount-1 {
 		return fmt.Errorf("Tried to complete module %d, but only at block index %d", moduleId, visit.BlockIndex)
 	}
 	err = ctx.dbClient.UpdateVisit(user.Id, visit.ModuleVersionId, blockCount)

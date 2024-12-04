@@ -27,7 +27,7 @@ html {
 	align-items: center;
 }
 
-.delete-edit-container {
+.delete-edit-container, .preview-edit-container {
 	display: flex;
 	justify-content: space-between;
 	gap: 1rem;
@@ -125,8 +125,10 @@ html {
 				<div class="edit-module">
 					<h3 class="module-title">{{.Title}}</h3>
 					{{ if and $.LoggedIn $.Editor }}
-					<a class="edit-module-link" href="/teacher/course/{{$course.Id}}/module/{{.Id}}/edit">Edit</a>
-					</a>
+					<div class="preview-edit-container">
+						<a class="edit-module-link" href="/teacher/course/{{$course.Id}}/module/{{.Id}}/preview">Preview</a>
+						<a class="edit-module-link" href="/teacher/course/{{$course.Id}}/module/{{.Id}}/edit">Edit</a>
+					</div>
 					{{ end }}
 				</div>
 				<p>{{.Description}}</p>

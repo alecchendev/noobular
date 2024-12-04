@@ -482,3 +482,47 @@ func handleEditModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 	}
 	return ctx.renderer.RenderModuleEdited(w)
 }
+
+// Preview page
+
+func handlePreviewModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
+	courseId, err := strconv.Atoi(r.PathValue("courseId"))
+	if err != nil {
+		return err
+	}
+	// Check they can access this
+	course, err := ctx.dbClient.GetTeacherCourse(courseId, user.Id)
+	if err != nil {
+		return err
+	}
+	moduleId, err := strconv.Atoi(r.PathValue("moduleId"))
+	if err != nil {
+		return err
+	}
+	module, err := ctx.dbClient.GetModule(moduleId)
+	if err != nil {
+		return err
+	}
+	moduleVersion, err := ctx.dbClient.GetLatestModuleVersion(module.Id)
+	if err != nil {
+		return err
+	}
+	blocks, err := ctx.dbClient.GetBlocks(moduleVersion.Id)
+	blockCount := len(blocks)
+	uiBlocks := make([]UiBlock, blockCount)
+	for blockIdx := 0; blockIdx < blockCount; blockIdx++ {
+		uiBlock, err := getBlock(ctx, moduleVersion.Id, blockIdx, user.Id)
+		if err != nil {
+			return fmt.Errorf("Error getting block %d for module %d: %v", blockIdx, moduleId, err)
+		}
+		uiBlocks[blockIdx] = uiBlock
+	}
+	uiModule := UiTakeModulePage{
+		Module:     NewUiModule(course.Id, moduleVersion),
+		Blocks:     uiBlocks,
+		BlockCount: blockCount,
+		VisitIndex: blockCount,
+		Preview:    true,
+	}
+	return ctx.renderer.RenderTakeModulePage(w, uiModule)
+}

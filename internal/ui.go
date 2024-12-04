@@ -400,6 +400,7 @@ type UiTakeModulePage struct {
 	Blocks     []UiBlock
 	BlockCount int
 	VisitIndex int
+	Preview    bool
 }
 
 func (u UiTakeModulePage) IsPage() bool {
@@ -412,6 +413,7 @@ func (u UiTakeModulePage) ModuleBlock(index int) UiTakeModule {
 		Block:      u.Blocks[index],
 		BlockCount: u.BlockCount,
 		VisitIndex: u.VisitIndex,
+		Preview:    u.Preview,
 	}
 }
 
@@ -424,6 +426,7 @@ type UiTakeModule struct {
 	Block      UiBlock
 	BlockCount int
 	VisitIndex int
+	Preview    bool
 }
 
 func (u UiTakeModule) IsPage() bool {

@@ -73,6 +73,23 @@ func (c *DbClient) GetCourse(courseId int) (Course, error) {
 	return course, nil
 }
 
+const getTeacherCourseQuery = `
+select c.id, c.title, c.description
+from courses c
+where c.id = ? and c.user_id = ?;
+`
+
+func (c *DbClient) GetTeacherCourse(courseId int, userId int64) (Course, error) {
+	row := c.db.QueryRow(getTeacherCourseQuery, courseId, userId)
+	var course Course
+	err := row.Scan(&course.Id, &course.Title, &course.Description)
+	if err != nil {
+		return Course{}, err
+	}
+	return course, nil
+}
+
+
 const getCoursesQuery = `
 select c.id, c.title, c.description
 from courses c
