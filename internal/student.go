@@ -41,13 +41,24 @@ func handleStudentCoursePage(w http.ResponseWriter, r *http.Request, ctx Handler
 	if err != nil {
 		return err
 	}
-	moduleVersions, err := ctx.dbClient.GetLatestModuleVersionsForCourse(course.Id, true)
+	modules, err := ctx.dbClient.GetModules(course.Id)
 	if err != nil {
 		return err
 	}
-	uiModules := make([]UiModule, len(moduleVersions))
-	for j, moduleVersion := range moduleVersions {
-		uiModules[j] = NewUiModule(courseId, moduleVersion)
+	uiModules := make([]UiModule, 0)
+	for _, module := range modules {
+		moduleVersion, err := ctx.dbClient.GetLatestModuleVersion(module.Id)
+		if err != nil {
+			return err
+		}
+		blockCount, err := ctx.dbClient.GetBlockCount(moduleVersion.Id)
+		if err != nil {
+			return err
+		}
+		if blockCount == 0 {
+			continue
+		}
+		uiModules = append(uiModules, NewUiModule(course.Id, moduleVersion))
 	}
 	return ctx.renderer.RenderStudentCoursePage(w, StudentCoursePageArgs{
 		Username:    user.Username,

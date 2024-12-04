@@ -211,7 +211,7 @@ where user_id = ? and id = ?;
 
 func (c *DbClient) DeleteCourse(userId int64, courseId int) error {
 	tx, err := c.db.Begin()
-	modules, err := c.GetModules(courseId, false)
+	modules, err := c.GetModules(courseId)
 	for _, module := range modules {
 		_, err = tx.Exec(deleteContentForModuleQuery, module.Id)
 		if err != nil {

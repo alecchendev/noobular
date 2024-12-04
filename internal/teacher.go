@@ -22,13 +22,17 @@ func handleTeacherCoursesPage(w http.ResponseWriter, r *http.Request, ctx Handle
 	}
 	uiCourses := make([]UiCourse, len(courses))
 	for i, course := range courses {
-		moduleVersions, err := ctx.dbClient.GetLatestModuleVersionsForCourse(course.Id, false)
+		modules, err := ctx.dbClient.GetModules(course.Id)
 		if err != nil {
 			return err
 		}
-		uiModules := make([]UiModule, len(moduleVersions))
-		for j, moduleVersion := range moduleVersions {
-			uiModules[j] = NewUiModule(course.Id, moduleVersion)
+		uiModules := make([]UiModule, 0)
+		for _, module := range modules {
+			moduleVersion, err := ctx.dbClient.GetLatestModuleVersion(module.Id)
+			if err != nil {
+				return err
+			}
+			uiModules = append(uiModules, NewUiModule(course.Id, moduleVersion))
 		}
 		uiCourses[i] = UiCourse{course.Id, course.Title, course.Description, uiModules}
 	}
@@ -110,13 +114,17 @@ func handleEditCoursePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	if err != nil {
 		return err
 	}
-	moduleVersions, err := ctx.dbClient.GetLatestModuleVersionsForCourse(courseId, false)
+	modules, err := ctx.dbClient.GetModules(course.Id)
 	if err != nil {
 		return err
 	}
-	uiModules := make([]UiModule, len(moduleVersions))
-	for i, moduleVersion := range moduleVersions {
-		uiModules[i] = NewUiModule(course.Id, moduleVersion)
+	uiModules := make([]UiModule, 0)
+	for _, module := range modules {
+		moduleVersion, err := ctx.dbClient.GetLatestModuleVersion(module.Id)
+		if err != nil {
+			return err
+		}
+		uiModules = append(uiModules, NewUiModule(course.Id, moduleVersion))
 	}
 	return ctx.renderer.RenderEditCoursePage(w, UiCourse{course.Id, course.Title, course.Description, uiModules})
 }

@@ -68,23 +68,8 @@ where m.course_id = ?
 order by m.id;
 `
 
-const getModulesWithBlocksQuery = `
-select distinct m.id, m.course_id
-from modules m
-join module_versions mv on m.id = mv.module_id
-join blocks b on mv.id = b.module_version_id
-where m.course_id = ?
-order by m.id;
-`
-
-func (c *DbClient) GetModules(courseId int, requireHasBlocks bool) ([]Module, error) {
-	var query string
-	if requireHasBlocks {
-		query = getModulesWithBlocksQuery
-	} else {
-		query = getModulesQuery
-	}
-	moduleRows, err := c.db.Query(query, courseId)
+func (c *DbClient) GetModules(courseId int) ([]Module, error) {
+	moduleRows, err := c.db.Query(getModulesQuery, courseId)
 	if err != nil {
 		return nil, err
 	}

@@ -163,13 +163,24 @@ func handleBrowsePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 	}
 	uiCourses := make([]UiCourse, len(courses))
 	for i, course := range courses {
-		moduleVersions, err := ctx.dbClient.GetLatestModuleVersionsForCourse(course.Id, true)
+		modules, err := ctx.dbClient.GetModules(course.Id)
 		if err != nil {
 			return err
 		}
-		uiModules := make([]UiModule, len(moduleVersions))
-		for j, moduleVersion := range moduleVersions {
-			uiModules[j] = NewUiModule(course.Id, moduleVersion)
+		uiModules := make([]UiModule, 0)
+		for _, module := range modules {
+			moduleVersion, err := ctx.dbClient.GetLatestModuleVersion(module.Id)
+			if err != nil {
+				return err
+			}
+			blockCount, err := ctx.dbClient.GetBlockCount(moduleVersion.Id)
+			if err != nil {
+				return err
+			}
+			if blockCount == 0 {
+				continue
+			}
+			uiModules = append(uiModules, NewUiModule(course.Id, moduleVersion))
 		}
 		uiCourses[i] = NewUiCourse(course, uiModules)
 	}

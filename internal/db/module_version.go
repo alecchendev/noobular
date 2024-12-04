@@ -84,67 +84,6 @@ func (c *DbClient) GetLatestModuleVersion(moduleId int) (ModuleVersion, error) {
 	return version, nil
 }
 
-// TODO: these queries are just too much
-const getLatestModuleVersionsForCourseQuery = `
-select mv.id, mv.module_id, mv.version_number, mv.title, mv.description
-from module_versions mv
-join modules m on mv.module_id = m.id
-join (
-    select module_id, max(version_number) as latest_version
-    from module_versions
-    group by module_id
-) latest_mv on mv.module_id = latest_mv.module_id and mv.version_number = latest_mv.latest_version
-where m.course_id = ?
-order by mv.version_number desc;
-`
-
-const getLatestModuleVersionsWithBlocksForCourseQuery = `
-select mv.id, mv.module_id, mv.version_number, mv.title, mv.description
-from module_versions mv
-join modules m on mv.module_id = m.id
-join (
-    select module_id, max(version_number) as latest_version
-    from module_versions
-    group by module_id
-) latest_mv on mv.module_id = latest_mv.module_id and mv.version_number = latest_mv.latest_version
-where m.course_id = ? and (
-	select count(*)
-	from blocks b
-	where b.module_version_id = mv.id
-) > 0
-order by mv.version_number desc;
-`
-
-func (c *DbClient) GetLatestModuleVersionsForCourse(courseId int, requireHasBlocks bool) ([]ModuleVersion, error) {
-	var query string
-	if requireHasBlocks {
-		query = getLatestModuleVersionsWithBlocksForCourseQuery
-	} else {
-		query = getLatestModuleVersionsForCourseQuery
-	}
-	rows, err := c.db.Query(query, courseId)
-	if err != nil {
-		return []ModuleVersion{}, err
-	}
-	versions := []ModuleVersion{}
-	for rows.Next() {
-		var id int64
-		var moduleId int
-		var versionNumber int64
-		var title string
-		var description string
-		err := rows.Scan(&id, &moduleId, &versionNumber, &title, &description)
-		if err != nil {
-			return []ModuleVersion{}, err
-		}
-		versions = append(versions, NewModuleVersion(id, moduleId, versionNumber, title, description))
-	}
-	if err := rows.Err(); err != nil {
-		return []ModuleVersion{}, err
-	}
-	return versions, nil
-}
-
 const insertModuleVersionQuery = `
 insert into module_versions(module_id, version_number, title, description)
 values(?, ?, ?, ?);
