@@ -16,7 +16,7 @@ func handleTeacherCoursesPage(w http.ResponseWriter, r *http.Request, ctx Handle
 	if err != nil {
 		newCourseId = -1
 	}
-	courses, err := ctx.dbClient.GetCourses(user.Id)
+	courses, err := ctx.dbClient.GetTeacherCourses(user.Id)
 	if err != nil {
 		return err
 	}
@@ -95,9 +95,17 @@ func handleCreateCourse(w http.ResponseWriter, r *http.Request, ctx HandlerConte
 	if err != nil {
 		return err
 	}
-	course, _, err := ctx.dbClient.CreateCourse(user.Id, req.title, req.description, req.moduleTitles, req.moduleDescriptions)
+	course, err := ctx.dbClient.CreateCourse(user.Id, req.title, req.description)
 	if err != nil {
 		return err
+	}
+	for i := 0; i < len(req.moduleTitles); i++ {
+		moduleTitle := req.moduleTitles[i]
+		moduleDescription := req.moduleDescriptions[i]
+		_, err := ctx.dbClient.CreateModule(course.Id, moduleTitle, moduleDescription)
+		if err != nil {
+			return err
+		}
 	}
 	w.Header().Add("HX-Redirect", fmt.Sprintf("/teacher?newCourse=%d#course-%d", course.Id, course.Id))
 	return nil

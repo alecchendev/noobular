@@ -32,30 +32,16 @@ insert into courses(user_id, title, description)
 values(?, ?, ?);
 `
 
-func (c *DbClient) CreateCourse(userId int64, title string, description string, moduleTitles []string, moduleDescriptions []string) (Course, []Module, error) {
-	if len(moduleTitles) != len(moduleDescriptions) {
-		return Course{}, []Module{}, fmt.Errorf("moduleTitles and moduleDescriptions must have the same length")
-	}
+func (c *DbClient) CreateCourse(userId int64, title string, description string) (Course, error) {
 	res, err := c.db.Exec(insertCourseQuery, userId, title, description)
 	if err != nil {
-		return Course{}, []Module{}, err
+		return Course{}, err
 	}
 	courseId, err := res.LastInsertId()
 	if err != nil {
-		return Course{}, []Module{}, err
+		return Course{}, err
 	}
-	course := Course{int(courseId), title, description}
-	modules := make([]Module, len(moduleTitles))
-	for i := 0; i < len(moduleTitles); i++ {
-		moduleTitle := moduleTitles[i]
-		moduleDescription := moduleDescriptions[i]
-		module, err := c.CreateModule(int(courseId), moduleTitle, moduleDescription)
-		if err != nil {
-			return Course{}, []Module{}, err
-		}
-		modules[i] = module
-	}
-	return course, modules, nil
+	return Course{int(courseId), title, description}, nil
 }
 
 const updateCourseQuery = `
@@ -127,35 +113,38 @@ func (c *DbClient) GetCourse(courseId int) (Course, error) {
 	return course, nil
 }
 
-const getUserCoursesQuery = `
+const getCoursesQuery = `
+select c.id, c.title, c.description
+from courses c
+order by c.id;
+`
+
+const getTeacherCoursesQuery = `
 select c.id, c.title, c.description
 from courses c
 where c.user_id = ?
 order by c.id;
 `
 
-const getCoursesWithModulesWithBlocksQuery = `
-select distinct c.id, c.title, c.description
-from courses c
-join modules m on c.id = m.course_id
-join module_versions mv on m.id = mv.module_id
-join blocks b on mv.id = b.module_version_id
-order by c.id;
-`
-
-func (c *DbClient) GetCourses(userId int64) ([]Course, error) {
-	var courseRows *sql.Rows
-	var err error
-	if userId != -1 {
-		courseRows, err = c.db.Query(getUserCoursesQuery, userId)
-	} else {
-		courseRows, err = c.db.Query(getCoursesWithModulesWithBlocksQuery)
-	}
+func (c *DbClient) GetTeacherCourses(userId int64) ([]Course, error) {
+	courseRows, err := c.db.Query(getTeacherCoursesQuery, userId)
 	if err != nil {
 		return nil, err
 	}
 	defer courseRows.Close()
+	return rowsToCourses(courseRows)
+}
 
+func (c *DbClient) GetCourses() ([]Course, error) {
+	courseRows, err := c.db.Query(getCoursesQuery)
+	if err != nil {
+		return nil, err
+	}
+	defer courseRows.Close()
+	return rowsToCourses(courseRows)
+}
+
+func rowsToCourses(courseRows *sql.Rows) ([]Course, error) {
 	var courses []Course
 	for courseRows.Next() {
 		var course Course
@@ -241,18 +230,5 @@ func (c *DbClient) GetEnrolledCourses(userId int64) ([]Course, error) {
 		return nil, err
 	}
 	defer courseRows.Close()
-
-	var courses []Course
-	for courseRows.Next() {
-		var course Course
-		err := courseRows.Scan(&course.Id, &course.Title, &course.Description)
-		if err != nil {
-			return nil, err
-		}
-		courses = append(courses, course)
-	}
-	if err := courseRows.Err(); err != nil {
-		return nil, err
-	}
-	return courses, nil
+	return rowsToCourses(courseRows)
 }

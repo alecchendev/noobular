@@ -156,8 +156,7 @@ func handleHomePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, 
 // Browse page
 
 func handleBrowsePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, loggedIn bool) error {
-	// Copied from teacher's course page
-	courses, err := ctx.dbClient.GetCourses(-1)
+	courses, err := ctx.dbClient.GetCourses()
 	if err != nil {
 		return err
 	}
