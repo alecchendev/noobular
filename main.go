@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"encoding/hex"
 	"fmt"
 	"log"
@@ -31,7 +32,7 @@ func main() {
 		log.Fatal("PUBLIC_URL must be a valid URL")
 	}
 	webAuthn, err := webauthn.New(&webauthn.Config{
-		RPDisplayName: "WebAuthn Demo",   // Display Name for your site
+		RPDisplayName: "Noobular",        // Display Name for your site
 		RPID:          urlUrl.Hostname(), // Generally the domain name for your site
 		RPOrigins:     []string{urlStr},  // The origin URL for WebAuthn requests
 	})
@@ -39,11 +40,15 @@ func main() {
 		log.Fatal(err)
 	}
 
+	tlsConfig := &tls.Config{}
+	certChainFilepath := os.Getenv("CERT_PATH")
+	privKeyFilepath := os.Getenv("PRIV_KEY_PATH")
+
 	port := 8080
 	dbClient := db.NewDbClient()
 	defer dbClient.Close()
 	renderer := internal.NewRenderer(".")
-	server := internal.NewServer(dbClient, renderer, webAuthn, jwtSecret, port)
+	server := internal.NewServer(dbClient, renderer, tlsConfig, webAuthn, jwtSecret, port)
 	fmt.Println("Listening on port", server.Addr)
-	log.Fatal(server.ListenAndServe())
+	log.Fatal(server.ListenAndServeTLS(certChainFilepath, privKeyFilepath))
 }

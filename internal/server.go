@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"crypto/tls"
 	"fmt"
 	"log"
 	"net/http"
@@ -11,11 +12,12 @@ import (
 	"noobular/internal/db"
 )
 
-func NewServer(dbClient *db.DbClient, renderer Renderer, webAuthn *webauthn.WebAuthn, jwtSecret []byte, port int) *http.Server {
+func NewServer(dbClient *db.DbClient, renderer Renderer, tlsConfig *tls.Config, webAuthn *webauthn.WebAuthn, jwtSecret []byte, port int) *http.Server {
 	router := initRouter(dbClient, renderer, webAuthn, jwtSecret)
 	return &http.Server{
 		Addr:    fmt.Sprintf(":%d", port),
 		Handler: router,
+		TLSConfig: tlsConfig,
 	}
 }
 

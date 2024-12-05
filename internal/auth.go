@@ -165,7 +165,7 @@ func CreateAuthCookie(jwtSecret []byte, userId int64) (http.Cookie, error) {
 		HttpOnly: true,                 // Not accessible to client side code
 		SameSite: http.SameSiteLaxMode, // Cannot send cookie to other domains
 		// TODO: make it easy to switch between local/prod
-		Secure: false, // HTTPS only, need to disable locally
+		Secure: true, // HTTPS only, need to disable locally
 		Path:   "/",
 	}, nil
 }
