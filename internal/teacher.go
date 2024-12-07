@@ -518,7 +518,7 @@ func handlePreviewModulePage(w http.ResponseWriter, r *http.Request, ctx Handler
 		uiBlocks[blockIdx] = uiBlock
 	}
 	uiModule := UiTakeModulePage{
-		Module:     NewUiModuleStudent(course.Id, moduleVersion, blockCount),
+		Module:     NewUiModuleStudent(course.Id, moduleVersion, blockCount, false, 0),
 		Blocks:     uiBlocks,
 		VisitIndex: blockCount,
 		Preview:    true,

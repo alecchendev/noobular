@@ -136,18 +136,20 @@ type UiModule struct {
 	Title       string
 	Description string
 	BlockCount  int
+	Completed   bool
+	Points      int
 }
 
 func NewUiModuleTeacher(courseId int, version db.ModuleVersion) UiModule {
-	return UiModule{version.ModuleId, courseId, version.Title, version.Description, 0}
+	return UiModule{version.ModuleId, courseId, version.Title, version.Description, 0, false, 0}
 }
 
-func NewUiModuleStudent(courseId int, version db.ModuleVersion, blockCount int) UiModule {
-	return UiModule{version.ModuleId, courseId, version.Title, version.Description, blockCount}
+func NewUiModuleStudent(courseId int, version db.ModuleVersion, blockCount int, completed bool, points int) UiModule {
+	return UiModule{version.ModuleId, courseId, version.Title, version.Description, blockCount, completed, points}
 }
 
 func EmptyModule() UiModule {
-	return UiModule{-1, -1, "", "", 0}
+	return UiModule{-1, -1, "", "", 0, false, 0}
 }
 
 func (m UiModule) ElementType() string {
@@ -311,6 +313,26 @@ type StudentCoursePageArgs struct {
 
 func (a StudentCoursePageArgs) HasCourse() bool {
 	return true
+}
+
+func (a StudentCoursePageArgs) HasNextModules() bool {
+	uncompletedModules := 0
+	for _, module := range a.Course.Modules {
+		if !module.Completed {
+			uncompletedModules++
+		}
+	}
+	return uncompletedModules > 0
+}
+
+func (a StudentCoursePageArgs) HasCompletedModules() bool {
+	completedModules := 0
+	for _, module := range a.Course.Modules {
+		if module.Completed {
+			completedModules++
+		}
+	}
+	return completedModules > 0
 }
 
 func (r *Renderer) RenderStudentPage(w http.ResponseWriter, args StudentPageArgs) error {

@@ -31,7 +31,7 @@
 .student-course-left, .student-course-right {
 	display: flex;
 	flex-direction: column;
-	gap: 1rem;
+	gap: 2.5rem;
 	margin: 0;
 	padding: 0;
 }
@@ -96,12 +96,29 @@
 }
 
 .total-points {
-	font-weight: bold;
 	font-size: 1.5rem;
 }
 
 .bold {
 	font-weight: bold;
+}
+
+.green {
+	/* dark green */
+	color: #1e854c;
+}
+
+.completed-modules-label {
+	font-weight: normal;
+	text-align: center;
+	margin-top: 0;
+}
+
+.next-modules, .completed-modules {
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+	padding: 0;
 }
 
 .module {
@@ -162,18 +179,40 @@
 				</div>
 				<div class="point-total border">
 					<p class="total-earned">Total earned:</p>
-					<p class="total-points">{{ .TotalPoints }} XP</p>
+					<p class="total-points bold">{{ .TotalPoints }} XP</p>
 				</div>
 			</div>
 		</div>
 		<div class="student-course-right">
+			{{ if .HasNextModules }}
+			<div class="next-modules">
 			{{ range $module := .Course.Modules }}
-			<a class="module-link" href="/student/course/{{$.Course.Id}}/module/{{$module.Id}}">
-			<div class="module border">
-				<h3 class="module-title">{{ $module.Title }}</h3>
-				<p class="module-xp">{{ $module.BlockCount }} XP</p>
+				{{ if not $module.Completed }}
+				<a class="module-link" href="/student/course/{{$.Course.Id}}/module/{{$module.Id}}">
+				<div class="module border">
+					<h3 class="module-title">{{ $module.Title }}</h3>
+					<p class="module-xp">{{ $module.BlockCount }} XP</p>
+				</div>
+				</a>
+				{{ end }}
+			{{ end }}
 			</div>
-			</a>
+			{{ end }}
+
+			{{ if .HasCompletedModules }}
+			<div class="completed-modules">
+			<p class="completed-modules-label">Completed</p>
+			{{ range $module := .Course.Modules }}
+				{{ if $module.Completed }}
+				<a class="module-link" href="/student/course/{{$.Course.Id}}/module/{{$module.Id}}">
+				<div class="module border">
+					<h3 class="module-title">{{ $module.Title }}</h3>
+					<p class="module-xp"><span class="green bold">{{ $module.Points}}</span>/{{ $module.BlockCount }} XP</p>
+				</div>
+				</a>
+				{{ end }}
+			{{ end }}
+			</div>
 			{{ end }}
 		</div>
 	</div>

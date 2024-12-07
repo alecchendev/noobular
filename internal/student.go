@@ -69,15 +69,18 @@ func handleStudentCoursePage(w http.ResponseWriter, r *http.Request, ctx Handler
 		if blockCount == 0 {
 			continue
 		}
-		uiModules = append(uiModules, NewUiModuleStudent(course.Id, moduleVersion, blockCount))
-
 		point, err := ctx.dbClient.GetPoint(user.Id, module.Id)
 		if err != nil && err != sql.ErrNoRows {
 			return err
 		}
+		pointCount := 0
 		if err == nil {
-			totalPoints += point.Count
+			pointCount = point.Count
 		}
+		totalPoints += pointCount
+		completed := visit.BlockIndex == blockCount
+
+		uiModules = append(uiModules, NewUiModuleStudent(course.Id, moduleVersion, blockCount, completed, pointCount))
 	}
 	return ctx.renderer.RenderStudentCoursePage(w, StudentCoursePageArgs{
 		Username:    user.Username,
@@ -137,7 +140,7 @@ func getModule(ctx HandlerContext, moduleId int, userId int64) (UiModule, db.Vis
 	if err != nil {
 		return UiModule{}, db.Visit{}, err
 	}
-	return NewUiModuleStudent(module.CourseId, moduleVersion, blockCount), visit, nil
+	return NewUiModuleStudent(module.CourseId, moduleVersion, blockCount, false, 0), visit, nil
 }
 
 func getBlock(ctx HandlerContext, moduleVersionId int64, blockIdx int, userId int64) (UiBlock, error) {
