@@ -321,3 +321,14 @@ func (c testClient) enrollCourseFail(courseId int) {
 	assert.NotEqual(c.t, 200, resp.StatusCode)
 }
 
+func studentCoursePageRoute(courseId int) string {
+	return fmt.Sprintf("/student/course/%d", courseId)
+}
+
+func takeModulePageRoute(courseId int, moduleId int) string {
+	return fmt.Sprintf("/student/course/%d/module/%d", courseId, moduleId)
+}
+
+func takeModulePieceRoute(courseId int, moduleId int, blockIdx int) string {
+	return fmt.Sprintf("/student/course/%d/module/%d/block/%d/piece", courseId, moduleId, blockIdx)
+}

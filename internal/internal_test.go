@@ -1,7 +1,6 @@
 package internal_test
 
 import (
-	"fmt"
 	"noobular/internal"
 	"noobular/internal/db"
 	"strings"
@@ -270,7 +269,7 @@ func TestStudentCoursePage(t *testing.T) {
 
 	client.enrollCourse(courseId)
 
-	body := client.getPageBody(fmt.Sprintf("/student/course/%d", courseId))
+	body := client.getPageBody(studentCoursePageRoute(courseId))
 	assert.Contains(t, body, course.Title)
 	for _, module := range modules {
 		assert.Equal(t, strings.Count(body, module.Title), 1)
@@ -278,4 +277,79 @@ func TestStudentCoursePage(t *testing.T) {
 
 	// If we enroll again in the same course it should not succeed
 	client.enrollCourseFail(courseId)
+}
+
+// Test module version, i.e. once someone has visited the module, then when you edit it
+// and they go back, it's still there
+func TestModuleVersioning(t *testing.T) {
+	ctx := startServer()
+	defer ctx.Close()
+
+	user := ctx.createUser()
+	client := newTestClient(t).login(user.Id)
+
+	// Create module with content
+	course, modules := sampleCreateCourseInput()
+	client.createCourse(course, modules)
+
+	courseId := 1
+	moduleId := 1
+
+	// Create one version
+	newModuleVersion1 := db.NewModuleVersion(2, moduleId, 1, "new title", "new description")
+	contentStr := "qcontent1"
+	question := newUiQuestionBuilder().
+			text("qname1").
+			choice("qchoice1", false).
+			choice("qchoice2", true).
+			explain("qexplanation1").
+			build()
+	blocks := []blockInput{
+		newContentBlockInput(contentStr),
+		newQuestionBlockInput(question),
+	}
+	client.editModule(courseId, newModuleVersion1, blocks)
+
+	// Visit
+	client.enrollCourse(courseId)
+	body := client.getPageBody(studentCoursePageRoute(courseId))
+	assert.Contains(t, body, takeModulePageRoute(courseId, moduleId))
+
+	// Take module initial page (first block = content)
+	body = client.getPageBody(takeModulePageRoute(courseId, moduleId))
+	assert.Contains(t, body, contentStr)
+	assert.NotContains(t, body, question.QuestionText)
+	assert.Contains(t, body, takeModulePieceRoute(courseId, moduleId, 1))
+
+	// Next piece (question)
+	body = client.getPageBody(takeModulePieceRoute(courseId, moduleId, 1))
+	assert.Contains(t, body, question.QuestionText)
+	assert.Contains(t, body, question.Choices[0].ChoiceText)
+	assert.Contains(t, body, question.Choices[1].ChoiceText)
+	assert.NotContains(t, body, question.Explanation.Content)
+
+	// TODO: Answer question + reveal explanation
+
+	// Edit
+	newModuleVersion2 := db.NewModuleVersion(3, moduleId, 2, "new title2", "new description2")
+	contentStr2 := "qcontent2"
+	question2 := newUiQuestionBuilder().
+			text("q2name1").
+			choice("q2choice1", false).
+			choice("q2choice2", true).
+			explain("q2explanation1").
+			build()
+	blocks2 := []blockInput{
+		newQuestionBlockInput(question2),
+		newContentBlockInput(contentStr2),
+	}
+	client.editModule(courseId, newModuleVersion2, blocks2)
+
+	// Visit again, and show old version
+	body = client.getPageBody(takeModulePageRoute(courseId, moduleId))
+	assert.Contains(t, body, contentStr)
+	assert.Contains(t, body, question.QuestionText)
+	assert.Contains(t, body, question.Choices[0].ChoiceText)
+	assert.Contains(t, body, question.Choices[1].ChoiceText)
+	assert.NotContains(t, body, question.Explanation.Content)
 }
