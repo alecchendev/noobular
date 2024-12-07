@@ -32,7 +32,7 @@ func handleTeacherCoursesPage(w http.ResponseWriter, r *http.Request, ctx Handle
 			if err != nil {
 				return err
 			}
-			uiModules = append(uiModules, NewUiModule(course.Id, moduleVersion))
+			uiModules = append(uiModules, NewUiModuleTeacher(course.Id, moduleVersion))
 		}
 		uiCourses[i] = NewUiCourse(course, uiModules)
 	}
@@ -132,7 +132,7 @@ func handleEditCoursePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 		if err != nil {
 			return err
 		}
-		uiModules = append(uiModules, NewUiModule(course.Id, moduleVersion))
+		uiModules = append(uiModules, NewUiModuleTeacher(course.Id, moduleVersion))
 	}
 	return ctx.renderer.RenderEditCoursePage(w, NewUiCourse(course, uiModules))
 }
@@ -518,9 +518,8 @@ func handlePreviewModulePage(w http.ResponseWriter, r *http.Request, ctx Handler
 		uiBlocks[blockIdx] = uiBlock
 	}
 	uiModule := UiTakeModulePage{
-		Module:     NewUiModule(course.Id, moduleVersion),
+		Module:     NewUiModuleStudent(course.Id, moduleVersion, blockCount),
 		Blocks:     uiBlocks,
-		BlockCount: blockCount,
 		VisitIndex: blockCount,
 		Preview:    true,
 	}

@@ -188,7 +188,7 @@ func handleBrowsePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 			if blockCount == 0 {
 				continue
 			}
-			uiModules = append(uiModules, NewUiModule(course.Id, moduleVersion))
+			uiModules = append(uiModules, NewUiModuleTeacher(course.Id, moduleVersion))
 		}
 		enrolled := false
 		if user != nil {

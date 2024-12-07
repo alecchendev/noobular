@@ -135,14 +135,19 @@ type UiModule struct {
 	CourseId    int
 	Title       string
 	Description string
+	BlockCount  int
 }
 
-func NewUiModule(courseId int, version db.ModuleVersion) UiModule {
-	return UiModule{version.ModuleId, courseId, version.Title, version.Description}
+func NewUiModuleTeacher(courseId int, version db.ModuleVersion) UiModule {
+	return UiModule{version.ModuleId, courseId, version.Title, version.Description, 0}
+}
+
+func NewUiModuleStudent(courseId int, version db.ModuleVersion, blockCount int) UiModule {
+	return UiModule{version.ModuleId, courseId, version.Title, version.Description, blockCount}
 }
 
 func EmptyModule() UiModule {
-	return UiModule{-1, -1, "", ""}
+	return UiModule{-1, -1, "", "", 0}
 }
 
 func (m UiModule) ElementType() string {
@@ -403,7 +408,6 @@ func (r *Renderer) RenderModuleEdited(w http.ResponseWriter) error {
 type UiTakeModulePage struct {
 	Module     UiModule
 	Blocks     []UiBlock
-	BlockCount int
 	VisitIndex int
 	Preview    bool
 }
@@ -416,7 +420,6 @@ func (u UiTakeModulePage) ModuleBlock(index int) UiTakeModule {
 	return UiTakeModule{
 		Module:     u.Module,
 		Block:      u.Blocks[index],
-		BlockCount: u.BlockCount,
 		VisitIndex: u.VisitIndex,
 		Preview:    u.Preview,
 	}
@@ -429,7 +432,6 @@ func (r *Renderer) RenderTakeModulePage(w http.ResponseWriter, module UiTakeModu
 type UiTakeModule struct {
 	Module     UiModule
 	Block      UiBlock
-	BlockCount int
 	VisitIndex int
 	Preview    bool
 }
@@ -440,7 +442,7 @@ func (u UiTakeModule) IsPage() bool {
 
 func (u UiTakeModule) ShowNextButton() bool {
 	return u.Block.BlockIndex == u.VisitIndex ||
-		(u.VisitIndex == u.BlockCount && u.Block.BlockIndex == u.BlockCount-1)
+		(u.VisitIndex == u.Module.BlockCount && u.Block.BlockIndex == u.Module.BlockCount-1)
 }
 
 // Renders just the content, i.e. the header + content, not the full page.

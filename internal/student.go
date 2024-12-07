@@ -58,7 +58,7 @@ func handleStudentCoursePage(w http.ResponseWriter, r *http.Request, ctx Handler
 		if blockCount == 0 {
 			continue
 		}
-		uiModules = append(uiModules, NewUiModule(course.Id, moduleVersion))
+		uiModules = append(uiModules, NewUiModuleStudent(course.Id, moduleVersion, blockCount))
 	}
 	return ctx.renderer.RenderStudentCoursePage(w, StudentCoursePageArgs{
 		Username: user.Username,
@@ -100,24 +100,24 @@ func parseTakeModuleRequest(r *http.Request) (takeModuleRequest, error) {
 	return takeModuleRequest{moduleId, blockIdx}, nil
 }
 
-func getModule(ctx HandlerContext, moduleId int, userId int64) (UiModule, db.Visit, int, error) {
+func getModule(ctx HandlerContext, moduleId int, userId int64) (UiModule, db.Visit, error) {
 	module, err := ctx.dbClient.GetModule(moduleId)
 	if err != nil {
-		return UiModule{}, db.Visit{}, 0, err
+		return UiModule{}, db.Visit{}, err
 	}
 	visit, err := ctx.dbClient.GetOrCreateVisit(userId, moduleId)
 	if err != nil {
-		return UiModule{}, db.Visit{}, 0, err
+		return UiModule{}, db.Visit{}, err
 	}
 	moduleVersion, err := ctx.dbClient.GetModuleVersion(visit.ModuleVersionId)
 	if err != nil {
-		return UiModule{}, db.Visit{}, 0, err
+		return UiModule{}, db.Visit{}, err
 	}
 	blockCount, err := ctx.dbClient.GetBlockCount(visit.ModuleVersionId)
 	if err != nil {
-		return UiModule{}, db.Visit{}, 0, err
+		return UiModule{}, db.Visit{}, err
 	}
-	return NewUiModule(module.CourseId, moduleVersion), visit, blockCount, nil
+	return NewUiModuleStudent(module.CourseId, moduleVersion, blockCount), visit, nil
 }
 
 func getBlock(ctx HandlerContext, moduleVersionId int64, blockIdx int, userId int64) (UiBlock, error) {
@@ -174,14 +174,14 @@ func handleTakeModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	if err != nil {
 		return err
 	}
-	module, visit, blockCount, err := getModule(ctx, moduleId, user.Id)
+	module, visit, err := getModule(ctx, moduleId, user.Id)
 	if err != nil {
 		return fmt.Errorf("Error getting module %d: %v", moduleId, err)
 	}
-	if visit.BlockIndex > blockCount {
-		return fmt.Errorf("Block index %d is out of bounds (>=%d) for module %d", visit.BlockIndex, blockCount, moduleId)
+	if visit.BlockIndex > module.BlockCount {
+		return fmt.Errorf("Block index %d is out of bounds (>=%d) for module %d", visit.BlockIndex, module.BlockCount, moduleId)
 	}
-	nBlocks := min(visit.BlockIndex+1, blockCount)
+	nBlocks := min(visit.BlockIndex+1, module.BlockCount)
 	uiBlocks := make([]UiBlock, nBlocks)
 	for blockIdx := 0; blockIdx < nBlocks; blockIdx++ {
 		uiBlock, err := getBlock(ctx, visit.ModuleVersionId, blockIdx, user.Id)
@@ -193,7 +193,6 @@ func handleTakeModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	uiModule := UiTakeModulePage{
 		Module:     module,
 		Blocks:     uiBlocks,
-		BlockCount: blockCount,
 		VisitIndex: visit.BlockIndex,
 		Preview:    false,
 	}
@@ -201,12 +200,12 @@ func handleTakeModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 }
 
 func getTakeModule(req takeModuleRequest, ctx HandlerContext, userId int64) (UiTakeModule, db.Visit, error) {
-	module, visit, blockCount, err := getModule(ctx, req.moduleId, userId)
+	module, visit, err := getModule(ctx, req.moduleId, userId)
 	if err != nil {
 		return UiTakeModule{}, db.Visit{}, err
 	}
-	if req.blockIdx >= blockCount {
-		return UiTakeModule{}, db.Visit{}, fmt.Errorf("Block index %d is out of bounds (>=%d) for module %d", req.blockIdx, blockCount, req.moduleId)
+	if req.blockIdx >= module.BlockCount {
+		return UiTakeModule{}, db.Visit{}, fmt.Errorf("Block index %d is out of bounds (>=%d) for module %d", req.blockIdx, module.BlockCount, req.moduleId)
 	}
 	if req.blockIdx > visit.BlockIndex+1 {
 		return UiTakeModule{}, db.Visit{}, fmt.Errorf("Block index %d is ahead of visit block index %d for module %d", req.blockIdx, visit.BlockIndex, req.moduleId)
@@ -218,7 +217,6 @@ func getTakeModule(req takeModuleRequest, ctx HandlerContext, userId int64) (UiT
 	return UiTakeModule{
 		Module:     module,
 		Block:      uiBlock,
-		BlockCount: blockCount,
 		VisitIndex: visit.BlockIndex,
 	}, visit, nil
 }

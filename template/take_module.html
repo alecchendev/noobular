@@ -114,7 +114,7 @@
 <div class="take-module-body">
 <div id="header">
 	<div class="progress-bar">
-		{{ range $i := NumRange .BlockCount }}
+		{{ range $i := NumRange .Module.BlockCount }}
 			<!-- TODO: make this traverse module -->
 			<button 
 				class="progress-bar-button"
@@ -233,7 +233,7 @@
 {{ end }}
 
 {{ define "next_button" }}
-{{ if eq (Increment .Block.BlockIndex) $.BlockCount }}
+{{ if eq (Increment .Block.BlockIndex) $.Module.BlockCount }}
 	{{ if .Preview }}
 	<a href="/teacher"><button id="submit-button">Back</button></a>
 	{{ else }}
