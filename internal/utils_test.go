@@ -114,10 +114,31 @@ func (c testClient) getPageBody(path string) string {
 	return bodyText(c.t, resp)
 }
 
+type titleDescInput struct {
+	Title string
+	Description string
+}
+
+func sampleCreateCourseInput() (titleDescInput, []titleDescInput) {
+	return titleDescInput{ "hello", "goodbye" }, []titleDescInput{
+		{ "module title1", "module description1" },
+		{ "module title2", "module description2" },
+	}
+}
+
 const createCourseRoute = "/teacher/course/create"
 
-func (c testClient) createCourse(course db.Course, modules []db.ModuleVersion) {
-	formData := createOrEditCourseForm(course, modules)
+func NewTestDbCourse(in titleDescInput) db.Course {
+	return db.NewCourse(-1, in.Title, in.Description)
+}
+
+func (c testClient) createCourse(course titleDescInput, modules []titleDescInput) {
+	dbCourse := NewTestDbCourse(course)
+	dbModules := make([]db.ModuleVersion, len(modules))
+	for i, module := range modules {
+		dbModules[i] = db.NewModuleVersion(-1, -1, 0, module.Title, module.Description)
+	}
+	formData := createOrEditCourseForm(dbCourse, dbModules)
 	resp := c.post(createCourseRoute, formData.Encode())
 	assert.Equal(c.t, 200, resp.StatusCode)
 }
@@ -257,11 +278,7 @@ func bodyText(t *testing.T, resp *http.Response) string {
 
 // Creates a test course with a module + edits the module to have content.
 func (c testClient) initTestCourse() (db.Course, []db.ModuleVersion, [][]blockInput) {
-	course := db.NewCourse(-1, "hello", "goodbye")
-	initModules := []db.ModuleVersion{
-		db.NewModuleVersion(-1, -1, 0, "module title1", "module description1"),
-		db.NewModuleVersion(-1, -1, 0, "module title2", "module description2"),
-	}
+	course, initModules := sampleCreateCourseInput()
 	c.createCourse(course, initModules)
 
 	courseId := 1
@@ -291,7 +308,7 @@ func (c testClient) initTestCourse() (db.Course, []db.ModuleVersion, [][]blockIn
 		c.editModule(courseId, module, blockInputs[i])
 	}
 
-	return course, newModules, blockInputs
+	return NewTestDbCourse(course), newModules, blockInputs
 }
 
 func (c testClient) enrollCourse(courseId int) {

@@ -52,12 +52,7 @@ func TestCreateCourse(t *testing.T) {
 	user := ctx.createUser()
 	client := newTestClient(t).login(user.Id)
 
-	course := db.NewCourse(-1, "hello", "goodbye")
-	modules := []db.ModuleVersion{
-		db.NewModuleVersion(-1, -1, 0, "module title1", "module description1"),
-		db.NewModuleVersion(-1, -1, 0, "module title2", "module description2"),
-	}
-
+	course, modules := sampleCreateCourseInput()
 	body := client.getPageBody("/teacher")
 	assert.Contains(t, body, createCourseRoute)
 	assert.NotContains(t, body, course.Title)
@@ -85,12 +80,7 @@ func TestEditCourse(t *testing.T) {
 	user := ctx.createUser()
 	client := newTestClient(t).login(user.Id)
 
-	course := db.NewCourse(-1, "hello", "goodbye")
-	modules := []db.ModuleVersion{
-		db.NewModuleVersion(-1, -1, 0, "module title1", "module description1"),
-		db.NewModuleVersion(-1, -1, 0, "module title2", "module description2"),
-	}
-
+	course, modules := sampleCreateCourseInput()
 	client.createCourse(course, modules)
 	courseId := 1
 
@@ -160,10 +150,7 @@ func TestNoDuplicateContent(t *testing.T) {
 	user := ctx.createUser()
 	client := newTestClient(t).login(user.Id)
 
-	course := db.NewCourse(-1, "hello", "goodbye")
-	modules := []db.ModuleVersion{
-		db.NewModuleVersion(-1, -1, 0, "module title1", "module description1"),
-	}
+	course, modules := sampleCreateCourseInput()
 	client.createCourse(course, modules)
 
 	courseId := 1
@@ -233,11 +220,8 @@ func TestDeleteModuleSharedContent(t *testing.T) {
 	client := newTestClient(t).login(user.Id)
 
 	// Create a course with a module with one unique content, and one shared content
-	course1 := db.NewCourse(-1, "hello", "goodbye")
-	modules1 := []db.ModuleVersion{
-		db.NewModuleVersion(-1, -1, 0, "module title1", "module description1"),
-	}
-	client.createCourse(course1, modules1)
+	course, modules := sampleCreateCourseInput()
+	client.createCourse(course, modules)
 
 	courseId1 := 1
 	moduleId1 := 1
@@ -252,11 +236,7 @@ func TestDeleteModuleSharedContent(t *testing.T) {
 	client.editModule(courseId1, newModuleVersion1, blocks)
 
 	// Create a course with a module with one shared content
-	course2 := db.NewCourse(-1, "hello", "goodbye")
-	modules2 := []db.ModuleVersion{
-		db.NewModuleVersion(-1, -1, 0, "module title1", "module description1"),
-	}
-	client.createCourse(course2, modules2)
+	client.createCourse(course, modules)
 
 	courseId2 := 2
 	moduleId2 := 2
