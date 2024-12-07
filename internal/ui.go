@@ -304,8 +304,9 @@ func (a StudentPageArgs) HasCourse() bool {
 }
 
 type StudentCoursePageArgs struct {
-	Username string
-	Course   UiCourse
+	Username    string
+	Course      UiCourse
+	TotalPoints int
 }
 
 func (a StudentCoursePageArgs) HasCourse() bool {

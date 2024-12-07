@@ -95,9 +95,22 @@ set block_index = ?
 where user_id = ? and module_version_id = ?;
 `
 
-func (c *DbClient) UpdateVisit(userId int64, moduleVersionId int64, blockIdx int) error {
-	_, err := c.db.Exec(updateVisitQuery, blockIdx, userId, moduleVersionId)
+func UpdateVisit(tx *sql.Tx, userId int64, moduleVersionId int64, blockIdx int) error {
+	_, err := tx.Exec(updateVisitQuery, blockIdx, userId, moduleVersionId)
 	return err
+}
+
+func (c *DbClient) UpdateVisit(userId int64, moduleVersionId int64, blockIdx int) error {
+	tx, err := c.db.Begin()
+	defer tx.Rollback()
+	if err != nil {
+		return err
+	}
+	err = UpdateVisit(tx, userId, moduleVersionId, blockIdx)
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 const deleteVisitsForModuleQuery = `

@@ -44,6 +44,22 @@ func InsertChoice(tx *sql.Tx, questionId int64, choiceText string, correct bool)
 	return Choice{int(choiceId), int(questionId), choiceText, correct}, nil
 }
 
+const getChoiceQuery = `
+select ch.id, ch.question_id, ch.choice_text, ch.correct
+from choices ch
+where ch.id = ?;
+`
+
+func (c *DbClient) GetChoice(choiceId int) (Choice, error) {
+	row := c.db.QueryRow(getChoiceQuery, choiceId)
+	choice := Choice{}
+	err := row.Scan(&choice.Id, &choice.QuestionId, &choice.ChoiceText, &choice.Correct)
+	if err != nil {
+		return Choice{}, err
+	}
+	return choice, nil
+}
+
 const getChoicesForQuestionQuery = `
 select ch.id, ch.question_id, ch.choice_text, ch.correct
 from choices ch

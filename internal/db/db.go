@@ -64,6 +64,7 @@ func initDb(db *sql.DB) {
 		createSessionTable,
 		createVisitTable,
 		createEnrollmentTable,
+		createPointTable,
 	}
 	for _, stmt := range stmts {
 		_, err := tx.Exec(stmt)

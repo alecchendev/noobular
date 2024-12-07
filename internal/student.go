@@ -2,6 +2,7 @@ package internal
 
 import (
 	"bytes"
+	"database/sql"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -46,8 +47,18 @@ func handleStudentCoursePage(w http.ResponseWriter, r *http.Request, ctx Handler
 		return err
 	}
 	uiModules := make([]UiModule, 0)
+	totalPoints := 0
 	for _, module := range modules {
-		moduleVersion, err := ctx.dbClient.GetLatestModuleVersion(module.Id)
+		visit, err := ctx.dbClient.GetVisit(user.Id, module.Id)
+		if err != nil && err != sql.ErrNoRows {
+			return err
+		}
+		var moduleVersion db.ModuleVersion
+		if err == sql.ErrNoRows {
+			moduleVersion, err = ctx.dbClient.GetLatestModuleVersion(module.Id)
+		} else {
+			moduleVersion, err = ctx.dbClient.GetModuleVersion(visit.ModuleVersionId)
+		}
 		if err != nil {
 			return err
 		}
@@ -59,10 +70,19 @@ func handleStudentCoursePage(w http.ResponseWriter, r *http.Request, ctx Handler
 			continue
 		}
 		uiModules = append(uiModules, NewUiModuleStudent(course.Id, moduleVersion, blockCount))
+
+		point, err := ctx.dbClient.GetPoint(user.Id, module.Id)
+		if err != nil && err != sql.ErrNoRows {
+			return err
+		}
+		if err == nil {
+			totalPoints += point.Count
+		}
 	}
 	return ctx.renderer.RenderStudentCoursePage(w, StudentCoursePageArgs{
-		Username: user.Username,
-		Course:   NewUiCourse(course, uiModules),
+		Username:    user.Username,
+		Course:      NewUiCourse(course, uiModules),
+		TotalPoints: totalPoints,
 	})
 }
 
@@ -291,7 +311,61 @@ func handleCompleteModule(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	if visit.BlockIndex < blockCount-1 {
 		return fmt.Errorf("Tried to complete module %d, but only at block index %d", moduleId, visit.BlockIndex)
 	}
-	err = ctx.dbClient.UpdateVisit(user.Id, visit.ModuleVersionId, blockCount)
+	if visit.BlockIndex == blockCount {
+		// Already completed, skip to redirect
+		w.Header().Add("HX-Redirect", fmt.Sprintf("/student/course/%d", courseId))
+		return nil
+	}
+
+	// Calculate points to award
+	blocks, err := ctx.dbClient.GetBlocks(visit.ModuleVersionId)
+	if err != nil {
+		return err
+	}
+	correctAnswers := 0
+	questionCount := 0
+	for _, block := range blocks {
+		if block.BlockType == db.QuestionBlockType {
+			questionCount += 1
+			question, err := ctx.dbClient.GetQuestionFromBlock(block.Id)
+			if err != nil {
+				return err
+			}
+			choiceId, err := ctx.dbClient.GetAnswer(user.Id, question.Id)
+			if err != nil {
+				return err
+			}
+			choice, err := ctx.dbClient.GetChoice(choiceId)
+			if err != nil {
+				return err
+			}
+			if choice.Correct {
+				correctAnswers += 1
+			}
+		}
+	}
+	pointCount := blockCount
+	if correctAnswers == questionCount {
+		// Bonus points for perfect score
+		pointCount += pointCount / 4
+	} else if correctAnswers == questionCount-1 {
+		// No penalty for one mistake
+	} else {
+		// Get points proportional to correct answers
+		pointCount = pointCount * correctAnswers / questionCount
+	}
+
+	tx, err := ctx.dbClient.Begin()
+	defer tx.Rollback()
+	err = db.UpdateVisit(tx, user.Id, visit.ModuleVersionId, blockCount)
+	if err != nil {
+		return err
+	}
+	_, err = db.InsertPoint(tx, user.Id, moduleId, pointCount)
+	if err != nil {
+		return err
+	}
+	err = tx.Commit()
 	if err != nil {
 		return err
 	}
