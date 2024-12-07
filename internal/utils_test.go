@@ -97,6 +97,10 @@ func (c testClient) put(path string, body string) *http.Response {
 	return c.request("PUT", path, body)
 }
 
+func (c testClient) delete(path string) *http.Response {
+	return c.request("DELETE", path, "")
+}
+
 func (c testClient) login(userId int64) testClient {
 	jwtSecret, _ := hex.DecodeString(testJwtSecretHex)
 	cookie, _ := internal.CreateAuthCookie(jwtSecret, userId, false)
@@ -143,6 +147,12 @@ func createOrEditCourseForm(course db.Course, modules []db.ModuleVersion) url.Va
 	}
 	return formData
 }
+
+func (c testClient) deleteModule(courseId, moduleId int) {
+	resp := c.delete(fmt.Sprintf("/teacher/course/%d/module/%d", courseId, moduleId))
+	assert.Equal(c.t, 200, resp.StatusCode)
+}
+
 type blockInput struct {
 	blockType db.BlockType
 	block interface{}

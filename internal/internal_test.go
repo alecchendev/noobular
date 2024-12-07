@@ -144,6 +144,10 @@ func TestEditModule(t *testing.T) {
 	}
 }
 
+// Test a couple things:
+// - If we need the same content for multiple blocks, we should only store it once
+// - If we make a new module version, we delete the old version's unique content
+//   (even if it's referenced multiple times), but keep the shared content
 func TestNoDuplicateContent(t *testing.T) {
 	ctx := startServer()
 	defer ctx.Close()
@@ -163,6 +167,7 @@ func TestNoDuplicateContent(t *testing.T) {
 	newModuleVersion := db.NewModuleVersion(2, moduleId, 1, "new title", "new description")
 	explanation := "qexplanation1"
 	contentStr := "qcontent1"
+	contentStr2 := "qcontent2" // Shared between blocks within version
 	question1 := newUiQuestionBuilder().
 		text("qname1").
 		choice("qchoice1", false).
@@ -170,8 +175,29 @@ func TestNoDuplicateContent(t *testing.T) {
 		choice("qchoice3", false).
 		explain(explanation).
 		build()
-	blocks := []blockInput{ newQuestionBlockInput(question1), newContentBlockInput(contentStr) }
+	question1_2 := newUiQuestionBuilder().
+		text("qname1").
+		choice("qchoice1", true).
+		explain(contentStr2).
+		build()
+	blocks := []blockInput{
+		newQuestionBlockInput(question1),
+		newQuestionBlockInput(question1_2),
+		newContentBlockInput(contentStr),
+		newContentBlockInput(contentStr2),
+	}
 	client.editModule(courseId, newModuleVersion, blocks)
+
+	// Assert contentStr2 is not duplicated (shared between explanation and content block)
+	{
+		content, err := ctx.db.GetAllContent()
+		assert.Nil(t, err)
+		assert.Len(t, content, 3)
+		contentStrings := []string{content[0].Content, content[1].Content, content[2].Content}
+		assert.Contains(t, contentStrings, explanation)
+		assert.Contains(t, contentStrings, contentStr)
+		assert.Contains(t, contentStrings, contentStr2)
+	}
 
 	newModuleVersion2 := db.NewModuleVersion(2, moduleId, 1, "new title2", "new description2")
 	question2 := newUiQuestionBuilder().
@@ -182,12 +208,69 @@ func TestNoDuplicateContent(t *testing.T) {
 	blocks2 := []blockInput{ newQuestionBlockInput(question2), newContentBlockInput(contentStr) }
 	client.editModule(courseId, newModuleVersion2, blocks2)
 
+	// Assert contentStr is not duplicated
+	// Assert contentStr2 is deleted
 	content, err := ctx.db.GetAllContent()
 	assert.Nil(t, err)
 	assert.Len(t, content, 2)
 	contentStrings := []string{content[0].Content, content[1].Content}
 	assert.Contains(t, contentStrings, explanation)
 	assert.Contains(t, contentStrings, contentStr)
+}
+
+// Test that if we delete a module, content unique to that module is deleted,
+// but content shared with other modules is not deleted
+func TestDeleteModuleSharedContent(t *testing.T) {
+	ctx := startServer()
+	defer ctx.Close()
+
+	user := ctx.createUser()
+	client := newTestClient(t).login(user.Id)
+
+	// Create a course with a module with one unique content, and one shared content
+	course1 := db.NewCourse(-1, "hello", "goodbye")
+	modules1 := []db.ModuleVersion{
+		db.NewModuleVersion(-1, -1, 0, "module title1", "module description1"),
+	}
+	client.createCourse(course1, modules1)
+
+	courseId1 := 1
+	moduleId1 := 1
+
+	newModuleVersion1 := db.NewModuleVersion(2, moduleId1, 1, "new title", "new description")
+	contentStr := "qcontent1"
+	contentStr2 := "qcontent2"
+	blocks := []blockInput{
+		newContentBlockInput(contentStr),
+		newContentBlockInput(contentStr2),
+	}
+	client.editModule(courseId1, newModuleVersion1, blocks)
+
+	// Create a course with a module with one shared content
+	course2 := db.NewCourse(-1, "hello", "goodbye")
+	modules2 := []db.ModuleVersion{
+		db.NewModuleVersion(-1, -1, 0, "module title1", "module description1"),
+	}
+	client.createCourse(course2, modules2)
+
+	courseId2 := 2
+	moduleId2 := 2
+
+	newModuleVersion2 := db.NewModuleVersion(2, moduleId2, 1, "new title", "new description")
+	blocks = []blockInput{
+		newContentBlockInput(contentStr),
+	}
+	client.editModule(courseId2, newModuleVersion2, blocks)
+
+	// Delete first courses module
+	client.deleteModule(courseId1, moduleId1)
+
+	// Assert shared content stays
+	// Assert unique content is deleted
+	content, err := ctx.db.GetAllContent()
+	assert.Nil(t, err)
+	assert.Len(t, content, 1)
+	assert.Contains(t, content[0].Content, contentStr)
 }
 
 func TestStudentCoursePage(t *testing.T) {

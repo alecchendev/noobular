@@ -122,3 +122,63 @@ func UpdateModuleVersionMetadata(tx *sql.Tx, moduleVersionId int64, title string
 	_, err := tx.Exec(updateModuleVersionMetadataQuery, title, description, moduleVersionId)
 	return err
 }
+
+// Desired behavior: only delete content if it's only referenced by this module version
+const deleteContentForModuleVersionQuery = `
+with module_version_block_ids as (
+	select b.id from blocks b
+	join module_versions mv on b.module_version_id = mv.id
+	where mv.module_id = ? and mv.version_number = ?
+),
+content_block_content_ids as (
+	select content_id from content_blocks where block_id in module_version_block_ids
+),
+explanation_content_ids as (
+	select content_id from explanations where question_id in (
+		select id from questions where block_id in module_version_block_ids
+	)
+),
+referenced_content_ids as (
+	select content_id from (
+		select * from content_block_content_ids
+		union
+		select * from explanation_content_ids
+	)
+),
+elsewhere_content_block_content_ids as (
+	select content_id from content_blocks where block_id not in module_version_block_ids
+),
+elsewhere_explanation_content_ids as (
+	select content_id from explanations where question_id in (
+		select id from questions where block_id not in module_version_block_ids
+	)
+),
+referenced_elsewhere_content_ids as (
+	select content_id from (
+		select * from elsewhere_content_block_content_ids
+		union
+		select * from elsewhere_explanation_content_ids
+	)
+),
+referenced_only_here_content_ids as (
+	select content_id from referenced_content_ids
+	except
+	select content_id from referenced_elsewhere_content_ids
+)
+delete from content
+where id in referenced_only_here_content_ids;
+`
+
+func DeleteContentForModuleVersion(tx *sql.Tx, moduleId int, versionNumber int64) error {
+	_, err := tx.Exec(deleteContentForModuleVersionQuery, moduleId, versionNumber)
+	return err
+}
+
+func DeleteModuleVersion(tx *sql.Tx, moduleId int, versionNumber int64) error {
+	err := DeleteContentForModuleVersion(tx, moduleId, versionNumber)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec("delete from module_versions where module_id = ? and version_number = ?;", moduleId, versionNumber)
+	return err
+}

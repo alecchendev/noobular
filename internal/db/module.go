@@ -89,21 +89,50 @@ func (c *DbClient) GetModules(courseId int) ([]Module, error) {
 	return modules, nil
 }
 
+// Desired behavior: only delete content if it's only referenced by this module
 const deleteContentForModuleQuery = `
 with module_block_ids as (
 	select b.id from blocks b
 	join module_versions mv on b.module_version_id = mv.id
 	where mv.module_id = ?
+),
+content_block_content_ids as (
+	select content_id from content_blocks where block_id in module_block_ids
+),
+explanation_content_ids as (
+	select content_id from explanations where question_id in (
+		select id from questions where block_id in module_block_ids
+	)
+),
+referenced_content_ids as (
+	select content_id from (
+		select * from content_block_content_ids
+		union
+		select * from explanation_content_ids
+	)
+),
+elsewhere_content_block_content_ids as (
+	select content_id from content_blocks where block_id not in module_block_ids
+),
+elsewhere_explanation_content_ids as (
+	select content_id from explanations where question_id in (
+		select id from questions where block_id not in module_block_ids
+	)
+),
+referenced_elsewhere_content_ids as (
+	select content_id from (
+		select * from elsewhere_content_block_content_ids
+		union
+		select * from elsewhere_explanation_content_ids
+	)
+),
+referenced_only_here_content_ids as (
+	select content_id from referenced_content_ids
+	except
+	select content_id from referenced_elsewhere_content_ids
 )
 delete from content
-where id in (
-    select content_id from content_blocks where block_id in module_block_ids
-)
-or id in (
-    select content_id from explanations where question_id in (
-        select id from questions where block_id in module_block_ids
-    )
-);
+where id in referenced_only_here_content_ids;
 `
 
 func DeleteContentForModule(tx *sql.Tx, moduleId int) error {

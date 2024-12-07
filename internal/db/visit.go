@@ -47,6 +47,23 @@ func InsertVisit(tx *sql.Tx, userId int64, moduleVersionId int64, blockIdx int) 
 	return NewVisit(id, userId, moduleVersionId, blockIdx), nil
 }
 
+const getVisitCountQuery = `
+select count(*)
+from visits v
+join module_versions mv on v.module_version_id = mv.id
+where mv.module_id = ? and mv.version_number = ?;
+`
+
+func GetVisitCount(tx *sql.Tx, moduleId int, versionNumber int64) (int, error) {
+	row := tx.QueryRow(getVisitCountQuery, moduleId, versionNumber)
+	var count int
+	err := row.Scan(&count)
+	if err != nil && err != sql.ErrNoRows {
+		return 0, err
+	}
+	return count, nil
+}
+
 const getVisitForModuleQuery = `
 select v.id, v.user_id, v.module_version_id, v.block_index
 from visits v

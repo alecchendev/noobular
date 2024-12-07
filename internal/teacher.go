@@ -476,6 +476,17 @@ func handleEditModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 			return fmt.Errorf("invalid block type: %s", blockType)
 		}
 	}
+	// Delete previous version if no one is pinned to it
+	visitCount, err := db.GetVisitCount(tx, req.moduleId, version.VersionNumber - 1)
+	if err != nil {
+		return err
+	}
+	if visitCount == 0 {
+		err = db.DeleteModuleVersion(tx, req.moduleId, version.VersionNumber - 1)
+		if err != nil {
+			return err
+		}
+	}
 	err = tx.Commit()
 	if err != nil {
 		return err
