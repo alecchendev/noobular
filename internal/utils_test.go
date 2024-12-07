@@ -31,7 +31,7 @@ func testServer(dbClient *db.DbClient) *http.Server {
 
 	port := 8080
 	renderer := internal.NewRenderer("..")
-	return internal.NewServer(dbClient, renderer, webAuthn, jwtSecret, port)
+	return internal.NewServer(dbClient, renderer, webAuthn, jwtSecret, port, internal.Local)
 }
 
 type testContext struct {
@@ -99,7 +99,7 @@ func (c testClient) put(path string, body string) *http.Response {
 
 func (c testClient) login(userId int64) testClient {
 	jwtSecret, _ := hex.DecodeString(testJwtSecretHex)
-	cookie, _ := internal.CreateAuthCookie(jwtSecret, userId)
+	cookie, _ := internal.CreateAuthCookie(jwtSecret, userId, false)
 	c.session_token = &cookie
 	return c
 }

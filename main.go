@@ -1,7 +1,6 @@
 package main
 
 import (
-	"crypto/tls"
 	"encoding/hex"
 	"fmt"
 	"log"
@@ -15,6 +14,9 @@ import (
 )
 
 func main() {
+	envStr := os.Getenv("ENVIRONMENT")
+	env := internal.Environment(envStr)
+
 	jwtSecretHex := os.Getenv("JWT_SECRET")
 	if jwtSecretHex == "" {
 		log.Fatal("JWT_SECRET must be set")
@@ -40,7 +42,6 @@ func main() {
 		log.Fatal(err)
 	}
 
-	tlsConfig := &tls.Config{}
 	certChainFilepath := os.Getenv("CERT_PATH")
 	privKeyFilepath := os.Getenv("PRIV_KEY_PATH")
 
@@ -48,7 +49,14 @@ func main() {
 	dbClient := db.NewDbClient()
 	defer dbClient.Close()
 	renderer := internal.NewRenderer(".")
-	server := internal.NewServer(dbClient, renderer, tlsConfig, webAuthn, jwtSecret, port)
+	server := internal.NewServer(dbClient, renderer, webAuthn, jwtSecret, port, env)
 	fmt.Println("Listening on port", server.Addr)
-	log.Fatal(server.ListenAndServeTLS(certChainFilepath, privKeyFilepath))
+
+	if env == internal.Local {
+		log.Fatal(server.ListenAndServe())
+	} else if env == internal.Production {
+		log.Fatal(server.ListenAndServeTLS(certChainFilepath, privKeyFilepath))
+	} else {
+		log.Fatal("ENVIRONMENT must be either 'local' or 'production'")
+	}
 }

@@ -1,12 +1,12 @@
 package internal
 
 import (
+	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
-	"time"
 	"net/http"
-	"encoding/json"
-	"database/sql"
+	"time"
 
 	"github.com/go-webauthn/webauthn/webauthn"
 
@@ -93,7 +93,7 @@ func handleSigninPage(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 // Log out
 
 func handleLogout(w http.ResponseWriter, r *http.Request, ctx HandlerContext, _ bool) error {
-	cookie, err := CreateAuthCookie(ctx.jwtSecret, 0)
+	cookie, err := CreateAuthCookie(ctx.jwtSecret, 0, ctx.env == Production)
 	if err != nil {
 		return err
 	}
@@ -102,7 +102,6 @@ func handleLogout(w http.ResponseWriter, r *http.Request, ctx HandlerContext, _ 
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 	return nil
 }
-
 
 // Helpers
 
@@ -152,7 +151,7 @@ func SaveSessionAndReturnOpts(w http.ResponseWriter, ctx HandlerContext, webAuth
 	return err
 }
 
-func CreateAuthCookie(jwtSecret []byte, userId int64) (http.Cookie, error) {
+func CreateAuthCookie(jwtSecret []byte, userId int64, httpsOnly bool) (http.Cookie, error) {
 	expiry := time.Now().Add(24 * time.Hour)
 	token, err := CreateJwt(jwtSecret, userId, expiry)
 	if err != nil {
@@ -164,9 +163,8 @@ func CreateAuthCookie(jwtSecret []byte, userId int64) (http.Cookie, error) {
 		Expires:  expiry,
 		HttpOnly: true,                 // Not accessible to client side code
 		SameSite: http.SameSiteLaxMode, // Cannot send cookie to other domains
-		// TODO: make it easy to switch between local/prod
-		Secure: true, // HTTPS only, need to disable locally
-		Path:   "/",
+		Secure:   httpsOnly,    // HTTPS only, need to disable locally
+		Path:     "/",
 	}, nil
 }
 
@@ -227,7 +225,7 @@ func handleSignupFinish(w http.ResponseWriter, r *http.Request, ctx HandlerConte
 	// TODO: add credentials to cookie and verify in auth middleware
 	// This would mean even if attacker gets our server's jwt secret
 	// they'd need to also compromise the user's webauthn device to forge a token
-	cookie, err := CreateAuthCookie(ctx.jwtSecret, webAuthnUser.User.Id)
+	cookie, err := CreateAuthCookie(ctx.jwtSecret, webAuthnUser.User.Id, ctx.env == Production)
 	http.SetCookie(w, &cookie)
 	return nil
 }
@@ -292,7 +290,7 @@ func handleSigninFinish(w http.ResponseWriter, r *http.Request, ctx HandlerConte
 	}
 	log.Printf("User %s logged in with credentials", username)
 
-	cookie, err := CreateAuthCookie(ctx.jwtSecret, webAuthnUser.User.Id)
+	cookie, err := CreateAuthCookie(ctx.jwtSecret, webAuthnUser.User.Id, ctx.env == Production)
 	http.SetCookie(w, &cookie)
 	return nil
 }

@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"crypto/tls"
 	"fmt"
 	"log"
 	"net/http"
@@ -12,18 +11,24 @@ import (
 	"noobular/internal/db"
 )
 
-func NewServer(dbClient *db.DbClient, renderer Renderer, tlsConfig *tls.Config, webAuthn *webauthn.WebAuthn, jwtSecret []byte, port int) *http.Server {
-	router := initRouter(dbClient, renderer, webAuthn, jwtSecret)
+type Environment string
+
+const (
+	Local       Environment = "local"
+	Production  Environment = "production"
+)
+
+func NewServer(dbClient *db.DbClient, renderer Renderer, webAuthn *webauthn.WebAuthn, jwtSecret []byte, port int, env Environment) *http.Server {
+	router := initRouter(dbClient, renderer, webAuthn, jwtSecret, env)
 	return &http.Server{
-		Addr:    fmt.Sprintf(":%d", port),
-		Handler: router,
-		TLSConfig: tlsConfig,
+		Addr:      fmt.Sprintf(":%d", port),
+		Handler:   router,
 	}
 }
 
-func initRouter(dbClient *db.DbClient, renderer Renderer, webAuthn *webauthn.WebAuthn, jwtSecret []byte) *http.ServeMux {
+func initRouter(dbClient *db.DbClient, renderer Renderer, webAuthn *webauthn.WebAuthn, jwtSecret []byte, env Environment) *http.ServeMux {
 	newHandlerMap := func() HandlerMap {
-		return NewHandlerMap(dbClient, renderer, jwtSecret)
+		return NewHandlerMap(dbClient, renderer, jwtSecret, env)
 	}
 	mux := http.NewServeMux()
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
@@ -63,13 +68,14 @@ func initRouter(dbClient *db.DbClient, renderer Renderer, webAuthn *webauthn.Web
 
 // Things that all handlers should have access to
 type HandlerContext struct {
-	dbClient     *db.DbClient
-	renderer     Renderer
-	jwtSecret    []byte
+	dbClient  *db.DbClient
+	renderer  Renderer
+	jwtSecret []byte
+	env       Environment
 }
 
-func NewHandlerContext(dbClient *db.DbClient, renderer Renderer, jwtSecret []byte) HandlerContext {
-	return HandlerContext{dbClient, renderer, jwtSecret}
+func NewHandlerContext(dbClient *db.DbClient, renderer Renderer, jwtSecret []byte, env Environment) HandlerContext {
+	return HandlerContext{dbClient, renderer, jwtSecret, env}
 }
 
 // Basically an http.Handle but returns an error
@@ -113,11 +119,11 @@ func (hm HandlerMap) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func NewHandlerMap(dbClient *db.DbClient, renderer Renderer, jwtSecret []byte) HandlerMap {
+func NewHandlerMap(dbClient *db.DbClient, renderer Renderer, jwtSecret []byte, env Environment) HandlerMap {
 	return HandlerMap{
 		handlers:        make(map[string]HandlerMapHandler),
-		ctx:             NewHandlerContext(dbClient, renderer, jwtSecret),
-		reloadTemplates: true,
+		ctx:             NewHandlerContext(dbClient, renderer, jwtSecret, env),
+		reloadTemplates: env == Local,
 	}
 }
 
