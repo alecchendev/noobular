@@ -289,3 +289,8 @@ func (c testClient) enrollCourse(courseId int) {
 	assert.Equal(c.t, 200, resp.StatusCode)
 }
 
+func (c testClient) enrollCourseFail(courseId int) {
+	resp := c.post(fmt.Sprintf("/student/course/%d", courseId), "")
+	assert.NotEqual(c.t, 200, resp.StatusCode)
+}
+

@@ -106,7 +106,11 @@ html {
 				<a class="edit-course-link" href="/teacher/course/{{$course.Id}}/edit">Edit</a>
 				{{ template "delete_course_link" $course }}
 				{{ else if $.LoggedIn }}
-				{{ template "take_course_link" $course }}
+					{{ if $course.Enrolled }}
+					<p>Enrolled</p>
+					{{ else }}
+					{{ template "take_course_link" $course }}
+					{{ end }}
 				{{ else }}
 				{{ end }}
 			</div>

@@ -34,7 +34,7 @@ func handleTeacherCoursesPage(w http.ResponseWriter, r *http.Request, ctx Handle
 			}
 			uiModules = append(uiModules, NewUiModule(course.Id, moduleVersion))
 		}
-		uiCourses[i] = UiCourse{course.Id, course.Title, course.Description, uiModules}
+		uiCourses[i] = NewUiCourse(course, uiModules)
 	}
 	return ctx.renderer.RenderTeacherCoursePage(w, uiCourses, newCourseId)
 }
@@ -134,7 +134,7 @@ func handleEditCoursePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 		}
 		uiModules = append(uiModules, NewUiModule(course.Id, moduleVersion))
 	}
-	return ctx.renderer.RenderEditCoursePage(w, UiCourse{course.Id, course.Title, course.Description, uiModules})
+	return ctx.renderer.RenderEditCoursePage(w, NewUiCourse(course, uiModules))
 }
 
 type editCourseRequest struct {

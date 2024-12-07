@@ -51,11 +51,21 @@ func authRequiredHandler(handler UserHandler) HandlerMapHandler {
 	}
 }
 
-func authOptionalHandler(handler AnyoneHandler) HandlerMapHandler {
+func authOptionalHandler(handler OptionalUserHandler) HandlerMapHandler {
 	return func(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
-		_, err := checkCookie(r, ctx.jwtSecret)
+		userId, err := checkCookie(r, ctx.jwtSecret)
 		loggedIn := err == nil
-		return handler(w, r, ctx, loggedIn)
+		if loggedIn {
+			user, err := ctx.dbClient.GetUser(userId)
+			if err != nil {
+				log.Println("Error getting user:", err)
+				return handler(w, r, ctx, nil)
+			} else {
+				return handler(w, r, ctx, &user)
+			}
+		} else {
+			return handler(w, r, ctx, nil)
+		}
 	}
 }
 
@@ -92,7 +102,7 @@ func handleSigninPage(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 
 // Log out
 
-func handleLogout(w http.ResponseWriter, r *http.Request, ctx HandlerContext, _ bool) error {
+func handleLogout(w http.ResponseWriter, r *http.Request, ctx HandlerContext, _ *db.User) error {
 	cookie, err := CreateAuthCookie(ctx.jwtSecret, 0, ctx.env == Production)
 	if err != nil {
 		return err

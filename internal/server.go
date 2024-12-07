@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"net/http"
@@ -149,21 +150,21 @@ func (hm HandlerMap) Delete(handler HandlerMapHandler) HandlerMap {
 
 type UserHandler func(http.ResponseWriter, *http.Request, HandlerContext, db.User) error
 
-type AnyoneHandler func(http.ResponseWriter, *http.Request, HandlerContext, bool) error
+type OptionalUserHandler func(http.ResponseWriter, *http.Request, HandlerContext, *db.User) error
 
 // Home page
 
-func handleHomePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, loggedIn bool) error {
+func handleHomePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user *db.User) error {
 	if r.URL.Path != "/" {
 		// TODO: We should return 404 here
 		return fmt.Errorf("Not found")
 	}
-	return ctx.renderer.RenderHomePage(w, loggedIn)
+	return ctx.renderer.RenderHomePage(w, user != nil)
 }
 
 // Browse page
 
-func handleBrowsePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, loggedIn bool) error {
+func handleBrowsePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user *db.User) error {
 	courses, err := ctx.dbClient.GetCourses()
 	if err != nil {
 		return err
@@ -189,7 +190,15 @@ func handleBrowsePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 			}
 			uiModules = append(uiModules, NewUiModule(course.Id, moduleVersion))
 		}
-		uiCourses[i] = NewUiCourse(course, uiModules)
+		enrolled := false
+		if user != nil {
+			_, err = ctx.dbClient.GetEnrollment(user.Id, course.Id)
+			if err != nil && err != sql.ErrNoRows {
+				return err
+			}
+			enrolled = err != sql.ErrNoRows
+		}
+		uiCourses[i] = NewUiCourseEnrolled(course, uiModules, enrolled)
 	}
-	return ctx.renderer.RenderBrowsePage(w, uiCourses, loggedIn)
+	return ctx.renderer.RenderBrowsePage(w, uiCourses, user != nil)
 }

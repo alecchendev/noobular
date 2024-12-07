@@ -11,7 +11,8 @@ create table if not exists enrollments (
 	user_id integer not null,
 	course_id integer not null,
 	foreign key (user_id) references users(id) on delete cascade,
-	foreign key (course_id) references courses(id) on delete cascade
+	foreign key (course_id) references courses(id) on delete cascade,
+	constraint enrollment_ unique(user_id, course_id) on conflict fail
 );
 `
 

@@ -23,6 +23,8 @@ func TestBasicNav(t *testing.T) {
 		{"browse", "/browse", "Courses"},
 	}
 
+	user := ctx.createUser()
+
 	test := func(t *testing.T, path string, expectedText string) {
 		client := newTestClient(t)
 		body := client.getPageBody(path)
@@ -30,7 +32,7 @@ func TestBasicNav(t *testing.T) {
 		assert.Contains(t, body, "Signin")
 		assert.Contains(t, body, "Signup")
 
-		client = client.login(1)
+		client = client.login(user.Id)
 		body = client.getPageBody(path)
 		assert.Contains(t, body, expectedText)
 		assert.Contains(t, body, "Logout")
@@ -205,4 +207,7 @@ func TestStudentCoursePage(t *testing.T) {
 	for _, module := range modules {
 		assert.Equal(t, strings.Count(body, module.Title), 1)
 	}
+
+	// If we enroll again in the same course it should not succeed
+	client.enrollCourseFail(courseId)
 }

@@ -115,14 +115,19 @@ type UiCourse struct {
 	Title       string
 	Description string
 	Modules     []UiModule
+	Enrolled    bool
 }
 
 func NewUiCourse(c db.Course, modules []UiModule) UiCourse {
-	return UiCourse{c.Id, c.Title, c.Description, modules}
+	return NewUiCourseEnrolled(c, modules, false)
+}
+
+func NewUiCourseEnrolled(c db.Course, modules []UiModule, enrolled bool) UiCourse {
+	return UiCourse{c.Id, c.Title, c.Description, modules, enrolled}
 }
 
 func EmptyCourse() UiCourse {
-	return UiCourse{-1, "", "", []UiModule{}}
+	return UiCourse{-1, "", "", []UiModule{}, false}
 }
 
 type UiModule struct {
