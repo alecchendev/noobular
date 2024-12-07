@@ -190,6 +190,9 @@ func handleBrowsePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 			}
 			uiModules = append(uiModules, NewUiModuleTeacher(course.Id, moduleVersion))
 		}
+		if len(uiModules) == 0 {
+			continue
+		}
 		enrolled := false
 		if user != nil {
 			_, err = ctx.dbClient.GetEnrollment(user.Id, course.Id)

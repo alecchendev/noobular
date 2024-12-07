@@ -71,6 +71,11 @@ func TestCreateCourse(t *testing.T) {
 		assert.Contains(t, body, module.Title)
 		assert.Contains(t, body, module.Description)
 	}
+
+	// Assert it doesn't show up because it doesn't have any modules with blocks
+	body = client.getPageBody("/browse")
+	assert.NotContains(t, body, course.Title)
+	assert.NotContains(t, body, course.Description)
 }
 
 func TestEditCourse(t *testing.T) {
