@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestBasicNav(t *testing.T) {
-	ctx := startServer()
+func TestNav(t *testing.T) {
+	ctx := startServer(t)
 	defer ctx.Close()
 
 	tests := []struct {
@@ -45,7 +45,7 @@ func TestBasicNav(t *testing.T) {
 }
 
 func TestCreateCourse(t *testing.T) {
-	ctx := startServer()
+	ctx := startServer(t)
 	defer ctx.Close()
 
 	user := ctx.createUser()
@@ -73,7 +73,7 @@ func TestCreateCourse(t *testing.T) {
 }
 
 func TestEditCourse(t *testing.T) {
-	ctx := startServer()
+	ctx := startServer(t)
 	defer ctx.Close()
 
 	user := ctx.createUser()
@@ -105,7 +105,7 @@ func TestEditCourse(t *testing.T) {
 }
 
 func TestEditModule(t *testing.T) {
-	ctx := startServer()
+	ctx := startServer(t)
 	defer ctx.Close()
 
 	user := ctx.createUser()
@@ -138,12 +138,53 @@ func TestEditModule(t *testing.T) {
 	}
 }
 
+func TestAuth(t *testing.T) {
+	ctx := startServer(t)
+	defer ctx.Close()
+
+	user1 := ctx.createUser()
+	client1 := newTestClient(t).login(user1.Id)
+
+	user2 := ctx.createUser()
+	client2 := newTestClient(t).login(user2.Id)
+
+	course, modules, _ := client1.initTestCourse()
+
+	body := client1.getPageBody("/teacher")
+	assert.Contains(t, body, course.Title)
+	assert.Contains(t, body, modules[0].Title)
+	assert.Contains(t, body, editCoursePageRoute(course.Id))
+	assert.Contains(t, body, editModulePageRoute(course.Id, modules[0].ModuleId))
+
+	body = client2.getPageBody("/teacher")
+	assert.NotContains(t, body, course.Title)
+	assert.NotContains(t, body, modules[0].Title)
+	assert.NotContains(t, body, editCoursePageRoute(course.Id))
+	assert.NotContains(t, body, editModulePageRoute(course.Id, modules[0].ModuleId))
+
+	newCourse := db.NewCourse(course.Id, "new title", "new description")
+	newModules := []db.ModuleVersion{
+		db.NewModuleVersion(-1, 1, 1, "new module title1", "new module description1"),
+		db.NewModuleVersion(-1, 2, 1, "new module title2", "new module description2"),
+	}
+	client2.editCourseFail(newCourse, newModules)
+
+	newModuleVersion1 := db.NewModuleVersion(2, modules[0].ModuleId, 1, "new title", "new description")
+	contentStr := "qcontent1"
+	contentStr2 := "qcontent2"
+	blocks := []blockInput{
+		newContentBlockInput(contentStr),
+		newContentBlockInput(contentStr2),
+	}
+	client2.editModuleFail(course.Id, newModuleVersion1, blocks)
+}
+
 // Test a couple things:
 // - If we need the same content for multiple blocks, we should only store it once
 // - If we make a new module version, we delete the old version's unique content
 //   (even if it's referenced multiple times), but keep the shared content
 func TestNoDuplicateContent(t *testing.T) {
-	ctx := startServer()
+	ctx := startServer(t)
 	defer ctx.Close()
 
 	user := ctx.createUser()
@@ -212,7 +253,7 @@ func TestNoDuplicateContent(t *testing.T) {
 // Test that if we delete a module, content unique to that module is deleted,
 // but content shared with other modules is not deleted
 func TestDeleteModuleSharedContent(t *testing.T) {
-	ctx := startServer()
+	ctx := startServer(t)
 	defer ctx.Close()
 
 	user := ctx.createUser()
@@ -258,7 +299,7 @@ func TestDeleteModuleSharedContent(t *testing.T) {
 }
 
 func TestStudentCoursePage(t *testing.T) {
-	ctx := startServer()
+	ctx := startServer(t)
 	defer ctx.Close()
 
 	user := ctx.createUser()
@@ -282,7 +323,7 @@ func TestStudentCoursePage(t *testing.T) {
 // Test module version, i.e. once someone has visited the module, then when you edit it
 // and they go back, it's still there
 func TestModuleVersioning(t *testing.T) {
-	ctx := startServer()
+	ctx := startServer(t)
 	defer ctx.Close()
 
 	user := ctx.createUser()

@@ -182,6 +182,10 @@ func handleEditCourse(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 	if err != nil {
 		return err
 	}
+	_, err = ctx.dbClient.GetTeacherCourse(req.courseId, user.Id)
+	if err != nil {
+		return err
+	}
 	tx, err := ctx.dbClient.Begin()
 	defer tx.Rollback()
 	course, err := db.EditCourse(tx, user.Id, req.courseId, req.title, req.description)

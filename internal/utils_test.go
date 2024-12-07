@@ -38,6 +38,7 @@ type testContext struct {
 	t *testing.T
 	server *http.Server
 	db *db.DbClient
+	userCount int
 }
 
 func (c testContext) Close() {
@@ -45,13 +46,15 @@ func (c testContext) Close() {
 	c.db.Close()
 }
 
-func (c testContext) createUser() db.User {
-	user, err := c.db.CreateUser("test")
+func (c *testContext) createUser() db.User {
+	fmt.Println("Creating user:", c.userCount)
+	user, err := c.db.CreateUser("test" + strconv.Itoa(c.userCount))
 	assert.Nil(c.t, err)
+	c.userCount += 1
 	return user
 }
 
-func startServer() testContext {
+func startServer(t *testing.T) testContext {
 	dbClient := db.NewMemoryDbClient()
 	server := testServer(dbClient)
 	ready := make(chan struct{})
@@ -60,7 +63,7 @@ func startServer() testContext {
 		server.ListenAndServe()
 	}()
 	<-ready
-	return testContext{server: server, db: dbClient}
+	return testContext{t: t, server: server, db: dbClient, userCount: 0}
 }
 
 type testClient struct {
@@ -157,6 +160,12 @@ func (c testClient) editCourse(course db.Course, modules []db.ModuleVersion) {
 	assert.Equal(c.t, 200, resp.StatusCode)
 }
 
+func (c testClient) editCourseFail(course db.Course, modules []db.ModuleVersion) {
+	formData := createOrEditCourseForm(course, modules)
+	resp := c.put(editCourseRoute(course.Id), formData.Encode())
+	assert.NotEqual(c.t, 200, resp.StatusCode)
+}
+
 func createOrEditCourseForm(course db.Course, modules []db.ModuleVersion) url.Values {
 	formData := url.Values{}
 	formData.Set("title", course.Title)
@@ -242,6 +251,12 @@ func (c testClient) editModule(courseId int, moduleVersion db.ModuleVersion, blo
 	assert.Equal(c.t, 200, resp.StatusCode)
 }
 
+func (c testClient) editModuleFail(courseId int, moduleVersion db.ModuleVersion, blocks []blockInput) {
+	formData := editModuleForm(moduleVersion, blocks)
+	resp := c.put(editModuleRoute(courseId, moduleVersion.ModuleId), formData.Encode())
+	assert.NotEqual(c.t, 200, resp.StatusCode)
+}
+
 func editModuleForm(moduleVersion db.ModuleVersion, blocks []blockInput) url.Values {
 	formData := url.Values{}
 	formData.Set("title", moduleVersion.Title)
@@ -308,7 +323,7 @@ func (c testClient) initTestCourse() (db.Course, []db.ModuleVersion, [][]blockIn
 		c.editModule(courseId, module, blockInputs[i])
 	}
 
-	return NewTestDbCourse(course), newModules, blockInputs
+	return db.NewCourse(1, course.Title, course.Description), newModules, blockInputs
 }
 
 func (c testClient) enrollCourse(courseId int) {
