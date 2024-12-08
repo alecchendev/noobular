@@ -11,6 +11,23 @@ import (
 
 // Courses page
 
+func getTeacherUiModulesForCourse(ctx HandlerContext, courseId int) ([]UiModule, error) {
+	modules, err := ctx.dbClient.GetModules(courseId)
+	if err != nil {
+		return []UiModule{}, err
+	}
+	uiModules := make([]UiModule, 0)
+	for _, module := range modules {
+		moduleVersion, err := ctx.dbClient.GetLatestModuleVersion(module.Id)
+		if err != nil {
+			return []UiModule{}, err
+		}
+		uiModules = append(uiModules, NewUiModuleTeacher(courseId, moduleVersion))
+	}
+	return uiModules, nil
+}
+
+
 func handleTeacherCoursesPage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
 	newCourseId, err := strconv.Atoi(r.URL.Query().Get("newCourse"))
 	if err != nil {
@@ -22,17 +39,9 @@ func handleTeacherCoursesPage(w http.ResponseWriter, r *http.Request, ctx Handle
 	}
 	uiCourses := make([]UiCourse, len(courses))
 	for i, course := range courses {
-		modules, err := ctx.dbClient.GetModules(course.Id)
+		uiModules, err := getTeacherUiModulesForCourse(ctx, course.Id)
 		if err != nil {
 			return err
-		}
-		uiModules := make([]UiModule, 0)
-		for _, module := range modules {
-			moduleVersion, err := ctx.dbClient.GetLatestModuleVersion(module.Id)
-			if err != nil {
-				return err
-			}
-			uiModules = append(uiModules, NewUiModuleTeacher(course.Id, moduleVersion))
 		}
 		uiCourses[i] = NewUiCourse(course, uiModules)
 	}
@@ -122,17 +131,9 @@ func handleEditCoursePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	if err != nil {
 		return err
 	}
-	modules, err := ctx.dbClient.GetModules(course.Id)
+	uiModules, err := getTeacherUiModulesForCourse(ctx, course.Id)
 	if err != nil {
 		return err
-	}
-	uiModules := make([]UiModule, 0)
-	for _, module := range modules {
-		moduleVersion, err := ctx.dbClient.GetLatestModuleVersion(module.Id)
-		if err != nil {
-			return err
-		}
-		uiModules = append(uiModules, NewUiModuleTeacher(course.Id, moduleVersion))
 	}
 	return ctx.renderer.RenderEditCoursePage(w, NewUiCourse(course, uiModules))
 }
