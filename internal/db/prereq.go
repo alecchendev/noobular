@@ -11,7 +11,7 @@ create table if not exists prereqs (
 	prereq_module_id integer not null,
 	foreign key (module_id) references modules(id) on delete cascade,
 	foreign key (prereq_module_id) references modules(id) on delete cascade,
-	constraint prereq_ unique(module_id, prereq_module_id) on conflict fail
+	constraint prereq_ unique(module_id, prereq_module_id) on conflict ignore
 );
 `
 
@@ -66,4 +66,14 @@ func (c *DbClient) GetPrereqs(moduleId int) ([]Prereq, error) {
 		prereqs = append(prereqs, NewPrereq(id, moduleId, prereqModuleId))
 	}
 	return prereqs, nil
+}
+
+const deletePrereqQuery = `
+delete from prereqs
+where module_id = ? and prereq_module_id = ?;
+`
+
+func DeletePrereq(tx *sql.Tx, moduleId int, prereqModuleId int) error {
+	_, err := tx.Exec(deletePrereqQuery, moduleId, prereqModuleId)
+	return err
 }

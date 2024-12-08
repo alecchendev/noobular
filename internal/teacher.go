@@ -626,3 +626,73 @@ func handlePrereqForm(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 	}
 	return ctx.renderer.RenderPrereqForm(w, UiPrereqForm{uiModule, uiPrereqs})
 }
+
+type prereqRequest struct {
+	courseId  int
+	moduleId  int
+	prereqModuleIds map[int]bool
+}
+
+func parsePrereqRequest(r *http.Request) (prereqRequest, error) {
+	courseId, err := strconv.Atoi(r.PathValue("courseId"))
+	if err != nil {
+		return prereqRequest{}, err
+	}
+	moduleId, err := strconv.Atoi(r.PathValue("moduleId"))
+	if err != nil {
+		return prereqRequest{}, err
+	}
+	err = r.ParseForm()
+	if err != nil {
+		return prereqRequest{}, err
+	}
+	prereqModuleIds := make(map[int]bool)
+	for _, prereqModuleIdStr := range r.Form["prereqs[]"] {
+		prereqModuleId, err := strconv.Atoi(prereqModuleIdStr)
+		if err != nil {
+			return prereqRequest{}, err
+		}
+		prereqModuleIds[prereqModuleId] = true
+	}
+	return prereqRequest{courseId, moduleId, prereqModuleIds}, nil
+}
+
+
+func handleEditPrereqs(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
+	req, err := parsePrereqRequest(r)
+	if err != nil {
+		return err
+	}
+	_, err = ctx.dbClient.GetTeacherCourse(req.courseId, user.Id)
+	if err != nil {
+		return err
+	}
+	moduleVersion, err := ctx.dbClient.GetLatestModuleVersion(req.moduleId)
+	if err != nil {
+		return err
+	}
+	tx, err := ctx.dbClient.Begin()
+	defer tx.Rollback()
+	if err != nil {
+		return err
+	}
+	modules, err := ctx.dbClient.GetModules(req.courseId)
+	if err != nil {
+		return err
+	}
+	for _, prereqModule := range modules {
+		if _, ok := req.prereqModuleIds[prereqModule.Id]; ok {
+			_, err = db.InsertPrereq(tx, req.moduleId, prereqModule.Id)
+		} else {
+			err = db.DeletePrereq(tx, req.moduleId, prereqModule.Id)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	err = tx.Commit()
+	if err != nil {
+		return err
+	}
+	return ctx.renderer.RenderPrereqEditedResponse(w, NewUiModuleTeacher(req.courseId, moduleVersion))
+}

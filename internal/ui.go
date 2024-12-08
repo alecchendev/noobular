@@ -456,6 +456,10 @@ func (r *Renderer) RenderPrereqForm(w http.ResponseWriter, prereqForm UiPrereqFo
 	return r.templates["prereq.html"].ExecuteTemplate(w, "prereq_form", prereqForm)
 }
 
+func (r *Renderer) RenderPrereqEditedResponse(w http.ResponseWriter, module UiModule) error {
+	return r.templates["prereq.html"].ExecuteTemplate(w, "edit_prereq_response", module)
+}
+
 type UiTakeModulePage struct {
 	Module     UiModule
 	Blocks     []UiBlock
