@@ -17,6 +17,8 @@ html, body {
 
 textarea, input {
 	border: none;
+	margin-left: 0;
+	padding-left: 0;
 }
 
 textarea:selected, input:selected{
