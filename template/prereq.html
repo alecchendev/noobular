@@ -4,26 +4,42 @@
 .form {
 	display: flex;
 	justify-content: space-between;
-	gap: 0.5rem;
-}
-
-.modules {
-	width: 100%;
-	border: 1px solid #e0e0e0;
-	height: 50vh;
-	overflow-y: auto;
-
-	display: flex;
-	flex-direction: column;
 	flex-wrap: wrap;
 }
 
-input[type="radio"] {
+.modules {
+	border: 1px solid #e0e0e0;
+}
+
+.prereq-container {
+}
+
+.modules, .prereq-container {
+	width: 49%;
+	overflow-y: auto;
+	height: 50vh;
+
+	display: flex;
+	flex-direction: column;
+}
+
+.prereqs {
+	/* .prereq-container - button */
+	height: calc(50vh - 1rem - 50px);
+	overflow-y: auto;
+	border: 1px solid #e0e0e0;
+}
+
+.module-button {
 	display: none;
 }
 
+.module-button:checked + label {
+	background-color: #e0e0e0;
+}
+
 .module-label {
-	width: 50%;
+	width: 100%;
 }
 
 .prereq-label {
@@ -41,74 +57,87 @@ input[type="radio"] {
 	align-items: center;
 }
 
-.module-label:hover {
+.module-label:hover, .prereq-label:hover {
 	background-color: #f8f9fa;
 }
 
-.module-prereqs {
-	width: 50%;
-	height: 100%;
-	display: flex;
-	flex-direction: column;
-	display: none;
-	order: 1;
+#submit-button {
+    margin: auto;
+    margin-top: 1rem;
+    width: 100%;
+    height: 50px;
+    background-color: #0077cc;
+    color: white;
+    border: none;
+    border-radius: 10px;
 }
 
-input[type="radio"]:checked + .module-label {
-	background-color: #f8f9fa;
+#submit-button:hover {
+    background-color: #0055aa;
 }
 
-input[type="radio"]:checked + .module-label + .module-prereqs {
-	display: flex;
+@media (max-width: 700px) {
+	.form {
+		flex-direction: column;
+	}
+
+	.modules, .prereq-container {
+		width: 100%;
+	}
+
+	.module-label {
+		width: 100%;
+	}
+
+	#submit-button {
+		width: 100%;
+	}
 }
+
 {{ end }}
 
 {{ define "content" }}
 <h1>Edit Prerequisites</h1>
 <!-- TODO: path? Courses > Course > Prereqs -->
+<p>Note: you must save changes for each course. Switching between modules will discard unsaved changes.</p>
 <div class="form">
 	<div class="modules">
-		<input type="radio" id="mod1" name="modules" checked="checked">
-		<label for="mod1" class="module-label">Module 1</label>
-		<div class="module-prereqs">
-			<label for="mod1-2" class="prereq-label">
-				<input type="checkbox" id="mod1-2" name="prereqs">
-				Module 1.2
-			</label>
-
-			<label for="mod1-3" class="prereq-label">
-				<input type="checkbox" id="mod1-3" name="prereqs">
-				Module 1.3
-			</label>
-		</div>
-
-		<input type="radio" id="mod2" name="modules">
-		<label for="mod2" class="module-label">Module 2</label>
-		<div class="module-prereqs">
-			<label for="mod2-1" class="prereq-label">
-				<input type="checkbox" id="mod2-1" name="prereqs">
-				Module 2.1
-			</label>
-
-			<label for="mod2-3" class="prereq-label">
-				<input type="checkbox" id="mod2-3" name="prereqs">
-				Module 2.3
-			</label>
-		</div>
-
-		<input type="radio" id="mod3" name="modules">
-		<label for="mod3" class="module-label">Module 3</label>
-		<div class="module-prereqs">
-			<label for="mod3-3" class="prereq-label">
-				<input type="checkbox" id="mod3-3" name="prereqs">
-				Module 3.1
-			</label>
-
-			<label for="mod3-2" class="prereq-label">
-				<input type="checkbox" id="mod3-2" name="prereqs">
-				Module 3.2
-			</label>
-		</div>
+		{{ range $i := NumRange (len .Course.Modules) }}
+		{{ $module := index $.Course.Modules $i }}
+		<input type="radio" id="mod-{{ $module.Id }}" class="module-button" name="modules" {{ if eq $i 0 }}checked="checked"{{ end }}>
+		<label
+			for="mod-{{ $module.Id }}"
+			class="module-label"
+			hx-get="/teacher/course/{{ $.Course.Id }}/module/{{ $module.Id }}/prereq"
+			hx-target="#prereqs"
+			hx-swap="outerHTML"
+		>
+			{{ $module.Title }}
+		</label>
+		{{ end }}
 	</div>
+	{{ template "prereq_form" .PrereqForm }}
 </div>
+{{ end }}
+
+{{ define "prereq_form" }}
+<form
+	id="prereqs"
+	class="prereq-container"
+	hx-put="/teacher/course/{{ .Module.CourseId }}/module/{{ .Module.Id }}/prereq"
+	hx-target="#prereqs"
+	hx-swap="outerHTML"
+>
+	<div class="prereqs">
+		{{ range $prereq := .Prereqs }}
+		{{ if not (eq $prereq.Module.Id $.Module.Id) }}
+		<label for="mod-{{ .Module.Id }}-{{ $prereq.Module.Id }}" class="prereq-label">
+			<input type="checkbox" id="mod-{{ .Module.Id }}-{{ $prereq.Module.Id }}" name="prereqs" {{ if $prereq.Prereq }}checked="checked"{{ end }}>
+			{{ $prereq.Module.Title }}
+		</label>
+		{{ end }}
+		{{ end }}
+	</div>
+	<button id="submit-button">Save</button>
+</form>
 {{ end }}

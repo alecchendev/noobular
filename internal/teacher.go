@@ -482,12 +482,12 @@ func handleEditModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 		}
 	}
 	// Delete previous version if no one is pinned to it
-	visitCount, err := db.GetVisitCount(tx, req.moduleId, version.VersionNumber - 1)
+	visitCount, err := db.GetVisitCount(tx, req.moduleId, version.VersionNumber-1)
 	if err != nil {
 		return err
 	}
 	if visitCount == 0 {
-		err = db.DeleteModuleVersion(tx, req.moduleId, version.VersionNumber - 1)
+		err = db.DeleteModuleVersion(tx, req.moduleId, version.VersionNumber-1)
 		if err != nil {
 			return err
 		}
@@ -544,14 +544,85 @@ func handlePreviewModulePage(w http.ResponseWriter, r *http.Request, ctx Handler
 
 // Prereqs page
 
+func uiPrereqsFromModules(modules []db.Module, uiModuleMap map[int]UiModule, prereqs []db.Prereq) []UiPrereq {
+	uiPrereqs := make([]UiPrereq, 0)
+	prereqSet := make(map[int]bool)
+	for _, prereq := range prereqs {
+		prereqSet[prereq.PrereqModuleId] = true
+	}
+	for _, module := range modules {
+		uiPrereqs = append(uiPrereqs, NewUiPrereq(uiModuleMap[module.Id], prereqSet[module.Id]))
+	}
+	return uiPrereqs
+}
+
 func handlePrereqPage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
 	courseId, err := strconv.Atoi(r.PathValue("courseId"))
 	if err != nil {
 		return err
 	}
-	_, err = ctx.dbClient.GetTeacherCourse(courseId, user.Id)
+	course, err := ctx.dbClient.GetTeacherCourse(courseId, user.Id)
 	if err != nil {
 		return err
 	}
-	return ctx.renderer.RenderPrereqPage(w)
+	modules, err := ctx.dbClient.GetModules(course.Id)
+	if err != nil {
+		return err
+	}
+	uiModules, err := getTeacherUiModulesForCourse(ctx, course.Id)
+	if err != nil {
+		return err
+	}
+	uiModuleMap := make(map[int]UiModule)
+	for _, uiModule := range uiModules {
+		uiModuleMap[uiModule.Id] = uiModule
+	}
+	var uiModule UiModule
+	uiPrereqs := make([]UiPrereq, 0)
+	if len(modules) > 0 {
+		uiModule = uiModuleMap[modules[0].Id]
+		prereqs, err := ctx.dbClient.GetPrereqs(modules[0].Id)
+		if err != nil {
+			return err
+		}
+		uiPrereqs = uiPrereqsFromModules(modules, uiModuleMap, prereqs)
+	}
+	return ctx.renderer.RenderPrereqPage(w, UiPrereqPageArgs{ NewUiCourse(course, uiModules), UiPrereqForm{uiModule, uiPrereqs} })
+}
+
+func handlePrereqForm(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
+	courseId, err := strconv.Atoi(r.PathValue("courseId"))
+	if err != nil {
+		return err
+	}
+	course, err := ctx.dbClient.GetTeacherCourse(courseId, user.Id)
+	if err != nil {
+		return err
+	}
+	moduleId, err := strconv.Atoi(r.PathValue("moduleId"))
+	if err != nil {
+		return err
+	}
+	modules, err := ctx.dbClient.GetModules(course.Id)
+	if err != nil {
+		return err
+	}
+	uiModules, err := getTeacherUiModulesForCourse(ctx, course.Id)
+	if err != nil {
+		return err
+	}
+	uiModuleMap := make(map[int]UiModule)
+	for _, uiModule := range uiModules {
+		uiModuleMap[uiModule.Id] = uiModule
+	}
+	prereqs, err := ctx.dbClient.GetPrereqs(moduleId)
+	if err != nil {
+		return err
+	}
+	uiPrereqs := uiPrereqsFromModules(modules, uiModuleMap, prereqs)
+	uiModule, ok := uiModuleMap[moduleId]
+	if !ok {
+		return fmt.Errorf("Module %d not found", moduleId)
+	}
+	return ctx.renderer.RenderPrereqForm(w, UiPrereqForm{uiModule, uiPrereqs})
 }

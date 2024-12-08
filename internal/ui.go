@@ -429,9 +429,31 @@ func (r *Renderer) RenderModuleEdited(w http.ResponseWriter) error {
 	return r.templates["edit_module.html"].ExecuteTemplate(w, "edited_module_response.html", nil)
 }
 
-func (r *Renderer) RenderPrereqPage(w http.ResponseWriter) error {
-	// TODO: pass the stuff in
-	return r.templates["prereq.html"].ExecuteTemplate(w, "page.html", NewPageArgs(true, true, nil))
+type UiPrereqPageArgs struct {
+	Course  UiCourse
+	PrereqForm UiPrereqForm
+}
+
+type UiPrereq struct {
+	Module UiModule
+	Prereq bool
+}
+
+func NewUiPrereq(m UiModule, prereq bool) UiPrereq {
+	return UiPrereq{m, prereq}
+}
+
+func (r *Renderer) RenderPrereqPage(w http.ResponseWriter, pageArgs UiPrereqPageArgs) error {
+	return r.templates["prereq.html"].ExecuteTemplate(w, "page.html", NewPageArgs(true, true, pageArgs))
+}
+
+type UiPrereqForm struct {
+	Module  UiModule
+	Prereqs []UiPrereq
+}
+
+func (r *Renderer) RenderPrereqForm(w http.ResponseWriter, prereqForm UiPrereqForm) error {
+	return r.templates["prereq.html"].ExecuteTemplate(w, "prereq_form", prereqForm)
 }
 
 type UiTakeModulePage struct {
