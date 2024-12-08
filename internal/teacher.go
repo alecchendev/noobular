@@ -540,3 +540,17 @@ func handlePreviewModulePage(w http.ResponseWriter, r *http.Request, ctx Handler
 	}
 	return ctx.renderer.RenderTakeModulePage(w, uiModule)
 }
+
+// Prereqs page
+
+func handlePrereqPage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
+	courseId, err := strconv.Atoi(r.PathValue("courseId"))
+	if err != nil {
+		return err
+	}
+	_, err = ctx.dbClient.GetTeacherCourse(courseId, user.Id)
+	if err != nil {
+		return err
+	}
+	return ctx.renderer.RenderPrereqPage(w)
+}

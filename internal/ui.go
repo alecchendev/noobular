@@ -57,6 +57,7 @@ func initTemplates(projectRootDir string) map[string]*template.Template {
 		"courses.html":       {"page.html", "courses.html"},
 		"create_course.html": {"page.html", "create_course.html", "add_element.html", "created_course_response.html", "edited_course_response.html"},
 		"edit_module.html":   {"page.html", "edit_module.html", "add_element.html", "edited_module_response.html"},
+		"prereq.html":        {"page.html", "prereq.html"},
 		"take_module.html":   {"page.html", "take_module.html"},
 		"add_element.html":   {"add_element.html"},
 	}
@@ -426,6 +427,11 @@ func (r *Renderer) RenderEditModulePage(w http.ResponseWriter, module UiEditModu
 
 func (r *Renderer) RenderModuleEdited(w http.ResponseWriter) error {
 	return r.templates["edit_module.html"].ExecuteTemplate(w, "edited_module_response.html", nil)
+}
+
+func (r *Renderer) RenderPrereqPage(w http.ResponseWriter) error {
+	// TODO: pass the stuff in
+	return r.templates["prereq.html"].ExecuteTemplate(w, "page.html", NewPageArgs(true, true, nil))
 }
 
 type UiTakeModulePage struct {

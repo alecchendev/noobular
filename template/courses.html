@@ -103,6 +103,7 @@ html {
 			<h2 class="course-title">{{.Title}}</h2>
 			<div class="delete-edit-container">
 				{{ if $.Editor }}
+				<a class="edit-course-link" href="/teacher/course/{{$course.Id}}/prereq">Prereqs</a>
 				<a class="edit-course-link" href="/teacher/course/{{$course.Id}}/edit">Edit</a>
 				{{ template "delete_course_link" $course }}
 				{{ else if $.LoggedIn }}
