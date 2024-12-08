@@ -1,5 +1,8 @@
 {{ define "title" }}Edit Prerequisites{{ end }}
 {{ define "style" }}
+.path {
+	margin-top: 1rem;
+}
 
 .form {
 	display: flex;
@@ -101,8 +104,10 @@
 {{ end }}
 
 {{ define "content" }}
+<div class="path">
+	<a href="/teacher">Courses</a> &gt; <a href="/teacher/course/{{ .Course.Id }}/edit">{{ .Course.Title }}</a> &gt; Prerequisites
+</div>
 <h1>Edit Prerequisites</h1>
-<!-- TODO: path? Courses > Course > Prereqs -->
 <p>Note: you must save changes for each module. Switching between modules will discard unsaved changes.</p>
 <div class="form">
 	<div class="modules">
