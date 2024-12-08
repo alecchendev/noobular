@@ -162,7 +162,7 @@ func SaveSessionAndReturnOpts(w http.ResponseWriter, ctx HandlerContext, webAuth
 }
 
 func CreateAuthCookie(jwtSecret []byte, userId int64, httpsOnly bool) (http.Cookie, error) {
-	expiry := time.Now().Add(24 * time.Hour)
+	expiry := time.Now().Add(2 * 7 * 24 * time.Hour) // 2 weeks
 	token, err := CreateJwt(jwtSecret, userId, expiry)
 	if err != nil {
 		return http.Cookie{}, err
