@@ -123,9 +123,14 @@ type titleDescInput struct {
 }
 
 func sampleCreateCourseInput() (titleDescInput, []titleDescInput) {
-	return titleDescInput{ "hello", "goodbye" }, []titleDescInput{
-		{ "module title1", "module description1" },
-		{ "module title2", "module description2" },
+	return sampleCreateCourseInputN(1)
+}
+
+func sampleCreateCourseInputN(n int) (titleDescInput, []titleDescInput) {
+	nStr := strconv.Itoa(n)
+	return titleDescInput{ "hello" + nStr, "goodbye" + nStr }, []titleDescInput{
+		{ "c" + nStr + "_module title1", "c" + nStr + "_module description1" },
+		{ "c" + nStr + "_module title2", "c" + nStr + "_module description2" },
 	}
 }
 

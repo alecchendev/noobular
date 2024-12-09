@@ -70,6 +70,8 @@ func TestCreateCourse(t *testing.T) {
 	body = client.getPageBody("/browse")
 	assert.NotContains(t, body, course.Title)
 	assert.NotContains(t, body, course.Description)
+	assert.NotContains(t, body, "Course created")
+	assert.NotContains(t, body, "Modules")
 }
 
 func TestEditCourse(t *testing.T) {
@@ -111,7 +113,7 @@ func TestEditModule(t *testing.T) {
 	user := ctx.createUser()
 	client := newTestClient(t).login(user.Id)
 
-	_, modules, blockInputs := client.initTestCourse()
+	course, modules, blockInputs := client.initTestCourse()
 	courseId := 1
 
 	// Check that if we revisit the edit module page
@@ -136,6 +138,20 @@ func TestEditModule(t *testing.T) {
 			}
 		}
 	}
+
+	modules = append(modules, db.NewModuleVersion(-1, -1, 1, "new module title3", "new module description3"))
+	client.editCourse(course, modules)
+
+	// Course + modules should show up in browse page now that module has blocks
+	body := client.getPageBody("/browse")
+	assert.Contains(t, body, course.Title)
+	assert.Contains(t, body, course.Description)
+	for _, module := range modules[:len(modules)-1] {
+		assert.Contains(t, body, module.Title)
+		assert.Contains(t, body, module.Description)
+	}
+	assert.NotContains(t, body, modules[len(modules)-1].Title)
+	assert.NotContains(t, body, modules[len(modules)-1].Description)
 }
 
 func TestAuth(t *testing.T) {

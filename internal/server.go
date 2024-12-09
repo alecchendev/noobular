@@ -171,8 +171,8 @@ func handleBrowsePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 	if err != nil {
 		return err
 	}
-	uiCourses := make([]UiCourse, len(courses))
-	for i, course := range courses {
+	uiCourses := make([]UiCourse, 0)
+	for _, course := range courses {
 		modules, err := ctx.dbClient.GetModules(course.Id)
 		if err != nil {
 			return err
@@ -203,7 +203,7 @@ func handleBrowsePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 			}
 			enrolled = err != sql.ErrNoRows
 		}
-		uiCourses[i] = NewUiCourseEnrolled(course, uiModules, enrolled)
+		uiCourses = append(uiCourses, NewUiCourseEnrolled(course, uiModules, enrolled))
 	}
 	return ctx.renderer.RenderBrowsePage(w, uiCourses, user != nil)
 }
