@@ -657,6 +657,19 @@ func parsePrereqRequest(r *http.Request) (prereqRequest, error) {
 	return prereqRequest{courseId, moduleId, prereqModuleIds}, nil
 }
 
+func hasCycle(edges map[int][]int, curr int, visited map[int]bool) bool {
+	if _, ok := visited[curr]; ok {
+		return true
+	}
+	visited[curr] = true
+	for _, next := range edges[curr] {
+		if hasCycle(edges, next, visited) {
+			return true
+		}
+	}
+	delete(visited, curr)
+	return false
+}
 
 func handleEditPrereqs(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
 	req, err := parsePrereqRequest(r)
@@ -671,12 +684,34 @@ func handleEditPrereqs(w http.ResponseWriter, r *http.Request, ctx HandlerContex
 	if err != nil {
 		return err
 	}
-	tx, err := ctx.dbClient.Begin()
-	defer tx.Rollback()
+	modules, err := ctx.dbClient.GetModules(req.courseId)
 	if err != nil {
 		return err
 	}
-	modules, err := ctx.dbClient.GetModules(req.courseId)
+
+	// Detect cycles using other existing prereqs
+	edges := make(map[int][]int) // prereqid -> modules
+	for prereqModuleId := range req.prereqModuleIds {
+		edges[prereqModuleId] = append(edges[prereqModuleId], req.moduleId)
+	}
+	for _, module := range modules {
+		if module.Id == req.moduleId {
+			continue
+		}
+		prereqs, err := ctx.dbClient.GetPrereqs(module.Id)
+		if err != nil {
+			return err
+		}
+		for _, prereq := range prereqs {
+			edges[prereq.PrereqModuleId] = append(edges[prereq.PrereqModuleId], module.Id)
+		}
+	}
+	if hasCycle(edges, req.moduleId, make(map[int]bool)) {
+		return fmt.Errorf("Cannot create cycle in prereqs")
+	}
+
+	tx, err := ctx.dbClient.Begin()
+	defer tx.Rollback()
 	if err != nil {
 		return err
 	}
