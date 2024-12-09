@@ -46,12 +46,16 @@ func handleStudentCoursePage(w http.ResponseWriter, r *http.Request, ctx Handler
 	if err != nil {
 		return err
 	}
-	uiModules := make([]UiModule, 0)
-	totalPoints := 0
+	visitMap := make(map[int]db.Visit) // moduleId -> visit
+	versionMap := make(map[int]db.ModuleVersion) // moduleId -> module version
+	blockCountMap := make(map[int]int) // moduleId -> block count
 	for _, module := range modules {
 		visit, err := ctx.dbClient.GetVisit(user.Id, module.Id)
 		if err != nil && err != sql.ErrNoRows {
 			return err
+		}
+		if err == nil {
+			visitMap[module.Id] = visit
 		}
 		var moduleVersion db.ModuleVersion
 		if err == sql.ErrNoRows {
@@ -62,10 +66,36 @@ func handleStudentCoursePage(w http.ResponseWriter, r *http.Request, ctx Handler
 		if err != nil {
 			return err
 		}
+		versionMap[module.Id] = moduleVersion
 		blockCount, err := ctx.dbClient.GetBlockCount(moduleVersion.Id)
 		if err != nil {
 			return err
 		}
+		blockCountMap[module.Id] = blockCount
+	}
+
+	uiModules := make([]UiModule, 0)
+	totalPoints := 0
+	for _, module := range modules {
+		prereqs, err := ctx.dbClient.GetPrereqs(module.Id)
+		if err != nil {
+			return err
+		}
+		completedAllPrereqs := true
+		for _, prereq := range prereqs {
+			visit, ok := visitMap[prereq.PrereqModuleId]
+			if !ok || visit.BlockIndex != blockCountMap[prereq.PrereqModuleId] {
+				completedAllPrereqs = false
+				break
+			}
+		}
+		if !completedAllPrereqs {
+			continue
+		}
+
+		visit, _ := visitMap[module.Id]
+		moduleVersion, _ := versionMap[module.Id]
+		blockCount := blockCountMap[module.Id]
 		if blockCount == 0 {
 			continue
 		}
