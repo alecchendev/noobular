@@ -5,6 +5,7 @@ import (
 	"math/rand/v2"
 	"net/http"
 	"strings"
+	"time"
 
 	"noobular/internal/db"
 )
@@ -138,19 +139,20 @@ type UiModule struct {
 	Description string
 	BlockCount  int
 	Completed   bool
+	CompletedAt time.Time
 	Points      int
 }
 
 func NewUiModuleTeacher(courseId int, version db.ModuleVersion) UiModule {
-	return UiModule{version.ModuleId, courseId, version.Title, version.Description, 0, false, 0}
+	return UiModule{version.ModuleId, courseId, version.Title, version.Description, 0, false, time.Now(), 0}
 }
 
-func NewUiModuleStudent(courseId int, version db.ModuleVersion, blockCount int, completed bool, points int) UiModule {
-	return UiModule{version.ModuleId, courseId, version.Title, version.Description, blockCount, completed, points}
+func NewUiModuleStudent(courseId int, version db.ModuleVersion, blockCount int, completed bool, completedAt time.Time, points int) UiModule {
+	return UiModule{version.ModuleId, courseId, version.Title, version.Description, blockCount, completed, completedAt, points}
 }
 
 func EmptyModule() UiModule {
-	return UiModule{-1, -1, "", "", 0, false, 0}
+	return UiModule{-1, -1, "", "", 0, false, time.Now(), 0}
 }
 
 func (m UiModule) ElementType() string {

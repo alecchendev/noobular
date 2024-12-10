@@ -5,8 +5,11 @@ import (
 	"database/sql"
 	"fmt"
 	"html/template"
+	"log"
 	"net/http"
+	"sort"
 	"strconv"
+	"time"
 
 	"github.com/yuin/goldmark"
 
@@ -90,6 +93,7 @@ func handleStudentCoursePage(w http.ResponseWriter, r *http.Request, ctx Handler
 			}
 		}
 		if !completedAllPrereqs {
+			log.Printf("Skipping module because not all prereqs are completed: %d", module.Id)
 			continue
 		}
 
@@ -97,6 +101,7 @@ func handleStudentCoursePage(w http.ResponseWriter, r *http.Request, ctx Handler
 		moduleVersion, _ := versionMap[module.Id]
 		blockCount := blockCountMap[module.Id]
 		if blockCount == 0 {
+			log.Printf("Skipping module because it has no blocks: %d %s", module.Id, moduleVersion.Title)
 			continue
 		}
 		point, err := ctx.dbClient.GetPoint(user.Id, module.Id)
@@ -110,8 +115,13 @@ func handleStudentCoursePage(w http.ResponseWriter, r *http.Request, ctx Handler
 		totalPoints += pointCount
 		completed := visit.BlockIndex == blockCount
 
-		uiModules = append(uiModules, NewUiModuleStudent(course.Id, moduleVersion, blockCount, completed, pointCount))
+		uiModules = append(uiModules, NewUiModuleStudent(course.Id, moduleVersion, blockCount, completed, point.CreatedAt, pointCount))
 	}
+	sort.Slice(uiModules, func(i, j int) bool {
+		if !uiModules[i].Completed { return true }
+		if !uiModules[j].Completed { return false }
+		return uiModules[i].CompletedAt.After(uiModules[j].CompletedAt)
+	})
 	return ctx.renderer.RenderStudentCoursePage(w, StudentCoursePageArgs{
 		Username:    user.Username,
 		Course:      NewUiCourse(course, uiModules),
@@ -170,7 +180,7 @@ func getModule(ctx HandlerContext, moduleId int, userId int64) (UiModule, db.Vis
 	if err != nil {
 		return UiModule{}, db.Visit{}, err
 	}
-	return NewUiModuleStudent(module.CourseId, moduleVersion, blockCount, false, 0), visit, nil
+	return NewUiModuleStudent(module.CourseId, moduleVersion, blockCount, false, time.Now(), 0), visit, nil
 }
 
 func getBlock(ctx HandlerContext, moduleVersionId int64, blockIdx int, userId int64) (UiBlock, error) {

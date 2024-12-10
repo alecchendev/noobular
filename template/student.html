@@ -120,7 +120,8 @@
 .module {
 	display: flex;
 	justify-content: space-between;
-	align-items: center;
+	flex-direction: column;
+	gap: 1.5rem;
 }
 
 .module:hover {
@@ -143,6 +144,19 @@
 
 .module-xp {
 	margin: 0;
+	color: var(--gray);
+}
+
+.module-title-points {
+	width: 100%;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+
+.completed-at {
+	margin: 0;
+	font-size: 0.8rem;
 	color: var(--gray);
 }
 
@@ -186,8 +200,10 @@
 				{{ if not $module.Completed }}
 				<a class="module-link" href="/student/course/{{$.Course.Id}}/module/{{$module.Id}}">
 				<div class="module border">
-					<h3 class="module-title">{{ $module.Title }}</h3>
-					<p class="module-xp">{{ $module.BlockCount }} XP</p>
+					<div class="module-title-points">
+						<h3 class="module-title">{{ $module.Title }}</h3>
+						<p class="module-xp">{{ $module.BlockCount }} XP</p>
+					</div>
 				</div>
 				</a>
 				{{ end }}
@@ -202,8 +218,11 @@
 				{{ if $module.Completed }}
 				<a class="module-link" href="/student/course/{{$.Course.Id}}/module/{{$module.Id}}">
 				<div class="module border">
-					<h3 class="module-title">{{ $module.Title }}</h3>
-					<p class="module-xp"><span class="green bold">{{ $module.Points}}</span>/{{ $module.BlockCount }} XP</p>
+					<div class="module-title-points">
+						<h3 class="module-title">{{ $module.Title }}</h3>
+						<p class="module-xp"><span class="green bold">{{ $module.Points}}</span>/{{ $module.BlockCount }} XP</p>
+					</div>
+					<p class="completed-at">Completed @ {{ $module.CompletedAt.Format "Mon January 2 2006 3:04pm UTC" }}</p>
 				</div>
 				</a>
 				{{ end }}

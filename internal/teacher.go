@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	"noobular/internal/db"
 )
@@ -534,7 +535,7 @@ func handlePreviewModulePage(w http.ResponseWriter, r *http.Request, ctx Handler
 		uiBlocks[blockIdx] = uiBlock
 	}
 	uiModule := UiTakeModulePage{
-		Module:     NewUiModuleStudent(course.Id, moduleVersion, blockCount, false, 0),
+		Module:     NewUiModuleStudent(course.Id, moduleVersion, blockCount, false, time.Now(), 0),
 		Blocks:     uiBlocks,
 		VisitIndex: blockCount,
 		Preview:    true,
