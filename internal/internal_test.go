@@ -152,6 +152,14 @@ func TestEditModule(t *testing.T) {
 	}
 	assert.NotContains(t, body, modules[len(modules)-1].Title)
 	assert.NotContains(t, body, modules[len(modules)-1].Description)
+
+	// Assert a user cannot edit a module for a course that's not theirs
+	// even if they put a course that is theirs
+	user2 := ctx.createUser()
+	client2 := newTestClient(t).login(user2.Id)
+	course2, _, _ := client2.initTestCourseN(1, 3)
+	client2.editModuleFail(course2.Id, modules[0], blockInputs[0])
+	client2.deleteModuleFail(course2.Id, modules[0].ModuleId)
 }
 
 func TestAuth(t *testing.T) {

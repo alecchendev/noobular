@@ -184,6 +184,11 @@ func (c testClient) deleteModule(courseId, moduleId int) {
 	assert.Equal(c.t, 200, resp.StatusCode)
 }
 
+func (c testClient) deleteModuleFail(courseId, moduleId int) {
+	resp := c.delete(fmt.Sprintf("/teacher/course/%d/module/%d", courseId, moduleId))
+	assert.NotEqual(c.t, 200, resp.StatusCode)
+}
+
 type blockInput struct {
 	blockType db.BlockType
 	block interface{}
@@ -290,11 +295,17 @@ func bodyText(t *testing.T, resp *http.Response) string {
 
 // Creates a test course with a module + edits the module to have content.
 func (c testClient) initTestCourse() (db.Course, []db.ModuleVersion, [][]blockInput) {
-	course, initModules := sampleCreateCourseInput()
+	return c.initTestCourseN(0, 0)
+}
+
+func (c testClient) initTestCourseN(courseCount int, moduleCount int) (db.Course, []db.ModuleVersion, [][]blockInput) {
+	n := courseCount + 1
+	m := moduleCount + 1
+	course, initModules := sampleCreateCourseInputN(n)
 	c.createCourse(course, initModules)
 
-	courseId := 1
-	moduleId := 1
+	courseId := n
+	moduleId := m
 
 	body := c.getPageBody("/teacher")
 	editModulePageLink := editModuleRoute(courseId, moduleId)
@@ -304,8 +315,8 @@ func (c testClient) initTestCourse() (db.Course, []db.ModuleVersion, [][]blockIn
 	assert.Contains(c.t, body, editModuleRoute(courseId, moduleId))
 
 	newModules := []db.ModuleVersion{
-		db.NewModuleVersion(-1, 1, 1, "new title1", "new description1"),
-		db.NewModuleVersion(-1, 2, 1, "new title2", "new description2"),
+		db.NewModuleVersion(-1, m, 1, "new title1", "new description1"),
+		db.NewModuleVersion(-1, m + 1, 1, "new title2", "new description2"),
 	}
 
 	blockInputs := make([][]blockInput, len(newModules))
