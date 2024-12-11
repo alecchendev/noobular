@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/rand"
 	"encoding/hex"
 	"fmt"
 	"log"
@@ -19,6 +20,9 @@ func main() {
 
 	jwtSecretHex := os.Getenv("JWT_SECRET")
 	if jwtSecretHex == "" {
+		token := make([]byte, 32)
+		rand.Read(token)
+		log.Println("Example: set -x JWT_SECRET", hex.EncodeToString(token))
 		log.Fatal("JWT_SECRET must be set")
 	}
 	jwtSecret, err := hex.DecodeString(jwtSecretHex)
