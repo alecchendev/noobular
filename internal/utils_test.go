@@ -155,10 +155,6 @@ func editCourseRoute(courseId int) string {
 	return fmt.Sprintf("/teacher/course/%d", courseId)
 }
 
-func editCoursePageRoute(courseId int) string {
-	return fmt.Sprintf("/teacher/course/%d", courseId) + "/edit"
-}
-
 func (c testClient) editCourse(course db.Course, modules []db.ModuleVersion) {
 	formData := createOrEditCourseForm(course, modules)
 	resp := c.put(editCourseRoute(course.Id), formData.Encode())
@@ -242,10 +238,6 @@ func newTestUiQuestion(moduleId int64, questionNumber int) internal.UiQuestion {
 		build()
 }
 
-func editModulePageRoute(courseId, moduleId int) string {
-	return editModuleRoute(courseId, moduleId) + "/edit"
-}
-
 func editModuleRoute(courseId, moduleId int) string {
 	return fmt.Sprintf("/teacher/course/%d/module/%d", courseId, moduleId)
 }
@@ -305,7 +297,7 @@ func (c testClient) initTestCourse() (db.Course, []db.ModuleVersion, [][]blockIn
 	moduleId := 1
 
 	body := c.getPageBody("/teacher")
-	editModulePageLink := editModulePageRoute(courseId, moduleId)
+	editModulePageLink := editModuleRoute(courseId, moduleId)
 	assert.Contains(c.t, body, editModulePageLink)
 
 	body = c.getPageBody(editModulePageLink)

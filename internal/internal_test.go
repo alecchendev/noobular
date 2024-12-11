@@ -95,7 +95,7 @@ func TestEditCourse(t *testing.T) {
 	}
 	client.editCourse(newCourse, newModules)
 
-	for _, route := range []string{"/teacher", editCoursePageRoute(courseId)} {
+	for _, route := range []string{"/teacher", editCourseRoute(courseId)} {
 		body = client.getPageBody(route)
 		assert.Contains(t, body, newCourse.Title)
 		assert.Contains(t, body, newCourse.Description)
@@ -119,7 +119,7 @@ func TestEditModule(t *testing.T) {
 	// Check that if we revisit the edit module page
 	// all of our changes are reflected
 	for i, module := range modules {
-		editModulePageLink := editModulePageRoute(courseId, module.ModuleId)
+		editModulePageLink := editModuleRoute(courseId, module.ModuleId)
 		body := client.getPageBody(editModulePageLink)
 		assert.Contains(t, body, module.Title)
 		assert.Contains(t, body, module.Description)
@@ -169,14 +169,14 @@ func TestAuth(t *testing.T) {
 	body := client1.getPageBody("/teacher")
 	assert.Contains(t, body, course.Title)
 	assert.Contains(t, body, modules[0].Title)
-	assert.Contains(t, body, editCoursePageRoute(course.Id))
-	assert.Contains(t, body, editModulePageRoute(course.Id, modules[0].ModuleId))
+	assert.Contains(t, body, editCourseRoute(course.Id))
+	assert.Contains(t, body, editModuleRoute(course.Id, modules[0].ModuleId))
 
 	body = client2.getPageBody("/teacher")
 	assert.NotContains(t, body, course.Title)
 	assert.NotContains(t, body, modules[0].Title)
-	assert.NotContains(t, body, editCoursePageRoute(course.Id))
-	assert.NotContains(t, body, editModulePageRoute(course.Id, modules[0].ModuleId))
+	assert.NotContains(t, body, editCourseRoute(course.Id))
+	assert.NotContains(t, body, editModuleRoute(course.Id, modules[0].ModuleId))
 
 	newCourse := db.NewCourse(course.Id, "new title", "new description")
 	newModules := []db.ModuleVersion{

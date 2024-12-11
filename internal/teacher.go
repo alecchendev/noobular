@@ -282,7 +282,6 @@ func handleDeleteModule(w http.ResponseWriter, r *http.Request, ctx HandlerConte
 // Edit module page
 
 func handleEditModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
-	// Get courseId and moduleId from "/course/:courseId/module/:moduleId/edit"
 	courseId, err := strconv.Atoi(r.PathValue("courseId"))
 	if err != nil {
 		return err

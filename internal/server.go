@@ -74,16 +74,14 @@ func initRouter(dbClient *db.DbClient, renderer Renderer, webAuthn *webauthn.Web
 	mux.Handle("/teacher/course/create", newHandlerMap().
 		Get(authRequiredHandler(handleCreateCoursePage)).
 		Post(authRequiredHandler(handleCreateCourse)))
-	mux.Handle("/teacher/course/{courseId}/edit", newHandlerMap().
-		Get(authRequiredHandler(handleEditCoursePage)))
 	mux.Handle("/teacher/course/{courseId}", newHandlerMap().
+		Get(authRequiredHandler(handleEditCoursePage)).
 		Put(authRequiredHandler(handleEditCourse)).
 		Delete(authRequiredHandler(handleDeleteCourse)))
 	mux.Handle("/teacher/course/{courseId}/module/{moduleId}", newHandlerMap().
+		Get(authRequiredHandler(handleEditModulePage)).
 		Put(authRequiredHandler(handleEditModule)).
 		Delete(authRequiredHandler(handleDeleteModule)))
-	mux.Handle("/teacher/course/{courseId}/module/{moduleId}/edit", newHandlerMap().
-		Get(authRequiredHandler(handleEditModulePage)))
 	mux.Handle("/teacher/course/{courseId}/module/{moduleId}/preview", newHandlerMap().
 		Get(authRequiredHandler(handlePreviewModulePage)))
 	mux.Handle("/teacher/course/{courseId}/prereq", newHandlerMap().
