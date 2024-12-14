@@ -105,11 +105,9 @@ explanation_content_ids as (
 	)
 ),
 referenced_content_ids as (
-	select content_id from (
-		select * from content_block_content_ids
-		union
-		select * from explanation_content_ids
-	)
+	select * from content_block_content_ids
+	union
+	select * from explanation_content_ids
 ),
 elsewhere_content_block_content_ids as (
 	select content_id from content_blocks where block_id not in module_block_ids
@@ -120,16 +118,14 @@ elsewhere_explanation_content_ids as (
 	)
 ),
 referenced_elsewhere_content_ids as (
-	select content_id from (
-		select * from elsewhere_content_block_content_ids
-		union
-		select * from elsewhere_explanation_content_ids
-	)
+	select * from elsewhere_content_block_content_ids
+	union
+	select * from elsewhere_explanation_content_ids
 ),
 referenced_only_here_content_ids as (
-	select content_id from referenced_content_ids
+	select * from referenced_content_ids
 	except
-	select content_id from referenced_elsewhere_content_ids
+	select * from referenced_elsewhere_content_ids
 )
 delete from content
 where id in referenced_only_here_content_ids;
