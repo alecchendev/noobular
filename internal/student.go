@@ -147,11 +147,16 @@ func handleTakeCourse(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 // Take module page
 
 type takeModuleRequest struct {
+	courseId int
 	moduleId int
 	blockIdx int
 }
 
 func parseTakeModuleRequest(r *http.Request) (takeModuleRequest, error) {
+	courseId, err := strconv.Atoi(r.PathValue("courseId"))
+	if err != nil {
+		return takeModuleRequest{}, err
+	}
 	moduleId, err := strconv.Atoi(r.PathValue("moduleId"))
 	if err != nil {
 		return takeModuleRequest{}, err
@@ -160,11 +165,11 @@ func parseTakeModuleRequest(r *http.Request) (takeModuleRequest, error) {
 	if err != nil {
 		return takeModuleRequest{}, err
 	}
-	return takeModuleRequest{moduleId, blockIdx}, nil
+	return takeModuleRequest{courseId, moduleId, blockIdx}, nil
 }
 
-func getModule(ctx HandlerContext, moduleId int, userId int64) (UiModule, db.Visit, error) {
-	module, err := ctx.dbClient.GetModule(moduleId)
+func getModule(ctx HandlerContext, courseId int, moduleId int, userId int64) (UiModule, db.Visit, error) {
+	module, err := ctx.dbClient.GetModule(courseId, moduleId)
 	if err != nil {
 		return UiModule{}, db.Visit{}, err
 	}
@@ -233,11 +238,15 @@ func getBlock(ctx HandlerContext, moduleVersionId int64, blockIdx int, userId in
 }
 
 func handleTakeModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
+	courseId, err := strconv.Atoi(r.PathValue("courseId"))
+	if err != nil {
+		return err
+	}
 	moduleId, err := strconv.Atoi(r.PathValue("moduleId"))
 	if err != nil {
 		return err
 	}
-	module, visit, err := getModule(ctx, moduleId, user.Id)
+	module, visit, err := getModule(ctx, courseId, moduleId, user.Id)
 	if err != nil {
 		return fmt.Errorf("Error getting module %d: %v", moduleId, err)
 	}
@@ -263,7 +272,7 @@ func handleTakeModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 }
 
 func getTakeModule(req takeModuleRequest, ctx HandlerContext, userId int64) (UiTakeModule, db.Visit, error) {
-	module, visit, err := getModule(ctx, req.moduleId, userId)
+	module, visit, err := getModule(ctx, req.courseId, req.moduleId, userId)
 	if err != nil {
 		return UiTakeModule{}, db.Visit{}, err
 	}

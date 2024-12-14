@@ -143,17 +143,26 @@ func DeleteContentForModule(tx *sql.Tx, moduleId int) error {
 const getModuleQuery = `
 select m.id, m.course_id
 from modules m
-where m.id = ?
+where m.id = ? and m.course_id = ?;
 `
 
-func (c *DbClient) GetModule(moduleId int) (Module, error) {
-	moduleRow := c.db.QueryRow(getModuleQuery, moduleId)
+func GetModule(tx *sql.Tx, courseId, moduleId int) (Module, error) {
+	moduleRow := tx.QueryRow(getModuleQuery, moduleId, courseId)
 	var module Module
 	err := moduleRow.Scan(&module.Id, &module.CourseId)
 	if err != nil {
 		return Module{}, err
 	}
 	return module, nil
+}
+
+func (c *DbClient) GetModule(courseId int, moduleId int) (Module, error) {
+	tx, err := c.Begin()
+	defer tx.Rollback()
+	if err != nil {
+		return Module{}, err
+	}
+	return GetModule(tx, courseId, moduleId)
 }
 
 func (c *DbClient) DeleteModule(moduleId int) error {

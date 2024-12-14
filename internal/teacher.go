@@ -207,6 +207,10 @@ func handleEditCourse(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 			}
 			moduleId = module.Id
 		} else {
+			_, err = db.GetModule(tx, req.courseId, moduleId)
+			if err != nil {
+				return err
+			}
 			// No need to instert new module version just to change the name.
 			version, err := db.GetLatestModuleVersion(tx, moduleId)
 			if err != nil {
@@ -515,7 +519,7 @@ func handlePreviewModulePage(w http.ResponseWriter, r *http.Request, ctx Handler
 	if err != nil {
 		return err
 	}
-	module, err := ctx.dbClient.GetModule(moduleId)
+	module, err := ctx.dbClient.GetModule(courseId, moduleId)
 	if err != nil {
 		return err
 	}

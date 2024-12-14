@@ -331,7 +331,7 @@ func (c testClient) initTestCourseN(courseCount int, moduleCount int) (db.Course
 		c.editModule(courseId, module, blockInputs[i])
 	}
 
-	return db.NewCourse(1, course.Title, course.Description), newModules, blockInputs
+	return db.NewCourse(n, course.Title, course.Description), newModules, blockInputs
 }
 
 func (c testClient) enrollCourse(courseId int) {

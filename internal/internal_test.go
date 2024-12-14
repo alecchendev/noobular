@@ -104,6 +104,14 @@ func TestEditCourse(t *testing.T) {
 			assert.Contains(t, body, module.Description)
 		}
 	}
+
+	// Assert a user cannot edit a module for a course that's not theirs
+	// even if they put a course that is theirs
+	user2 := ctx.createUser()
+	client2 := newTestClient(t).login(user2.Id)
+	course2, _, _ := client2.initTestCourseN(1, 2)
+	module := db.NewModuleVersion(-1, 1, 2, "different module title", "different module description")
+	client2.editCourseFail(course2, []db.ModuleVersion{module})
 }
 
 func TestEditModule(t *testing.T) {
