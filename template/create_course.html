@@ -21,6 +21,16 @@ form {
     height: 8rem;
 }
 
+.public-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+#course-public:disabled ~ .public-label {
+    color: #808080;
+}
+
 #modules {
     display: flex;
     flex-direction: column;
@@ -77,6 +87,26 @@ form {
     <input type="text" id="course-title" name="title" placeholder="Course name" value="{{ .Title }}" autofocus required>
 
     <textarea id="course-description" name="description" placeholder="Course description" required>{{ .Description }}</textarea>
+
+    <div class="public-checkbox">
+        <input
+            type="checkbox"
+            id="course-public"
+            name="public"
+            {{ if .Public }}
+            checked
+            {{ end }}
+            {{ if .HasStudent }}
+            disabled
+            title="Cannot take a course private with at least one student enrolled."
+            {{ end }}
+        >
+        <label class="public-label" for="course-public"
+            {{ if .HasStudent }}
+            title="Cannot take a course private with at least one student enrolled."
+            {{ end }}
+        >Public</label>
+    </div>
 
     <h2>Modules</h2>
 

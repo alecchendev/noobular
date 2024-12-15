@@ -1,6 +1,8 @@
 package db
 
 import (
+	"database/sql"
+
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -57,4 +59,35 @@ func (c *DbClient) GetEnrollment(userId int64, courseId int) (Enrollment, error)
 		return Enrollment{}, err
 	}
 	return enrollment, nil
+}
+
+const getEnrollmentCountQuery = `
+select count(*)
+from enrollments e
+where e.course_id = ?;
+`
+
+func GetEnrollmentCount(tx *sql.Tx, courseId int) (int64, error) {
+	row := tx.QueryRow(getEnrollmentCountQuery, courseId)
+	var count int64
+	err := row.Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+func (c *DbClient) GetEnrollmentCount(courseId int) (int64, error) {
+	tx, err := c.Begin()
+	defer tx.Rollback()
+	if err != nil {
+		return 0, err
+	}
+	row := tx.QueryRow(getEnrollmentCountQuery, courseId)
+	var count int64
+	err = row.Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
 }

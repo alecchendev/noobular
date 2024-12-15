@@ -116,6 +116,7 @@ type UiCourse struct {
 	Id          int
 	Title       string
 	Description string
+	Public      bool
 	Modules     []UiModule
 	Enrolled    bool
 }
@@ -125,11 +126,23 @@ func NewUiCourse(c db.Course, modules []UiModule) UiCourse {
 }
 
 func NewUiCourseEnrolled(c db.Course, modules []UiModule, enrolled bool) UiCourse {
-	return UiCourse{c.Id, c.Title, c.Description, modules, enrolled}
+	return UiCourse{c.Id, c.Title, c.Description, c.Public, modules, enrolled}
 }
 
 func EmptyCourse() UiCourse {
-	return UiCourse{-1, "", "", []UiModule{}, false}
+	return UiCourse{-1, "", "", true, []UiModule{}, false}
+}
+
+func (c UiCourse) HasStudent() bool {
+	return false
+}
+
+// This is a course that has at least one student.
+// This means we can no longer take this course private.
+type UiFixedPublicCourse UiCourse
+
+func (c UiFixedPublicCourse) HasStudent() bool {
+	return true
 }
 
 type UiModule struct {
@@ -358,8 +371,12 @@ func (r *Renderer) RenderCourseCreated(w http.ResponseWriter) error {
 	return r.templates["create_course.html"].ExecuteTemplate(w, "created_course_response.html", nil)
 }
 
-func (r *Renderer) RenderEditCoursePage(w http.ResponseWriter, course UiCourse) error {
-	return r.templates["create_course.html"].ExecuteTemplate(w, "page.html", NewPageArgs(true, true, course))
+func (r *Renderer) RenderEditCoursePage(w http.ResponseWriter, course UiCourse, publicFixed bool) error {
+	var uiCourse interface{} = course
+	if publicFixed {
+		uiCourse = UiFixedPublicCourse(course)
+	}
+	return r.templates["create_course.html"].ExecuteTemplate(w, "page.html", NewPageArgs(true, true, uiCourse))
 }
 
 func (r *Renderer) RenderCourseEdited(w http.ResponseWriter) error {
@@ -432,7 +449,7 @@ func (r *Renderer) RenderModuleEdited(w http.ResponseWriter) error {
 }
 
 type UiPrereqPageArgs struct {
-	Course  UiCourse
+	Course     UiCourse
 	PrereqForm UiPrereqForm
 }
 

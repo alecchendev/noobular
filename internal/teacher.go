@@ -28,7 +28,6 @@ func getTeacherUiModulesForCourse(ctx HandlerContext, courseId int) ([]UiModule,
 	return uiModules, nil
 }
 
-
 func handleTeacherCoursesPage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
 	newCourseId, err := strconv.Atoi(r.URL.Query().Get("newCourse"))
 	if err != nil {
@@ -72,6 +71,7 @@ func handleCreateCoursePage(w http.ResponseWriter, r *http.Request, ctx HandlerC
 type createCourseRequest struct {
 	title              string
 	description        string
+	public             bool
 	moduleTitles       []string
 	moduleDescriptions []string
 }
@@ -89,6 +89,7 @@ func parseCreateCourseRequest(r *http.Request) (createCourseRequest, error) {
 	if description == "" {
 		return createCourseRequest{}, fmt.Errorf("Description cannot be empty")
 	}
+	public := r.Form.Get("public") == "on"
 	moduleTitles := r.Form["module-title[]"]
 	if len(moduleTitles) == 0 {
 		return createCourseRequest{}, fmt.Errorf("Course must have at least one module")
@@ -97,7 +98,7 @@ func parseCreateCourseRequest(r *http.Request) (createCourseRequest, error) {
 	if len(moduleDescriptions) != len(moduleTitles) {
 		return createCourseRequest{}, fmt.Errorf("Each module must have a description")
 	}
-	return createCourseRequest{title, description, moduleTitles, moduleDescriptions}, nil
+	return createCourseRequest{title, description, public, moduleTitles, moduleDescriptions}, nil
 }
 
 func handleCreateCourse(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
@@ -105,7 +106,7 @@ func handleCreateCourse(w http.ResponseWriter, r *http.Request, ctx HandlerConte
 	if err != nil {
 		return err
 	}
-	course, err := ctx.dbClient.CreateCourse(user.Id, req.title, req.description, true)
+	course, err := ctx.dbClient.CreateCourse(user.Id, req.title, req.description, req.public)
 	if err != nil {
 		return err
 	}
@@ -136,13 +137,20 @@ func handleEditCoursePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	if err != nil {
 		return err
 	}
-	return ctx.renderer.RenderEditCoursePage(w, NewUiCourse(course, uiModules))
+	enrollmentCount, err := ctx.dbClient.GetEnrollmentCount(courseId)
+	if err != nil {
+		return err
+	}
+	uiCourse := NewUiCourse(course, uiModules)
+	publicFixed := enrollmentCount > 0
+	return ctx.renderer.RenderEditCoursePage(w, uiCourse, publicFixed)
 }
 
 type editCourseRequest struct {
 	courseId           int
 	title              string
 	description        string
+	public             bool
 	moduleIds          []int
 	moduleTitles       []string
 	moduleDescriptions []string
@@ -159,6 +167,7 @@ func parseEditCourseRequest(r *http.Request) (editCourseRequest, error) {
 	}
 	title := r.Form.Get("title")
 	description := r.Form.Get("description")
+	public := r.Form.Get("public") == "on"
 	moduleIdStrs := r.Form["module-id[]"]
 	moduleIds := make([]int, len(moduleIdStrs))
 	for i, moduleIdStr := range moduleIdStrs {
@@ -176,7 +185,7 @@ func parseEditCourseRequest(r *http.Request) (editCourseRequest, error) {
 	if moduleIdCount != moduleTitleCount || moduleTitleCount != moduleDescriptionCount {
 		return editCourseRequest{}, fmt.Errorf("Edit course module data lengths are misaligned: %d module ids, %d moduleTitles, %d motule descriptions", moduleIdCount, moduleTitleCount, moduleDescriptionCount)
 	}
-	return editCourseRequest{courseId, title, description, moduleIds, moduleTitles, moduleDescriptions}, nil
+	return editCourseRequest{courseId, title, description, public, moduleIds, moduleTitles, moduleDescriptions}, nil
 }
 
 func handleEditCourse(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
@@ -190,7 +199,17 @@ func handleEditCourse(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 	}
 	tx, err := ctx.dbClient.Begin()
 	defer tx.Rollback()
-	course, err := db.EditCourse(tx, user.Id, req.courseId, req.title, req.description, true)
+	if err != nil {
+		return err
+	}
+	enrollmentCount, err := db.GetEnrollmentCount(tx, req.courseId)
+	if err != nil {
+		return err
+	}
+	if enrollmentCount > 0 {
+		req.public = true
+	}
+	course, err := db.EditCourse(tx, user.Id, req.courseId, req.title, req.description, req.public)
 	if err != nil {
 		return err
 	}
@@ -591,7 +610,7 @@ func handlePrereqPage(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 		}
 		uiPrereqs = uiPrereqsFromModules(modules, uiModuleMap, prereqs)
 	}
-	return ctx.renderer.RenderPrereqPage(w, UiPrereqPageArgs{ NewUiCourse(course, uiModules), UiPrereqForm{uiModule, uiPrereqs} })
+	return ctx.renderer.RenderPrereqPage(w, UiPrereqPageArgs{NewUiCourse(course, uiModules), UiPrereqForm{uiModule, uiPrereqs}})
 }
 
 func handlePrereqForm(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
@@ -632,8 +651,8 @@ func handlePrereqForm(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 }
 
 type prereqRequest struct {
-	courseId  int
-	moduleId  int
+	courseId        int
+	moduleId        int
 	prereqModuleIds map[int]bool
 }
 

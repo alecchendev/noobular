@@ -171,6 +171,9 @@ func createOrEditCourseForm(course db.Course, modules []db.ModuleVersion) url.Va
 	formData := url.Values{}
 	formData.Set("title", course.Title)
 	formData.Set("description", course.Description)
+	if course.Public {
+		formData.Set("public", "on")
+	}
 	for _, module := range modules {
 		formData.Add("module-title[]", module.Title)
 		formData.Add("module-id[]", strconv.Itoa(module.ModuleId))
