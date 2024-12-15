@@ -21,19 +21,20 @@ type Course struct {
 	Id          int
 	Title       string
 	Description string
+	Public      bool
 }
 
-func NewCourse(id int, title string, description string) Course {
-	return Course{id, title, description}
+func NewCourse(id int, title string, description string, public bool) Course {
+	return Course{id, title, description, public}
 }
 
 const insertCourseQuery = `
-insert into courses(user_id, title, description)
-values(?, ?, ?);
+insert into courses(user_id, title, description, public)
+values(?, ?, ?, ?);
 `
 
-func (c *DbClient) CreateCourse(userId int64, title string, description string) (Course, error) {
-	res, err := c.db.Exec(insertCourseQuery, userId, title, description)
+func (c *DbClient) CreateCourse(userId int64, title string, description string, public bool) (Course, error) {
+	res, err := c.db.Exec(insertCourseQuery, userId, title, description, public)
 	if err != nil {
 		return Course{}, err
 	}
@@ -41,64 +42,65 @@ func (c *DbClient) CreateCourse(userId int64, title string, description string) 
 	if err != nil {
 		return Course{}, err
 	}
-	return Course{int(courseId), title, description}, nil
+	return NewCourse(int(courseId), title, description, public), nil
 }
 
 const updateCourseQuery = `
 update courses
-set title = ?, description = ?
+set title = ?, description = ?, public = ?
 where id = ? and user_id = ?;
 `
 
-func EditCourse(tx *sql.Tx, userId int64, courseId int, title string, description string) (Course, error) {
-	_, err := tx.Exec(updateCourseQuery, title, description, courseId, userId)
+func EditCourse(tx *sql.Tx, userId int64, courseId int, title string, description string, public bool) (Course, error) {
+	_, err := tx.Exec(updateCourseQuery, title, description, public, courseId, userId)
 	if err != nil {
 		return Course{}, err
 	}
-	return NewCourse(courseId, title, description), nil
+	return NewCourse(courseId, title, description, public), nil
+}
+
+func rowToCourse(row *sql.Row) (Course, error) {
+	var id int
+	var title string
+	var description string
+	var public bool
+	err := row.Scan(&id, &title, &description, &public)
+	if err != nil {
+		return Course{}, err
+	}
+	return NewCourse(id, title, description, public), nil
 }
 
 const getCourseQuery = `
-select c.id, c.title, c.description
+select c.id, c.title, c.description, c.public
 from courses c
 where c.id = ?;
 `
 
 func (c *DbClient) GetCourse(courseId int) (Course, error) {
 	row := c.db.QueryRow(getCourseQuery, courseId)
-	var course Course
-	err := row.Scan(&course.Id, &course.Title, &course.Description)
-	if err != nil {
-		return Course{}, err
-	}
-	return course, nil
+	return rowToCourse(row)
 }
 
 const getTeacherCourseQuery = `
-select c.id, c.title, c.description
+select c.id, c.title, c.description, c.public
 from courses c
 where c.id = ? and c.user_id = ?;
 `
 
 func (c *DbClient) GetTeacherCourse(courseId int, userId int64) (Course, error) {
 	row := c.db.QueryRow(getTeacherCourseQuery, courseId, userId)
-	var course Course
-	err := row.Scan(&course.Id, &course.Title, &course.Description)
-	if err != nil {
-		return Course{}, err
-	}
-	return course, nil
+	return rowToCourse(row)
 }
 
-
 const getCoursesQuery = `
-select c.id, c.title, c.description
+select c.id, c.title, c.description, c.public
 from courses c
 order by c.id;
 `
 
 const getTeacherCoursesQuery = `
-select c.id, c.title, c.description
+select c.id, c.title, c.description, c.public
 from courses c
 where c.user_id = ?
 order by c.id;
@@ -125,12 +127,15 @@ func (c *DbClient) GetCourses() ([]Course, error) {
 func rowsToCourses(courseRows *sql.Rows) ([]Course, error) {
 	var courses []Course
 	for courseRows.Next() {
-		var course Course
-		err := courseRows.Scan(&course.Id, &course.Title, &course.Description)
+		var id int
+		var title string
+		var description string
+		var public bool
+		err := courseRows.Scan(&id, &title, &description, &public)
 		if err != nil {
 			return nil, err
 		}
-		courses = append(courses, course)
+		courses = append(courses, NewCourse(id, title, description, public))
 	}
 	if err := courseRows.Err(); err != nil {
 		return nil, err
@@ -139,23 +144,18 @@ func rowsToCourses(courseRows *sql.Rows) ([]Course, error) {
 }
 
 const getEditCourseQuery = `
-select c.id, c.title, c.description
+select c.id, c.title, c.description, c.public
 from courses c
 where c.user_id = ? and c.id = ?;
 `
 
 func (c *DbClient) GetEditCourse(userId int64, courseId int) (Course, error) {
-       row := c.db.QueryRow(getEditCourseQuery, userId, courseId)
-       var course Course
-       err := row.Scan(&course.Id, &course.Title, &course.Description)
-       if err != nil {
-               return Course{}, err
-       }
-       return course, nil
+	row := c.db.QueryRow(getEditCourseQuery, userId, courseId)
+	return rowToCourse(row)
 }
 
 const getModuleCourseQuery = `
-select c.id, c.title, c.description
+select c.id, c.title, c.description, c.public
 from modules m
 join courses c on m.course_id = c.id
 where c.user_id = ? and m.id = ?;
@@ -163,12 +163,7 @@ where c.user_id = ? and m.id = ?;
 
 func (c *DbClient) GetModuleCourse(userId int64, moduleId int) (Course, error) {
 	row := c.db.QueryRow(getModuleCourseQuery, userId, moduleId)
-	var course Course
-	err := row.Scan(&course.Id, &course.Title, &course.Description)
-	if err != nil {
-		return Course{}, err
-	}
-	return course, nil
+	return rowToCourse(row)
 }
 
 const deleteCourseQuery = `
@@ -194,7 +189,7 @@ func (c *DbClient) DeleteCourse(userId int64, courseId int) error {
 }
 
 const getEnrolledCoursesQuery = `
-select c.id, c.title, c.description
+select c.id, c.title, c.description, c.public
 from courses c
 join enrollments e on c.id = e.course_id
 where e.user_id = ?

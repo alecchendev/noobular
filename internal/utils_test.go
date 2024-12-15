@@ -137,7 +137,7 @@ func sampleCreateCourseInputN(n int) (titleDescInput, []titleDescInput) {
 const createCourseRoute = "/teacher/course/create"
 
 func NewTestDbCourse(in titleDescInput) db.Course {
-	return db.NewCourse(-1, in.Title, in.Description)
+	return db.NewCourse(-1, in.Title, in.Description, true)
 }
 
 func (c testClient) createCourse(course titleDescInput, modules []titleDescInput) {
@@ -331,7 +331,7 @@ func (c testClient) initTestCourseN(courseCount int, moduleCount int) (db.Course
 		c.editModule(courseId, module, blockInputs[i])
 	}
 
-	return db.NewCourse(n, course.Title, course.Description), newModules, blockInputs
+	return db.NewCourse(n, course.Title, course.Description, true), newModules, blockInputs
 }
 
 func (c testClient) enrollCourse(courseId int) {

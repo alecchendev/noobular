@@ -105,7 +105,7 @@ func handleCreateCourse(w http.ResponseWriter, r *http.Request, ctx HandlerConte
 	if err != nil {
 		return err
 	}
-	course, err := ctx.dbClient.CreateCourse(user.Id, req.title, req.description)
+	course, err := ctx.dbClient.CreateCourse(user.Id, req.title, req.description, true)
 	if err != nil {
 		return err
 	}
@@ -190,7 +190,7 @@ func handleEditCourse(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 	}
 	tx, err := ctx.dbClient.Begin()
 	defer tx.Rollback()
-	course, err := db.EditCourse(tx, user.Id, req.courseId, req.title, req.description)
+	course, err := db.EditCourse(tx, user.Id, req.courseId, req.title, req.description, true)
 	if err != nil {
 		return err
 	}

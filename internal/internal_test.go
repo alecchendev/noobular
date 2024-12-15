@@ -88,7 +88,7 @@ func TestEditCourse(t *testing.T) {
 	body := client.getPageBody("/teacher")
 	assert.Contains(t, body, editCourseRoute(courseId))
 
-	newCourse := db.NewCourse(courseId, "new title", "new description")
+	newCourse := db.NewCourse(courseId, "new title", "new description", true)
 	newModules := []db.ModuleVersion{
 		db.NewModuleVersion(-1, 1, 1, "new module title1", "new module description1"),
 		db.NewModuleVersion(-1, 2, 1, "new module title2", "new module description2"),
@@ -194,7 +194,7 @@ func TestAuth(t *testing.T) {
 	assert.NotContains(t, body, editCourseRoute(course.Id))
 	assert.NotContains(t, body, editModuleRoute(course.Id, modules[0].ModuleId))
 
-	newCourse := db.NewCourse(course.Id, "new title", "new description")
+	newCourse := db.NewCourse(course.Id, "new title", "new description", true)
 	newModules := []db.ModuleVersion{
 		db.NewModuleVersion(-1, 1, 1, "new module title1", "new module description1"),
 		db.NewModuleVersion(-1, 2, 1, "new module title2", "new module description2"),
