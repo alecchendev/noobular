@@ -20,9 +20,9 @@ const insertDbVersionQuery = `
 insert into db_version(version) values(?);
 `
 
-func InsertDbVersion(tx *sql.Tx) (DbVersion, error) {
-	_, err := tx.Exec(insertDbVersionQuery, 0)
-	return DbVersion(0), err
+func InsertDbVersion(tx *sql.Tx, version DbVersion) (DbVersion, error) {
+	_, err := tx.Exec(insertDbVersionQuery, version)
+	return DbVersion(version), err
 }
 
 const getDbVersionQuery = `

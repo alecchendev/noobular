@@ -12,6 +12,7 @@ create table if not exists courses (
 	user_id integer not null,
 	title text not null,
 	description text not null,
+	public integer not null default true,
 	foreign key (user_id) references users(id) on delete cascade
 );
 `
