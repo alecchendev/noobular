@@ -12,9 +12,16 @@ import (
 	"time"
 
 	"github.com/yuin/goldmark"
+	mathjax "github.com/litao91/goldmark-mathjax"
 
 	"noobular/internal/db"
 )
+
+func newMd() goldmark.Markdown {
+	return goldmark.New(
+		goldmark.WithExtensions(mathjax.MathJax),
+	)
+}
 
 // Student page
 
@@ -205,7 +212,7 @@ func getBlock(ctx HandlerContext, moduleVersionId int64, blockIdx int, userId in
 			return UiBlock{}, fmt.Errorf("Error getting explanation for question %d: %v", question.Id, err)
 		}
 		var buf bytes.Buffer
-		if err := goldmark.Convert([]byte(explanationContent.Content), &buf); err != nil {
+		if err := newMd().Convert([]byte(explanationContent.Content), &buf); err != nil {
 			return UiBlock{}, fmt.Errorf("Error converting explanation content for question %d: %v", question.Id, err)
 		}
 		explanation := template.HTML(buf.String())
@@ -227,7 +234,7 @@ func getBlock(ctx HandlerContext, moduleVersionId int64, blockIdx int, userId in
 			return UiBlock{}, fmt.Errorf("Error getting content for block %d: %v", block.Id, err)
 		}
 		var buf bytes.Buffer
-		if err := goldmark.Convert([]byte(content.Content), &buf); err != nil {
+		if err := newMd().Convert([]byte(content.Content), &buf); err != nil {
 			return UiBlock{}, fmt.Errorf("Error converting content for block %d: %v", block.Id, err)
 		}
 		uiBlock := NewUiBlockContent(NewUiContentRendered(content, template.HTML(buf.String())), blockIdx)
