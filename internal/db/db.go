@@ -66,6 +66,7 @@ func initDb(db *sql.DB) {
 		createEnrollmentTable,
 		createPointTable,
 		createPrereqTable,
+		createDbVersionTable,
 	}
 	for _, stmt := range stmts {
 		_, err := tx.Exec(stmt)
@@ -73,6 +74,17 @@ func initDb(db *sql.DB) {
 			log.Fatal(err)
 		}
 	}
+	version, err := GetDbVersion(tx)
+	if err != nil && err != sql.ErrNoRows {
+		log.Fatal(err)
+	}
+	if err == sql.ErrNoRows {
+		version, err = InsertDbVersion(tx)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+	log.Println("Db version:", version)
 	tx.Commit()
 }
 
