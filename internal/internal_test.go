@@ -142,6 +142,8 @@ func TestPrivateCourse(t *testing.T) {
 		assert.NotContains(t, body, module.Title)
 		assert.NotContains(t, body, module.Description)
 	}
+
+	client.enrollCourseFail(course.Id)
 }
 
 func TestEditModule(t *testing.T) {

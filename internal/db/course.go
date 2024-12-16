@@ -77,6 +77,11 @@ from courses c
 where c.id = ?;
 `
 
+func GetCourse(tx *sql.Tx, courseId int) (Course, error) {
+	row := tx.QueryRow(getCourseQuery, courseId)
+	return rowToCourse(row)
+}
+
 func (c *DbClient) GetCourse(courseId int) (Course, error) {
 	row := c.db.QueryRow(getCourseQuery, courseId)
 	return rowToCourse(row)

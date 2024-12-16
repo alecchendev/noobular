@@ -143,7 +143,23 @@ func handleTakeCourse(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 	if err != nil {
 		return err
 	}
-	_, err = ctx.dbClient.InsertEnrollment(user.Id, courseId)
+	tx, err := ctx.dbClient.Begin()
+	defer tx.Rollback()
+	if err != nil {
+		return err
+	}
+	course, err := db.GetCourse(tx, courseId)
+	if err != nil {
+		return err
+	}
+	if !course.Public {
+		return fmt.Errorf("Cannot enroll in private course.")
+	}
+	_, err = db.InsertEnrollment(tx, user.Id, courseId)
+	if err != nil {
+		return err
+	}
+	err = tx.Commit()
 	if err != nil {
 		return err
 	}

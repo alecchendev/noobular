@@ -33,8 +33,8 @@ insert into enrollments(user_id, course_id)
 values(?, ?);
 `
 
-func (c *DbClient) InsertEnrollment(userId int64, courseId int) (Enrollment, error) {
-	res, err := c.db.Exec(insertEnrollmentQuery, userId, courseId)
+func InsertEnrollment(tx *sql.Tx, userId int64, courseId int) (Enrollment, error) {
+	res, err := tx.Exec(insertEnrollmentQuery, userId, courseId)
 	if err != nil {
 		return Enrollment{}, err
 	}
