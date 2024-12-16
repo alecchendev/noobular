@@ -96,7 +96,8 @@ func initDb(db *sql.DB, fromScratch bool) {
 		if err != nil {
 			log.Fatal(err)
 		}
-	} else if version < latestVersion {
+	}
+	if err == nil && version < latestVersion {
 		log.Println("New DB version available. Current:", version, "Latest:", latestVersion)
 		for version < latestVersion {
 			_, err = tx.Exec(migrateToVersionQuery(version + 1))
