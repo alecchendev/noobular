@@ -93,12 +93,6 @@ func (c *DbClient) GetTeacherCourse(courseId int, userId int64) (Course, error) 
 	return rowToCourse(row)
 }
 
-const getCoursesQuery = `
-select c.id, c.title, c.description, c.public
-from courses c
-order by c.id;
-`
-
 const getTeacherCoursesQuery = `
 select c.id, c.title, c.description, c.public
 from courses c
@@ -115,8 +109,15 @@ func (c *DbClient) GetTeacherCourses(userId int64) ([]Course, error) {
 	return rowsToCourses(courseRows)
 }
 
-func (c *DbClient) GetCourses() ([]Course, error) {
-	courseRows, err := c.db.Query(getCoursesQuery)
+const getPublicCoursesQuery = `
+select c.id, c.title, c.description, c.public
+from courses c
+where c.public = true
+order by c.id;
+`
+
+func (c *DbClient) GetPublicCourses() ([]Course, error) {
+	courseRows, err := c.db.Query(getPublicCoursesQuery)
 	if err != nil {
 		return nil, err
 	}

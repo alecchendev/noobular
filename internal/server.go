@@ -197,7 +197,7 @@ func handleHomePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, 
 // Browse page
 
 func handleBrowsePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user *db.User) error {
-	courses, err := ctx.dbClient.GetCourses()
+	courses, err := ctx.dbClient.GetPublicCourses()
 	if err != nil {
 		return err
 	}

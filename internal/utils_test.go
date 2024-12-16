@@ -136,12 +136,12 @@ func sampleCreateCourseInputN(n int) (titleDescInput, []titleDescInput) {
 
 const createCourseRoute = "/teacher/course/create"
 
-func NewTestDbCourse(in titleDescInput) db.Course {
-	return db.NewCourse(-1, in.Title, in.Description, true)
+func NewTestDbCourse(in titleDescInput, public bool) db.Course {
+	return db.NewCourse(-1, in.Title, in.Description, public)
 }
 
 func (c testClient) createCourse(course titleDescInput, modules []titleDescInput) {
-	dbCourse := NewTestDbCourse(course)
+	dbCourse := NewTestDbCourse(course, true)
 	dbModules := make([]db.ModuleVersion, len(modules))
 	for i, module := range modules {
 		dbModules[i] = db.NewModuleVersion(-1, -1, 0, module.Title, module.Description)

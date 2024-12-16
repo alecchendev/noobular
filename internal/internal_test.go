@@ -114,6 +114,36 @@ func TestEditCourse(t *testing.T) {
 	client2.editCourseFail(course2, []db.ModuleVersion{module})
 }
 
+func TestPrivateCourse(t *testing.T) {
+	ctx := startServer(t)
+	defer ctx.Close()
+
+	user := ctx.createUser()
+	client := newTestClient(t).login(user.Id)
+
+	course, modules, _ := client.initTestCourse()
+
+	body := client.getPageBody("/browse")
+	assert.Contains(t, body, course.Title)
+	assert.Contains(t, body, course.Description)
+	for _, module := range modules {
+		assert.Contains(t, body, module.Title)
+		assert.Contains(t, body, module.Description)
+	}
+
+	newCourse := course
+	newCourse.Public = false
+	client.editCourse(newCourse, modules)
+
+	body = client.getPageBody("/browse")
+	assert.NotContains(t, body, course.Title)
+	assert.NotContains(t, body, course.Description)
+	for _, module := range modules {
+		assert.NotContains(t, body, module.Title)
+		assert.NotContains(t, body, module.Description)
+	}
+}
+
 func TestEditModule(t *testing.T) {
 	ctx := startServer(t)
 	defer ctx.Close()
