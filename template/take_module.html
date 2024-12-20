@@ -1,4 +1,7 @@
 {{ define "title" }}Module: {{ .Module.Title }}{{ end }}
+{{ define "extra_head" }}
+<link rel="stylesheet" type="text/css" href="/style/katex.min.css">
+{{ end }}
 {{ define "style" }}
 
 .take-module-body {
@@ -115,8 +118,6 @@ p {
 
 {{ end }}
 {{ define "content" }}
-<link rel="stylesheet" type="text/css" href="/style/katex.min.css">
-
 <div class="take-module-body">
 <div id="header">
 	<div class="progress-bar">
