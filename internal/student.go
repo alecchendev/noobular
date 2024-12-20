@@ -12,14 +12,14 @@ import (
 	"time"
 
 	"github.com/yuin/goldmark"
-	mathjax "github.com/litao91/goldmark-mathjax"
+	"github.com/graemephi/goldmark-qjs-katex"
 
 	"noobular/internal/db"
 )
 
 func newMd() goldmark.Markdown {
 	return goldmark.New(
-		goldmark.WithExtensions(mathjax.MathJax),
+		goldmark.WithExtensions(&qjskatex.Extension{}),
 	)
 }
 
