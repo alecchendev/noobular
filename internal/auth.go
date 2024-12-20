@@ -73,7 +73,8 @@ func authRejectedHandler(handler HandlerMapHandler) HandlerMapHandler {
 	return func(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
 		_, err := checkCookie(r, ctx.jwtSecret)
 		if err == nil {
-			http.Redirect(w, r, "/", http.StatusSeeOther)
+			// If they have some wrong/expired cookie just delete it for them
+			http.Redirect(w, r, "/logout", http.StatusSeeOther)
 			return nil
 		}
 		return handler(w, r, ctx)
