@@ -29,7 +29,7 @@ func NewDbClient() *DbClient {
 	if err != nil {
 		log.Fatal(err)
 	}
-	initDb(db, false)
+	initDb(db)
 	return &DbClient{db}
 }
 
@@ -38,17 +38,11 @@ func NewMemoryDbClient() *DbClient {
 	if err != nil {
 		log.Fatal(err)
 	}
-	initDb(db, true)
+	initDb(db)
 	return &DbClient{db}
 }
 
-// `fromScratch` parameter says if we don't have
-// a version number, we should jump to the latest.
-// If it's false, we start at zero, and run all migrations.
-// When initializing from scratch or during tests, we'll
-// start from the latest version. The very first time
-// we migrate the production database, we want to start at 0.
-func initDb(db *sql.DB, fromScratch bool) {
+func initDb(db *sql.DB) {
 	tx, err := db.Begin()
 	defer tx.Rollback()
 	if err != nil {
@@ -82,22 +76,14 @@ func initDb(db *sql.DB, fromScratch bool) {
 	}
 	latestVersion := latestDbVersion()
 	version, err := GetDbVersion(tx)
-	if err != nil && err != sql.ErrNoRows {
-		log.Fatal(err)
-	}
 	if err == sql.ErrNoRows {
-		var initialVersion DbVersion
-		if fromScratch {
-			initialVersion = latestVersion
-		} else {
-			initialVersion = DbVersion(0)
-		}
-		version, err = InsertDbVersion(tx, initialVersion)
+		version, err = InsertDbVersion(tx, latestVersion)
 		if err != nil {
 			log.Fatal(err)
 		}
-	}
-	if err == nil && version < latestVersion {
+	} else if err != nil {
+		log.Fatal(err)
+	} else if version < latestVersion {
 		log.Println("New DB version available. Current:", version, "Latest:", latestVersion)
 		for version < latestVersion {
 			_, err = tx.Exec(migrateToVersionQuery(version + 1))
