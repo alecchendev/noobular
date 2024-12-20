@@ -91,9 +91,6 @@ func parseCreateCourseRequest(r *http.Request) (createCourseRequest, error) {
 	}
 	public := r.Form.Get("public") == "on"
 	moduleTitles := r.Form["module-title[]"]
-	if len(moduleTitles) == 0 {
-		return createCourseRequest{}, fmt.Errorf("Course must have at least one module")
-	}
 	moduleDescriptions := r.Form["module-description[]"]
 	if len(moduleDescriptions) != len(moduleTitles) {
 		return createCourseRequest{}, fmt.Errorf("Each module must have a description")
