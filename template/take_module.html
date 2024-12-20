@@ -254,7 +254,7 @@ p {
 	id="submit-button"
 	hx-get="/student/course/{{ $.Module.CourseId }}/module/{{ $.Module.Id }}/block/{{ Increment .Block.BlockIndex }}/piece"
 	hx-target="#submit-button"
-	hx-swap="outerHTML show:#block-{{ Increment .Block.BlockIndex }}:top settle:50ms transition:true"
+	hx-swap="outerHTML"
 	hx-select-oob="#header"
 >Next</button>
 {{ end }}
