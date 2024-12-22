@@ -72,7 +72,6 @@ button {
 </div>
 <h1>Edit Module</h1>
 <p>Note: Content blocks and question explanations expect <a target="_blank" href="https://commonmark.org/help/">markdown</a>.</p>
-<p>Note: You may write mathematical expressions (<a target="_blank" href="https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/writing-mathematical-expressions#writing-inline-expressions">within single $'s for inline expressions, double $$'s for block expressions</a>), however as <a target="_blank" href="https://docs.mathjax.org/en/latest/output/linebreaks.html">automatic linebreaks are not supported in MathJax3</a>, if you want to break lines you must <a target="_blank" href="https://github.com/mathjax/MathJax/issues/2312#issuecomment-538185951">wrap your expression in \displaylines{}</a>.</p>
 <form
     hx-put="/teacher/course/{{ .CourseId }}/module/{{ .ModuleId }}"
     hx-target="#response-message"
