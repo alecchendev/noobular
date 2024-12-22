@@ -13,7 +13,7 @@ import (
 	"testing"
 
 	"github.com/go-webauthn/webauthn/webauthn"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const testUrl = "http://localhost:8080"
@@ -49,7 +49,7 @@ func (c testContext) Close() {
 func (c *testContext) createUser() db.User {
 	fmt.Println("Creating user:", c.userCount)
 	user, err := c.db.CreateUser("test" + strconv.Itoa(c.userCount))
-	assert.Nil(c.t, err)
+	require.Nil(c.t, err)
 	c.userCount += 1
 	return user
 }
@@ -113,7 +113,7 @@ func (c testClient) login(userId int64) testClient {
 
 func (c testClient) getPageBody(path string) string {
 	resp := c.get(path)
-	assert.Equal(c.t, 200, resp.StatusCode)
+	require.Equal(c.t, 200, resp.StatusCode)
 	return bodyText(c.t, resp)
 }
 
@@ -157,14 +157,14 @@ func (c testClient) createCourse(course titleDescInput, modules []titleDescInput
 	dbCourse, dbModules := newDbCourseAndModules(course, modules)
 	formData := createOrEditCourseForm(dbCourse, dbModules)
 	resp := c.post(createCourseRoute, formData.Encode())
-	assert.Equal(c.t, 200, resp.StatusCode)
+	require.Equal(c.t, 200, resp.StatusCode)
 }
 
 func (c testClient) createCourseFail(course titleDescInput, modules []titleDescInput) {
 	dbCourse, dbModules := newDbCourseAndModules(course, modules)
 	formData := createOrEditCourseForm(dbCourse, dbModules)
 	resp := c.post(createCourseRoute, formData.Encode())
-	assert.NotEqual(c.t, 200, resp.StatusCode)
+	require.NotEqual(c.t, 200, resp.StatusCode)
 }
 
 func editCourseRoute(courseId int) string {
@@ -174,13 +174,13 @@ func editCourseRoute(courseId int) string {
 func (c testClient) editCourse(course db.Course, modules []db.ModuleVersion) {
 	formData := createOrEditCourseForm(course, modules)
 	resp := c.put(editCourseRoute(course.Id), formData.Encode())
-	assert.Equal(c.t, 200, resp.StatusCode)
+	require.Equal(c.t, 200, resp.StatusCode)
 }
 
 func (c testClient) editCourseFail(course db.Course, modules []db.ModuleVersion) {
 	formData := createOrEditCourseForm(course, modules)
 	resp := c.put(editCourseRoute(course.Id), formData.Encode())
-	assert.NotEqual(c.t, 200, resp.StatusCode)
+	require.NotEqual(c.t, 200, resp.StatusCode)
 }
 
 func createOrEditCourseForm(course db.Course, modules []db.ModuleVersion) url.Values {
@@ -200,12 +200,12 @@ func createOrEditCourseForm(course db.Course, modules []db.ModuleVersion) url.Va
 
 func (c testClient) deleteModule(courseId, moduleId int) {
 	resp := c.delete(fmt.Sprintf("/teacher/course/%d/module/%d", courseId, moduleId))
-	assert.Equal(c.t, 200, resp.StatusCode)
+	require.Equal(c.t, 200, resp.StatusCode)
 }
 
 func (c testClient) deleteModuleFail(courseId, moduleId int) {
 	resp := c.delete(fmt.Sprintf("/teacher/course/%d/module/%d", courseId, moduleId))
-	assert.NotEqual(c.t, 200, resp.StatusCode)
+	require.NotEqual(c.t, 200, resp.StatusCode)
 }
 
 type blockInput struct {
@@ -269,13 +269,13 @@ func editModuleRoute(courseId, moduleId int) string {
 func (c testClient) editModule(courseId int, moduleVersion db.ModuleVersion, blocks []blockInput) {
 	formData := editModuleForm(moduleVersion, blocks)
 	resp := c.put(editModuleRoute(courseId, moduleVersion.ModuleId), formData.Encode())
-	assert.Equal(c.t, 200, resp.StatusCode)
+	require.Equal(c.t, 200, resp.StatusCode)
 }
 
 func (c testClient) editModuleFail(courseId int, moduleVersion db.ModuleVersion, blocks []blockInput) {
 	formData := editModuleForm(moduleVersion, blocks)
 	resp := c.put(editModuleRoute(courseId, moduleVersion.ModuleId), formData.Encode())
-	assert.NotEqual(c.t, 200, resp.StatusCode)
+	require.NotEqual(c.t, 200, resp.StatusCode)
 }
 
 func editModuleForm(moduleVersion db.ModuleVersion, blocks []blockInput) url.Values {
@@ -308,7 +308,7 @@ func editModuleForm(moduleVersion db.ModuleVersion, blocks []blockInput) url.Val
 
 func bodyText(t *testing.T, resp *http.Response) string {
 	bodyBytes, err := io.ReadAll(resp.Body)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	return string(bodyBytes)
 }
 
@@ -328,10 +328,10 @@ func (c testClient) initTestCourseN(courseCount int, moduleCount int) (db.Course
 
 	body := c.getPageBody("/teacher")
 	editModulePageLink := editModuleRoute(courseId, moduleId)
-	assert.Contains(c.t, body, editModulePageLink)
+	require.Contains(c.t, body, editModulePageLink)
 
 	body = c.getPageBody(editModulePageLink)
-	assert.Contains(c.t, body, editModuleRoute(courseId, moduleId))
+	require.Contains(c.t, body, editModuleRoute(courseId, moduleId))
 
 	newModules := []db.ModuleVersion{
 		db.NewModuleVersion(-1, m, 1, "new title1", "new description1"),
@@ -355,12 +355,12 @@ func (c testClient) initTestCourseN(courseCount int, moduleCount int) (db.Course
 
 func (c testClient) enrollCourse(courseId int) {
 	resp := c.post(fmt.Sprintf("/student/course/%d", courseId), "")
-	assert.Equal(c.t, 200, resp.StatusCode)
+	require.Equal(c.t, 200, resp.StatusCode)
 }
 
 func (c testClient) enrollCourseFail(courseId int) {
 	resp := c.post(fmt.Sprintf("/student/course/%d", courseId), "")
-	assert.NotEqual(c.t, 200, resp.StatusCode)
+	require.NotEqual(c.t, 200, resp.StatusCode)
 }
 
 func studentCoursePageRoute(courseId int) string {
