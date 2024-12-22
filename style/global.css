@@ -9,6 +9,8 @@ html, body {
 	margin: auto;
 	margin-bottom: 150px;
 	scroll-behavior: smooth;
+	text-wrap: wrap;
+	word-break: break-word;
 }
 
 * {

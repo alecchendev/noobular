@@ -1,7 +1,4 @@
 {{ define "title" }}Module: {{ .Module.Title }}{{ end }}
-{{ define "extra_head" }}
-<link rel="stylesheet" type="text/css" href="/style/katex.min.css">
-{{ end }}
 {{ define "style" }}
 
 .take-module-body {
@@ -123,7 +120,13 @@ p {
 
 {{ end }}
 {{ define "content" }}
+<link rel="stylesheet" type="text/css" href="/style/katex.min.css">
 <div class="take-module-body">
+{{ template "content_inner" . }}
+</div>
+{{ end }}
+
+{{ define "content_inner" }}
 <div id="header">
 	<div class="progress-bar">
 		{{ range $i := NumRange .Module.BlockCount }}
@@ -153,8 +156,6 @@ p {
 {{ else }}
 	{{ template "block" . }}
 {{ end }}
-
-</div>
 {{ end }}
 
 {{ define "content_block" }}
@@ -186,9 +187,9 @@ p {
 
 {{ define "question_form" }}
 <form
-	id="question-form"
+		id="question-form-{{ .Block.BlockIndex }}"
 	hx-post="/student/course/{{ $.Module.CourseId }}/module/{{ $.Module.Id }}/block/{{ .Block.BlockIndex }}/answer"
-	hx-target="#question-form"
+	hx-target="#question-form-{{ .Block.BlockIndex }}"
 	hx-swap="outerHTML"
 >
 	<div id="block-{{ .Block.BlockIndex }}" class="block">

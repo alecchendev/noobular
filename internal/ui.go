@@ -521,7 +521,7 @@ func (u UiTakeModule) ShowNextButton() bool {
 
 // Renders just the content, i.e. the header + content, not the full page.
 func (r *Renderer) RenderTakeModule(w http.ResponseWriter, module UiTakeModule) error {
-	return r.templates["take_module.html"].ExecuteTemplate(w, "content", module)
+	return r.templates["take_module.html"].ExecuteTemplate(w, "content_inner", module)
 }
 
 func (r *Renderer) RenderQuestionSubmitted(w http.ResponseWriter, module UiTakeModule) error {
