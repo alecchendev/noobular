@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNav(t *testing.T) {
@@ -27,14 +27,14 @@ func TestNav(t *testing.T) {
 	test := func(t *testing.T, path string, expectedText string) {
 		client := newTestClient(t)
 		body := client.getPageBody(path)
-		assert.Contains(t, body, expectedText)
-		assert.Contains(t, body, "Signin")
-		assert.Contains(t, body, "Signup")
+		require.Contains(t, body, expectedText)
+		require.Contains(t, body, "Signin")
+		require.Contains(t, body, "Signup")
 
 		client = client.login(user.Id)
 		body = client.getPageBody(path)
-		assert.Contains(t, body, expectedText)
-		assert.Contains(t, body, "Logout")
+		require.Contains(t, body, expectedText)
+		require.Contains(t, body, "Logout")
 	}
 
 	for _, tt := range tests {
@@ -53,25 +53,25 @@ func TestCreateCourse(t *testing.T) {
 
 	course, modules := sampleCreateCourseInput()
 	body := client.getPageBody("/teacher")
-	assert.Contains(t, body, createCourseRoute)
-	assert.NotContains(t, body, course.Title)
+	require.Contains(t, body, createCourseRoute)
+	require.NotContains(t, body, course.Title)
 
 	client.createCourse(course, modules)
 
 	body = client.getPageBody("/teacher")
-	assert.Contains(t, body, course.Title)
-	assert.Contains(t, body, course.Description)
+	require.Contains(t, body, course.Title)
+	require.Contains(t, body, course.Description)
 	for _, module := range modules {
-		assert.Contains(t, body, module.Title)
-		assert.Contains(t, body, module.Description)
+		require.Contains(t, body, module.Title)
+		require.Contains(t, body, module.Description)
 	}
 
-	// Assert it doesn't show up because it doesn't have any modules with blocks
+	// require it doesn't show up because it doesn't have any modules with blocks
 	body = client.getPageBody("/browse")
-	assert.NotContains(t, body, course.Title)
-	assert.NotContains(t, body, course.Description)
-	assert.NotContains(t, body, "Course created")
-	assert.NotContains(t, body, "Modules")
+	require.NotContains(t, body, course.Title)
+	require.NotContains(t, body, course.Description)
+	require.NotContains(t, body, "Course created")
+	require.NotContains(t, body, "Modules")
 }
 
 func TestEditCourse(t *testing.T) {
@@ -86,7 +86,7 @@ func TestEditCourse(t *testing.T) {
 	courseId := 1
 
 	body := client.getPageBody("/teacher")
-	assert.Contains(t, body, editCourseRoute(courseId))
+	require.Contains(t, body, editCourseRoute(courseId))
 
 	newCourse := db.NewCourse(courseId, "new title", "new description", true)
 	newModules := []db.ModuleVersion{
@@ -97,15 +97,15 @@ func TestEditCourse(t *testing.T) {
 
 	for _, route := range []string{"/teacher", editCourseRoute(courseId)} {
 		body = client.getPageBody(route)
-		assert.Contains(t, body, newCourse.Title)
-		assert.Contains(t, body, newCourse.Description)
+		require.Contains(t, body, newCourse.Title)
+		require.Contains(t, body, newCourse.Description)
 		for _, module := range newModules {
-			assert.Contains(t, body, module.Title)
-			assert.Contains(t, body, module.Description)
+			require.Contains(t, body, module.Title)
+			require.Contains(t, body, module.Description)
 		}
 	}
 
-	// Assert a user cannot edit a module for a course that's not theirs
+	// require a user cannot edit a module for a course that's not theirs
 	// even if they put a course that is theirs
 	user2 := ctx.createUser()
 	client2 := newTestClient(t).login(user2.Id)
@@ -124,11 +124,11 @@ func TestPrivateCourse(t *testing.T) {
 	course, modules, _ := client.initTestCourse()
 
 	body := client.getPageBody("/browse")
-	assert.Contains(t, body, course.Title)
-	assert.Contains(t, body, course.Description)
+	require.Contains(t, body, course.Title)
+	require.Contains(t, body, course.Description)
 	for _, module := range modules {
-		assert.Contains(t, body, module.Title)
-		assert.Contains(t, body, module.Description)
+		require.Contains(t, body, module.Title)
+		require.Contains(t, body, module.Description)
 	}
 
 	newCourse := course
@@ -136,11 +136,11 @@ func TestPrivateCourse(t *testing.T) {
 	client.editCourse(newCourse, modules)
 
 	body = client.getPageBody("/browse")
-	assert.NotContains(t, body, course.Title)
-	assert.NotContains(t, body, course.Description)
+	require.NotContains(t, body, course.Title)
+	require.NotContains(t, body, course.Description)
 	for _, module := range modules {
-		assert.NotContains(t, body, module.Title)
-		assert.NotContains(t, body, module.Description)
+		require.NotContains(t, body, module.Title)
+		require.NotContains(t, body, module.Description)
 	}
 
 	client.enrollCourseFail(course.Id)
@@ -161,20 +161,20 @@ func TestEditModule(t *testing.T) {
 	for i, module := range modules {
 		editModulePageLink := editModuleRoute(courseId, module.ModuleId)
 		body := client.getPageBody(editModulePageLink)
-		assert.Contains(t, body, module.Title)
-		assert.Contains(t, body, module.Description)
+		require.Contains(t, body, module.Title)
+		require.Contains(t, body, module.Description)
 		for _, block := range blockInputs[i] {
 			switch block.blockType {
 			case db.QuestionBlockType:
 				question := block.block.(internal.UiQuestion)
-				assert.Contains(t, body, question.QuestionText)
-				assert.Contains(t, body, question.Explanation.Content)
+				require.Contains(t, body, question.QuestionText)
+				require.Contains(t, body, question.Explanation.Content)
 				for _, choice := range question.Choices {
-					assert.Contains(t, body, choice.ChoiceText)
+					require.Contains(t, body, choice.ChoiceText)
 				}
 			case db.ContentBlockType:
 				content := block.block.(db.Content)
-				assert.Contains(t, body, content.Content)
+				require.Contains(t, body, content.Content)
 			}
 		}
 	}
@@ -184,16 +184,16 @@ func TestEditModule(t *testing.T) {
 
 	// Course + modules should show up in browse page now that module has blocks
 	body := client.getPageBody("/browse")
-	assert.Contains(t, body, course.Title)
-	assert.Contains(t, body, course.Description)
+	require.Contains(t, body, course.Title)
+	require.Contains(t, body, course.Description)
 	for _, module := range modules[:len(modules)-1] {
-		assert.Contains(t, body, module.Title)
-		assert.Contains(t, body, module.Description)
+		require.Contains(t, body, module.Title)
+		require.Contains(t, body, module.Description)
 	}
-	assert.NotContains(t, body, modules[len(modules)-1].Title)
-	assert.NotContains(t, body, modules[len(modules)-1].Description)
+	require.NotContains(t, body, modules[len(modules)-1].Title)
+	require.NotContains(t, body, modules[len(modules)-1].Description)
 
-	// Assert a user cannot edit a module for a course that's not theirs
+	// require a user cannot edit a module for a course that's not theirs
 	// even if they put a course that is theirs
 	user2 := ctx.createUser()
 	client2 := newTestClient(t).login(user2.Id)
@@ -215,16 +215,16 @@ func TestAuth(t *testing.T) {
 	course, modules, _ := client1.initTestCourse()
 
 	body := client1.getPageBody("/teacher")
-	assert.Contains(t, body, course.Title)
-	assert.Contains(t, body, modules[0].Title)
-	assert.Contains(t, body, editCourseRoute(course.Id))
-	assert.Contains(t, body, editModuleRoute(course.Id, modules[0].ModuleId))
+	require.Contains(t, body, course.Title)
+	require.Contains(t, body, modules[0].Title)
+	require.Contains(t, body, editCourseRoute(course.Id))
+	require.Contains(t, body, editModuleRoute(course.Id, modules[0].ModuleId))
 
 	body = client2.getPageBody("/teacher")
-	assert.NotContains(t, body, course.Title)
-	assert.NotContains(t, body, modules[0].Title)
-	assert.NotContains(t, body, editCourseRoute(course.Id))
-	assert.NotContains(t, body, editModuleRoute(course.Id, modules[0].ModuleId))
+	require.NotContains(t, body, course.Title)
+	require.NotContains(t, body, modules[0].Title)
+	require.NotContains(t, body, editCourseRoute(course.Id))
+	require.NotContains(t, body, editModuleRoute(course.Id, modules[0].ModuleId))
 
 	newCourse := db.NewCourse(course.Id, "new title", "new description", true)
 	newModules := []db.ModuleVersion{
@@ -284,15 +284,15 @@ func TestNoDuplicateContent(t *testing.T) {
 	}
 	client.editModule(courseId, newModuleVersion, blocks)
 
-	// Assert contentStr2 is not duplicated (shared between explanation and content block)
+	// require contentStr2 is not duplicated (shared between explanation and content block)
 	{
 		content, err := ctx.db.GetAllContent()
-		assert.Nil(t, err)
-		assert.Len(t, content, 3)
+		require.Nil(t, err)
+		require.Len(t, content, 3)
 		contentStrings := []string{content[0].Content, content[1].Content, content[2].Content}
-		assert.Contains(t, contentStrings, explanation)
-		assert.Contains(t, contentStrings, contentStr)
-		assert.Contains(t, contentStrings, contentStr2)
+		require.Contains(t, contentStrings, explanation)
+		require.Contains(t, contentStrings, contentStr)
+		require.Contains(t, contentStrings, contentStr2)
 	}
 
 	newModuleVersion2 := db.NewModuleVersion(2, moduleId, 1, "new title2", "new description2")
@@ -304,14 +304,14 @@ func TestNoDuplicateContent(t *testing.T) {
 	blocks2 := []blockInput{ newQuestionBlockInput(question2), newContentBlockInput(contentStr) }
 	client.editModule(courseId, newModuleVersion2, blocks2)
 
-	// Assert contentStr is not duplicated
-	// Assert contentStr2 is deleted
+	// require contentStr is not duplicated
+	// require contentStr2 is deleted
 	content, err := ctx.db.GetAllContent()
-	assert.Nil(t, err)
-	assert.Len(t, content, 2)
+	require.Nil(t, err)
+	require.Len(t, content, 2)
 	contentStrings := []string{content[0].Content, content[1].Content}
-	assert.Contains(t, contentStrings, explanation)
-	assert.Contains(t, contentStrings, contentStr)
+	require.Contains(t, contentStrings, explanation)
+	require.Contains(t, contentStrings, contentStr)
 }
 
 // Test that if we delete a module, content unique to that module is deleted,
@@ -354,12 +354,12 @@ func TestDeleteModuleSharedContent(t *testing.T) {
 	// Delete first courses module
 	client.deleteModule(courseId1, moduleId1)
 
-	// Assert shared content stays
-	// Assert unique content is deleted
+	// require shared content stays
+	// require unique content is deleted
 	content, err := ctx.db.GetAllContent()
-	assert.Nil(t, err)
-	assert.Len(t, content, 1)
-	assert.Contains(t, content[0].Content, contentStr)
+	require.Nil(t, err)
+	require.Len(t, content, 1)
+	require.Contains(t, content[0].Content, contentStr)
 }
 
 func TestStudentCoursePage(t *testing.T) {
@@ -375,9 +375,9 @@ func TestStudentCoursePage(t *testing.T) {
 	client.enrollCourse(courseId)
 
 	body := client.getPageBody(studentCoursePageRoute(courseId))
-	assert.Contains(t, body, course.Title)
+	require.Contains(t, body, course.Title)
 	for _, module := range modules {
-		assert.Equal(t, strings.Count(body, module.Title), 1)
+		require.Equal(t, strings.Count(body, module.Title), 1)
 	}
 
 	// If we enroll again in the same course it should not succeed
@@ -418,20 +418,20 @@ func TestModuleVersioning(t *testing.T) {
 	// Visit
 	client.enrollCourse(courseId)
 	body := client.getPageBody(studentCoursePageRoute(courseId))
-	assert.Contains(t, body, takeModulePageRoute(courseId, moduleId))
+	require.Contains(t, body, takeModulePageRoute(courseId, moduleId))
 
 	// Take module initial page (first block = content)
 	body = client.getPageBody(takeModulePageRoute(courseId, moduleId))
-	assert.Contains(t, body, contentStr)
-	assert.NotContains(t, body, question.QuestionText)
-	assert.Contains(t, body, takeModulePieceRoute(courseId, moduleId, 1))
+	require.Contains(t, body, contentStr)
+	require.NotContains(t, body, question.QuestionText)
+	require.Contains(t, body, takeModulePieceRoute(courseId, moduleId, 1))
 
 	// Next piece (question)
 	body = client.getPageBody(takeModulePieceRoute(courseId, moduleId, 1))
-	assert.Contains(t, body, question.QuestionText)
-	assert.Contains(t, body, question.Choices[0].ChoiceText)
-	assert.Contains(t, body, question.Choices[1].ChoiceText)
-	assert.NotContains(t, body, question.Explanation.Content)
+	require.Contains(t, body, question.QuestionText)
+	require.Contains(t, body, question.Choices[0].ChoiceText)
+	require.Contains(t, body, question.Choices[1].ChoiceText)
+	require.NotContains(t, body, question.Explanation.Content)
 
 	// TODO: Answer question + reveal explanation
 
@@ -452,9 +452,9 @@ func TestModuleVersioning(t *testing.T) {
 
 	// Visit again, and show old version
 	body = client.getPageBody(takeModulePageRoute(courseId, moduleId))
-	assert.Contains(t, body, contentStr)
-	assert.Contains(t, body, question.QuestionText)
-	assert.Contains(t, body, question.Choices[0].ChoiceText)
-	assert.Contains(t, body, question.Choices[1].ChoiceText)
-	assert.NotContains(t, body, question.Explanation.Content)
+	require.Contains(t, body, contentStr)
+	require.Contains(t, body, question.QuestionText)
+	require.Contains(t, body, question.Choices[0].ChoiceText)
+	require.Contains(t, body, question.Choices[1].ChoiceText)
+	require.NotContains(t, body, question.Explanation.Content)
 }
