@@ -266,6 +266,64 @@ func TestEditModule(t *testing.T) {
 	client2.deleteModuleFail(course2.Id, modules[0].ModuleId)
 }
 
+func TestEditModuleInputValidation(t *testing.T) {
+	ctx := startServer(t)
+	defer ctx.Close()
+
+	user := ctx.createUser()
+	client := newTestClient(t).login(user.Id)
+
+	course, modules, blocks := client.initTestCourse()
+	module := modules[0]
+	module.Id = 1
+	blockInputs := blocks[0]
+
+	emptyTitle := newTitleDescInput("", "description")
+	emptyDescription := newTitleDescInput("title", "")
+	tooLongTitle := newTitleDescInput(strings.Repeat("a", internal.TitleMaxLength + 1), "description")
+	tooLongDescription := newTitleDescInput("title", strings.Repeat("a", internal.DescriptionMaxLength + 1))
+
+	dbModule := func(in titleDescInput) db.ModuleVersion {
+		return db.NewModuleVersion(2, int(module.Id), 2, in.Title, in.Description)
+	}
+	client.editModuleFail(course.Id, dbModule(emptyTitle), blockInputs)
+	client.editModuleFail(course.Id, dbModule(emptyDescription), blockInputs)
+	client.editModuleFail(course.Id, dbModule(tooLongTitle), blockInputs)
+	client.editModuleFail(course.Id, dbModule(tooLongDescription), blockInputs)
+	client.editModuleFail(course.Id, module, []blockInput{
+		newQuestionBlockInput(newUiQuestionBuilder().text("").choice("choice", true).build()),
+	})
+	client.editModuleFail(course.Id, module, []blockInput{
+		newQuestionBlockInput(newUiQuestionBuilder().text(strings.Repeat("a", internal.MaxQuestionLength + 1)).choice("choice", true).build()),
+	})
+	client.editModuleFail(course.Id, module, []blockInput{
+		newQuestionBlockInput(newUiQuestionBuilder().text("question").build()),
+	})
+	client.editModuleFail(course.Id, module, []blockInput{
+		newQuestionBlockInput(newUiQuestionBuilder().text("question").choice("", true).build()),
+	})
+	client.editModuleFail(course.Id, module, []blockInput{
+		newQuestionBlockInput(newUiQuestionBuilder().text("question").choice(strings.Repeat("a", internal.MaxChoiceLength + 1), true).build()),
+	})
+	client.editModuleFail(course.Id, module, []blockInput{
+		newQuestionBlockInput(newUiQuestionBuilder().text("question").choice("choice", false).build()),
+	})
+	tooManyChoices := newUiQuestionBuilder().text("question")
+	for i := 0; i < internal.MaxChoices; i++ {
+		tooManyChoices.choice("choice", false)
+	}
+	tooManyChoices.choice("choice", true)
+	client.editModuleFail(course.Id, module, []blockInput{
+		newQuestionBlockInput(tooManyChoices.build()),
+	})
+	client.editModuleFail(course.Id, module, []blockInput{
+		newContentBlockInput(""),
+	})
+	client.editModuleFail(course.Id, module, []blockInput{
+		newContentBlockInput(strings.Repeat("a", internal.MaxContentLength + 1)),
+	})
+}
+
 func TestAuth(t *testing.T) {
 	ctx := startServer(t)
 	defer ctx.Close()

@@ -477,15 +477,15 @@ func parseEditModuleRequest(r *http.Request) (editModuleRequest, error) {
 	}, nil
 }
 
-const maxBlocks = 64
-const maxQuestionLength = 256
-const maxChoices = 16
-const maxChoiceLength = maxQuestionLength
-const maxContentLength = 4096
+const MaxBlocks = 64
+const MaxQuestionLength = 256
+const MaxChoices = 16
+const MaxChoiceLength = MaxQuestionLength
+const MaxContentLength = 4096
 
 func validateEditModuleRequest(req editModuleRequest) error {
-	if len(req.blockTypes) > maxBlocks {
-		return fmt.Errorf("Cannot have more than %d blocks", maxBlocks)
+	if len(req.blockTypes) > MaxBlocks {
+		return fmt.Errorf("Cannot have more than %d blocks", MaxBlocks)
 	}
 	if req.title == "" {
 		return fmt.Errorf("Title cannot be empty")
@@ -503,21 +503,21 @@ func validateEditModuleRequest(req editModuleRequest) error {
 		if question == "" {
 			return fmt.Errorf("Questions cannot be empty")
 		}
-		if len(question) > maxQuestionLength {
-			return fmt.Errorf("Questions cannot be longer than %d characters", maxQuestionLength)
+		if len(question) > MaxQuestionLength {
+			return fmt.Errorf("Questions cannot be longer than %d characters", MaxQuestionLength)
 		}
 		if len(req.choicesByQuestion[i]) == 0 {
 			return fmt.Errorf("Questions must have at least one choice")
 		}
-		if len(req.choicesByQuestion[i]) > maxChoices {
-			return fmt.Errorf("Questions cannot have more than %d choices", maxChoices)
+		if len(req.choicesByQuestion[i]) > MaxChoices {
+			return fmt.Errorf("Questions cannot have more than %d choices", MaxChoices)
 		}
 		for _, choice := range req.choicesByQuestion[i] {
 			if choice == "" {
 				return fmt.Errorf("Choices cannot be empty")
 			}
-			if len(choice) > maxChoiceLength {
-				return fmt.Errorf("Choices cannot be longer than %d characters", maxChoiceLength)
+			if len(choice) > MaxChoiceLength {
+				return fmt.Errorf("Choices cannot be longer than %d characters", MaxChoiceLength)
 			}
 		}
 	}
@@ -525,8 +525,8 @@ func validateEditModuleRequest(req editModuleRequest) error {
 		if content == "" {
 			return fmt.Errorf("Contents cannot be empty")
 		}
-		if len(content) > maxContentLength {
-			return fmt.Errorf("Contents cannot be longer than %d characters", maxContentLength)
+		if len(content) > MaxContentLength {
+			return fmt.Errorf("Contents cannot be longer than %d characters", MaxContentLength)
 		}
 	}
 	return nil
