@@ -181,11 +181,17 @@ func CreateAuthCookie(jwtSecret []byte, userId int64, httpsOnly bool) (http.Cook
 
 // Webauthn sign up
 
+const maxUsernameLength = 64
+
 func handleSignupBegin(w http.ResponseWriter, r *http.Request, ctx HandlerContext, webAuthn *webauthn.WebAuthn) error {
 	username := r.URL.Query().Get("username")
 	if username == "" {
 		return fmt.Errorf("empty username")
 	}
+	if len(username) > maxUsernameLength {
+		return fmt.Errorf("username too long, max %d characters", maxUsernameLength)
+	}
+	// TODO: delete user if they don't finish signup
 	webAuthnUser, err := GetWebAuthnUser(ctx.dbClient, username, true, true)
 	if err != nil {
 		return fmt.Errorf("Error getting webauthn user: %v", err)

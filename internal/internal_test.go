@@ -114,6 +114,70 @@ func TestEditCourse(t *testing.T) {
 	client2.editCourseFail(course2, []db.ModuleVersion{module})
 }
 
+func TestCreateEditCourseInputValidation(t *testing.T) {
+	ctx := startServer(t)
+	defer ctx.Close()
+
+	user := ctx.createUser()
+	client := newTestClient(t).login(user.Id)
+
+	course, modules := sampleCreateCourseInput()
+
+	emptyTitle := newTitleDescInput("", "description")
+	emptyDescription := newTitleDescInput("title", "")
+	tooLongTitle := newTitleDescInput(strings.Repeat("a", internal.TitleMaxLength + 1), "description")
+	tooLongDescription := newTitleDescInput("title", strings.Repeat("a", internal.DescriptionMaxLength + 1))
+	emptyTitleModules := []titleDescInput{emptyTitle}
+	emptyDescriptionModules := []titleDescInput{emptyDescription}
+	tooLongTitleModules := []titleDescInput{tooLongTitle}
+	tooLongDescriptionModules := []titleDescInput{tooLongDescription}
+
+	// Create
+	client.createCourseFail(emptyTitle, modules)
+	client.createCourseFail(emptyDescription, modules)
+	client.createCourseFail(tooLongTitle, modules)
+	client.createCourseFail(tooLongDescription, modules)
+	client.createCourseFail(course, emptyTitleModules)
+	client.createCourseFail(course, emptyDescriptionModules)
+	client.createCourseFail(course, tooLongTitleModules)
+	client.createCourseFail(course, tooLongDescriptionModules)
+	tooManyModules := make([]titleDescInput, internal.MaxModules + 1)
+	for i := range tooManyModules {
+		tooManyModules[i] = newTitleDescInput("title", "description")
+	}
+	client.createCourseFail(course, tooManyModules)
+
+	// Edit
+	client.createCourse(course, modules)
+	courseId := 1
+	newCourse := db.NewCourse(courseId, "new title", "new description", true)
+	newModules := []db.ModuleVersion{
+		db.NewModuleVersion(-1, 1, 1, "new module title1", "new module description1"),
+		db.NewModuleVersion(-1, 2, 1, "new module title2", "new module description2"),
+	}
+	client.editCourse(newCourse, newModules)
+
+	dbCourse := func(in titleDescInput) db.Course {
+		return db.NewCourse(courseId, in.Title, in.Description, true)
+	}
+	dbMdoules := func(in []titleDescInput) []db.ModuleVersion {
+		out := make([]db.ModuleVersion, len(in))
+		for i, module := range in {
+			out[i] = db.NewModuleVersion(-1, i + 1, 1, module.Title, module.Description)
+		}
+		return out
+	}
+	client.editCourseFail(dbCourse(emptyTitle), newModules)
+	client.editCourseFail(dbCourse(emptyDescription), newModules)
+	client.editCourseFail(dbCourse(tooLongTitle), newModules)
+	client.editCourseFail(dbCourse(tooLongDescription), newModules)
+	client.editCourseFail(newCourse, dbMdoules(emptyTitleModules))
+	client.editCourseFail(newCourse, dbMdoules(emptyDescriptionModules))
+	client.editCourseFail(newCourse, dbMdoules(tooLongTitleModules))
+	client.editCourseFail(newCourse, dbMdoules(tooLongDescriptionModules))
+	client.editCourseFail(newCourse, dbMdoules(tooManyModules))
+}
+
 func TestPrivateCourse(t *testing.T) {
 	ctx := startServer(t)
 	defer ctx.Close()

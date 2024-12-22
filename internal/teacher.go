@@ -82,26 +82,63 @@ func parseCreateCourseRequest(r *http.Request) (createCourseRequest, error) {
 		return createCourseRequest{}, err
 	}
 	title := r.Form.Get("title")
-	if title == "" {
-		return createCourseRequest{}, fmt.Errorf("Title cannot be empty")
-	}
 	description := r.Form.Get("description")
-	if description == "" {
-		return createCourseRequest{}, fmt.Errorf("Description cannot be empty")
-	}
 	public := r.Form.Get("public") == "on"
 	moduleTitles := r.Form["module-title[]"]
 	moduleDescriptions := r.Form["module-description[]"]
-	if len(moduleDescriptions) != len(moduleTitles) {
-		return createCourseRequest{}, fmt.Errorf("Each module must have a description")
-	}
 	return createCourseRequest{title, description, public, moduleTitles, moduleDescriptions}, nil
+}
+
+const TitleMaxLength = 128
+const DescriptionMaxLength = 1024
+const MaxModules = 128
+
+func validateCourseRequest(title string, description string, moduleTitles []string, moduleDescriptions []string) error {
+	if title == "" {
+		return fmt.Errorf("Title cannot be empty")
+	}
+	if len(title) > TitleMaxLength {
+		return fmt.Errorf("Title cannot be longer than %d characters", TitleMaxLength)
+	}
+	if description == "" {
+		return fmt.Errorf("Description cannot be empty")
+	}
+	if len(description) > DescriptionMaxLength {
+		return fmt.Errorf("Description cannot be longer than %d characters", DescriptionMaxLength)
+	}
+	if len(moduleDescriptions) != len(moduleTitles) {
+		return fmt.Errorf("Each module must have a title and description")
+	}
+	if len(moduleTitles) > MaxModules {
+		return fmt.Errorf("Cannot have more than %d modules", MaxModules)
+	}
+	for _, moduleTitle := range moduleTitles {
+		if moduleTitle == "" {
+			return fmt.Errorf("Module titles cannot be empty")
+		}
+		if len(moduleTitle) > TitleMaxLength {
+			return fmt.Errorf("Module titles cannot be longer than %d characters", TitleMaxLength)
+		}
+	}
+	for _, moduleDescription := range moduleDescriptions {
+		if moduleDescription == "" {
+			return fmt.Errorf("Module descriptions cannot be empty")
+		}
+		if len(moduleDescription) > DescriptionMaxLength {
+			return fmt.Errorf("Module descriptions cannot be longer than %d characters", DescriptionMaxLength)
+		}
+	}
+	return nil
 }
 
 func handleCreateCourse(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
 	req, err := parseCreateCourseRequest(r)
 	if err != nil {
-		return err
+		return fmt.Errorf("Error parsing create course request: %v", err)
+	}
+	err = validateCourseRequest(req.title, req.description, req.moduleTitles, req.moduleDescriptions)
+	if err != nil {
+		return fmt.Errorf("Error validating create course request: %v", err)
 	}
 	course, err := ctx.dbClient.CreateCourse(user.Id, req.title, req.description, req.public)
 	if err != nil {
@@ -178,9 +215,8 @@ func parseEditCourseRequest(r *http.Request) (editCourseRequest, error) {
 	moduleDescriptions := r.Form["module-description[]"]
 	moduleIdCount := len(moduleIds)
 	moduleTitleCount := len(moduleTitles)
-	moduleDescriptionCount := len(moduleDescriptions)
-	if moduleIdCount != moduleTitleCount || moduleTitleCount != moduleDescriptionCount {
-		return editCourseRequest{}, fmt.Errorf("Edit course module data lengths are misaligned: %d module ids, %d moduleTitles, %d motule descriptions", moduleIdCount, moduleTitleCount, moduleDescriptionCount)
+	if moduleIdCount != moduleTitleCount {
+		return editCourseRequest{}, fmt.Errorf("Edit course module data lengths are misaligned: %d module ids, %d moduleTitles", moduleIdCount, moduleTitleCount)
 	}
 	return editCourseRequest{courseId, title, description, public, moduleIds, moduleTitles, moduleDescriptions}, nil
 }
@@ -188,7 +224,11 @@ func parseEditCourseRequest(r *http.Request) (editCourseRequest, error) {
 func handleEditCourse(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
 	req, err := parseEditCourseRequest(r)
 	if err != nil {
-		return err
+		return fmt.Errorf("Error parsing edit course request: %v", err)
+	}
+	err = validateCourseRequest(req.title, req.description, req.moduleTitles, req.moduleDescriptions)
+	if err != nil {
+		return fmt.Errorf("Error validating edit course request: %v", err)
 	}
 	_, err = ctx.dbClient.GetTeacherCourse(req.courseId, user.Id)
 	if err != nil {
@@ -424,29 +464,6 @@ func parseEditModuleRequest(r *http.Request) (editModuleRequest, error) {
 		uiQuestions[i] = question
 		uiChoicesByQuestion[i] = uiChoices
 	}
-	for i, question := range uiQuestions {
-		if question == "" {
-			return editModuleRequest{}, fmt.Errorf("Questions cannot be empty")
-		}
-		if len(uiChoicesByQuestion[i]) == 0 {
-			return editModuleRequest{}, fmt.Errorf("Questions must have at least one choice")
-		}
-		for _, choice := range uiChoicesByQuestion[i] {
-			if choice == "" {
-				return editModuleRequest{}, fmt.Errorf("Choices cannot be empty")
-			}
-		}
-	}
-	for _, content := range contents {
-		if content == "" {
-			return editModuleRequest{}, fmt.Errorf("Contents cannot be empty")
-		}
-	}
-	// TODO: maybe remove this. This is just so I can restrict what I have to consider
-	// rendering in the UI for now.
-	if len(uiQuestions) > 12 {
-		return editModuleRequest{}, fmt.Errorf("Modules cannot have more than 12 questions")
-	}
 	return editModuleRequest{
 		moduleId,
 		title,
@@ -460,10 +477,69 @@ func parseEditModuleRequest(r *http.Request) (editModuleRequest, error) {
 	}, nil
 }
 
+const maxBlocks = 64
+const maxQuestionLength = 256
+const maxChoices = 16
+const maxChoiceLength = maxQuestionLength
+const maxContentLength = 4096
+
+func validateEditModuleRequest(req editModuleRequest) error {
+	if len(req.blockTypes) > maxBlocks {
+		return fmt.Errorf("Cannot have more than %d blocks", maxBlocks)
+	}
+	if req.title == "" {
+		return fmt.Errorf("Title cannot be empty")
+	}
+	if len(req.title) > TitleMaxLength {
+		return fmt.Errorf("Title cannot be longer than %d characters", TitleMaxLength)
+	}
+	if req.description == "" {
+		return fmt.Errorf("Description cannot be empty")
+	}
+	if len(req.description) > DescriptionMaxLength {
+		return fmt.Errorf("Description cannot be longer than %d characters", DescriptionMaxLength)
+	}
+	for i, question := range req.questions {
+		if question == "" {
+			return fmt.Errorf("Questions cannot be empty")
+		}
+		if len(question) > maxQuestionLength {
+			return fmt.Errorf("Questions cannot be longer than %d characters", maxQuestionLength)
+		}
+		if len(req.choicesByQuestion[i]) == 0 {
+			return fmt.Errorf("Questions must have at least one choice")
+		}
+		if len(req.choicesByQuestion[i]) > maxChoices {
+			return fmt.Errorf("Questions cannot have more than %d choices", maxChoices)
+		}
+		for _, choice := range req.choicesByQuestion[i] {
+			if choice == "" {
+				return fmt.Errorf("Choices cannot be empty")
+			}
+			if len(choice) > maxChoiceLength {
+				return fmt.Errorf("Choices cannot be longer than %d characters", maxChoiceLength)
+			}
+		}
+	}
+	for _, content := range req.contents {
+		if content == "" {
+			return fmt.Errorf("Contents cannot be empty")
+		}
+		if len(content) > maxContentLength {
+			return fmt.Errorf("Contents cannot be longer than %d characters", maxContentLength)
+		}
+	}
+	return nil
+}
+
 func handleEditModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
 	req, err := parseEditModuleRequest(r)
 	if err != nil {
-		return err
+		return fmt.Errorf("Error parsing edit module request: %v", err)
+	}
+	err = validateEditModuleRequest(req)
+	if err != nil {
+		return fmt.Errorf("Error validating edit module request: %v", err)
 	}
 	_, err = ctx.dbClient.GetModuleCourse(user.Id, req.moduleId)
 	if err != nil {

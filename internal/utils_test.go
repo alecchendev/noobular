@@ -122,6 +122,10 @@ type titleDescInput struct {
 	Description string
 }
 
+func newTitleDescInput(title, desc string) titleDescInput {
+	return titleDescInput{title, desc}
+}
+
 func sampleCreateCourseInput() (titleDescInput, []titleDescInput) {
 	return sampleCreateCourseInputN(1)
 }
@@ -140,15 +144,27 @@ func NewTestDbCourse(in titleDescInput, public bool) db.Course {
 	return db.NewCourse(-1, in.Title, in.Description, public)
 }
 
-func (c testClient) createCourse(course titleDescInput, modules []titleDescInput) {
-	dbCourse := NewTestDbCourse(course, true)
-	dbModules := make([]db.ModuleVersion, len(modules))
-	for i, module := range modules {
-		dbModules[i] = db.NewModuleVersion(-1, -1, 0, module.Title, module.Description)
+func newDbCourseAndModules(in titleDescInput, modules []titleDescInput) (db.Course, []db.ModuleVersion) {
+	dbCourse := NewTestDbCourse(in, true)
+	dbModules := make([]db.ModuleVersion, 0)
+	for _, module := range modules {
+		dbModules = append(dbModules, db.NewModuleVersion(-1, -1, 0, module.Title, module.Description))
 	}
+	return dbCourse, dbModules
+}
+
+func (c testClient) createCourse(course titleDescInput, modules []titleDescInput) {
+	dbCourse, dbModules := newDbCourseAndModules(course, modules)
 	formData := createOrEditCourseForm(dbCourse, dbModules)
 	resp := c.post(createCourseRoute, formData.Encode())
 	assert.Equal(c.t, 200, resp.StatusCode)
+}
+
+func (c testClient) createCourseFail(course titleDescInput, modules []titleDescInput) {
+	dbCourse, dbModules := newDbCourseAndModules(course, modules)
+	formData := createOrEditCourseForm(dbCourse, dbModules)
+	resp := c.post(createCourseRoute, formData.Encode())
+	assert.NotEqual(c.t, 200, resp.StatusCode)
 }
 
 func editCourseRoute(courseId int) string {
