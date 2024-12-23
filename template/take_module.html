@@ -77,6 +77,10 @@
 	padding: 25px 40px;
 }
 
+.block > * {
+	overflow-x: scroll;
+}
+
 .choices {
 }
 
@@ -121,11 +125,6 @@ img {
 .green {
 	color: #34d058;
 }
-
-p, pre {
-	overflow-x: scroll;
-}
-
 {{ end }}
 {{ define "content" }}
 <link rel="stylesheet" type="text/css" href="/style/katex.min.css">
@@ -169,9 +168,7 @@ p, pre {
 {{ define "content_block" }}
 <div id="block-{{ .Block.BlockIndex }}" class="block">
 	{{ if not (eq .Block.Content.ContentTmpl "") }}
-		<div class="explanation">
-			{{ .Block.Content.ContentTmpl }}
-		</div>
+		{{ .Block.Content.ContentTmpl }}
 	{{ end }}
 </div>
 {{ if .ShowNextButton }}
@@ -241,9 +238,7 @@ p, pre {
 
 	{{ if not (eq .Block.Question.Explanation.ContentTmpl "") }}
 		<h3>Explanation</h3>
-		<div class="explanation">
-			{{ .Block.Question.Explanation.ContentTmpl }}
-		</div>
+		{{ .Block.Question.Explanation.ContentTmpl }}
 	{{ end }}
 </div>
 
