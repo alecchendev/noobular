@@ -420,7 +420,10 @@ func handleCompleteModule(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 		}
 	}
 	pointCount := blockCount
-	if correctAnswers == questionCount {
+	if questionCount > 0 && correctAnswers == 0 {
+		// No points if all questions are wrong
+		pointCount = 0
+	} else if correctAnswers == questionCount {
 		// Bonus points for perfect score
 		pointCount += pointCount / 4
 	} else if correctAnswers == questionCount-1 {
