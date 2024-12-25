@@ -478,10 +478,10 @@ func parseEditModuleRequest(r *http.Request) (editModuleRequest, error) {
 }
 
 const MaxBlocks = 64
-const MaxQuestionLength = 256
-const MaxChoices = 16
-const MaxChoiceLength = MaxQuestionLength
 const MaxContentLength = 4096
+const MaxQuestionLength = 2048
+const MaxChoices = 16
+const MaxChoiceLength = 1024
 
 func validateEditModuleRequest(req editModuleRequest) error {
 	if len(req.blockTypes) > MaxBlocks {
