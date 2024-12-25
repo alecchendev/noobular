@@ -17,6 +17,17 @@ create table if not exists answers (
 );
 `
 
+type Answer struct {
+	Id         int
+	UserId     int
+	QuestionId int
+	ChoiceId   int
+}
+
+func NewAnswer(id int, userId int, questionId int, choiceId int) Answer {
+	return Answer{id, userId, questionId, choiceId}
+}
+
 const storeAnswerQuery = `
 update answers
 set choice_id = ?
@@ -40,13 +51,30 @@ where a.user_id = ? and a.question_id = ?;
 
 // Returns the choice id of the answer for the question if it exists.
 // Returns -1 if there is no answer for the question.
-func (c *DbClient) GetAnswer(userId int64, questionId int) (int, error) {
-	row := c.db.QueryRow(getAnswerQuery, userId, questionId)
+func GetAnswer(tx *sql.Tx, userId int64, questionId int) (int, error) {
+	row := tx.QueryRow(getAnswerQuery, userId, questionId)
 	var choiceId int
 	err := row.Scan(&choiceId)
 	if err == sql.ErrNoRows {
 		return -1, nil
 	}
+	if err != nil {
+		return 0, err
+	}
+	return choiceId, nil
+}
+
+func (c *DbClient) GetAnswer(userId int64, questionId int) (int, error) {
+	tx, err := c.db.Begin()
+	defer tx.Rollback()
+	if err != nil {
+		return 0, err
+	}
+	choiceId, err := GetAnswer(tx, userId, questionId)
+	if err != nil {
+		return 0, err
+	}
+	err = tx.Commit()
 	if err != nil {
 		return 0, err
 	}

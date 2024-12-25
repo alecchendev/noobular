@@ -133,13 +133,24 @@ with module_version_block_ids as (
 content_block_content_ids as (
 	select content_id from content_blocks where block_id in module_version_block_ids
 ),
+question_ids as (
+	select id from questions where block_id in module_version_block_ids
+),
+question_content_ids as (
+	select content_id from questions where id in question_ids
+),
+choice_content_ids as (
+	select content_id from choices where question_id in question_ids
+),
 explanation_content_ids as (
-	select content_id from explanations where question_id in (
-		select id from questions where block_id in module_version_block_ids
-	)
+	select content_id from explanations where question_id in question_ids
 ),
 referenced_content_ids as (
 	select * from content_block_content_ids
+	union
+	select * from question_content_ids
+	union
+	select * from choice_content_ids
 	union
 	select * from explanation_content_ids
 ),

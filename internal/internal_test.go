@@ -407,11 +407,17 @@ func TestNoDuplicateContent(t *testing.T) {
 	client.editModule(courseId, newModuleVersion, blocks)
 
 	// require contentStr2 is not duplicated (shared between explanation and content block)
+	// require question name/choice text is not duplicated
 	{
+		contentExplanationCount := 3
+		questionChoiceContentCount := 4
 		content, err := ctx.db.GetAllContent()
 		require.Nil(t, err)
-		require.Len(t, content, 3)
-		contentStrings := []string{content[0].Content, content[1].Content, content[2].Content}
+		require.Len(t, content, contentExplanationCount + questionChoiceContentCount)
+		contentStrings := []string{}
+		for _, c := range content {
+			contentStrings = append(contentStrings, c.Content)
+		}
 		require.Contains(t, contentStrings, explanation)
 		require.Contains(t, contentStrings, contentStr)
 		require.Contains(t, contentStrings, contentStr2)
@@ -428,10 +434,16 @@ func TestNoDuplicateContent(t *testing.T) {
 
 	// require contentStr is not duplicated
 	// require contentStr2 is deleted
+	// question 1 content is deleted
+	questionChoiceContentCount := 2
+	explanationContentCount := 2
 	content, err := ctx.db.GetAllContent()
 	require.Nil(t, err)
-	require.Len(t, content, 2)
-	contentStrings := []string{content[0].Content, content[1].Content}
+	require.Len(t, content, questionChoiceContentCount + explanationContentCount)
+	contentStrings := []string{}
+	for _, c := range content {
+		contentStrings = append(contentStrings, c.Content)
+	}
 	require.Contains(t, contentStrings, explanation)
 	require.Contains(t, contentStrings, contentStr)
 }
@@ -455,7 +467,13 @@ func TestDeleteModuleSharedContent(t *testing.T) {
 	newModuleVersion1 := db.NewModuleVersion(2, moduleId1, 1, "new title", "new description")
 	contentStr := "qcontent1"
 	contentStr2 := "qcontent2"
+	question := newUiQuestionBuilder().
+		text("qname1").
+		choice("qchoice1", true).
+		explain("qexplanation1").
+		build()
 	blocks := []blockInput{
+		newQuestionBlockInput(question),
 		newContentBlockInput(contentStr),
 		newContentBlockInput(contentStr2),
 	}

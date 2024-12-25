@@ -86,9 +86,9 @@ func initDb(db *sql.DB) {
 	} else if version < latestVersion {
 		log.Println("New DB version available. Current:", version, "Latest:", latestVersion)
 		for version < latestVersion {
-			_, err = tx.Exec(migrateToVersionQuery(version + 1))
+			err = migrateToVersionFunc(version + 1)(tx)
 			if err != nil {
-				log.Fatal(err)
+				log.Fatal("Migration failed: ", err)
 			}
 			_, err = tx.Exec(incrementVersionNumber)
 			if err != nil {

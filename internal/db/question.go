@@ -10,8 +10,9 @@ const createQuestionTable = `
 create table if not exists questions (
 	id integer primary key autoincrement,
 	block_id integer not null unique,
-	question_text text not null,
-	foreign key (block_id) references blocks(id) on delete cascade
+	content_id integer not null,
+	foreign key (block_id) references blocks(id) on delete cascade,
+	foreign key (content_id) references content(id) on delete cascade
 );
 `
 
@@ -26,13 +27,17 @@ func NewQuestion(id int, blockId int, question string) Question {
 }
 
 const insertQuestionQuery = `
-insert into questions(block_id, question_text)
+insert into questions(block_id, content_id)
 values(?, ?);
 `
 
 // Need to rollback tx upon error one level up the stack because this function will not do that.
 func InsertQuestion(tx *sql.Tx, blockId int64, question string, choices []string, correctChoiceIdx int, explanation string) error {
-	res, err := tx.Exec(insertQuestionQuery, blockId, question)
+	questionContentId, err := InsertContent(tx, question)
+	if err != nil {
+		return err
+	}
+	res, err := tx.Exec(insertQuestionQuery, blockId, questionContentId)
 	if err != nil {
 		return err
 	}
@@ -46,11 +51,11 @@ func InsertQuestion(tx *sql.Tx, blockId int64, question string, choices []string
 			return err
 		}
 	}
-	contentId, err := InsertContent(tx, explanation)
+	explanationContentId, err := InsertContent(tx, explanation)
 	if err != nil {
 		return err
 	}
-	err = InsertExplanation(tx, int(questionId), int(contentId))
+	err = InsertExplanation(tx, int(questionId), int(explanationContentId))
 	if err != nil {
 		return err
 	}
@@ -58,8 +63,9 @@ func InsertQuestion(tx *sql.Tx, blockId int64, question string, choices []string
 }
 
 const getQuestionQuery = `
-select q.id, q.block_id, q.question_text
+select q.id, q.block_id, c.content
 from questions q
+join content c on q.content_id = c.id
 where q.block_id = ?;
 `
 

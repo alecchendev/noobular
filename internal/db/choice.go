@@ -10,9 +10,10 @@ const createChoiceTable = `
 create table if not exists choices (
 	id integer primary key autoincrement,
 	question_id integer not null,
-	choice_text text not null,
+	content_id integer not null,
 	correct bool not null,
-	foreign key (question_id) references questions(id) on delete cascade
+	foreign key (question_id) references questions(id) on delete cascade,
+	foreign key (content_id) references content(id) on delete cascade
 );
 `
 
@@ -28,12 +29,16 @@ func NewChoice(id int, questionId int, choiceText string, correct bool) Choice {
 }
 
 const insertChoiceQuery = `
-insert into choices(question_id, choice_text, correct)
+insert into choices(question_id, content_id, correct)
 values(?, ?, ?);
 `
 
 func InsertChoice(tx *sql.Tx, questionId int64, choiceText string, correct bool) (Choice, error) {
-	res, err := tx.Exec(insertChoiceQuery, questionId, choiceText, correct)
+	choiceContentId, err := InsertContent(tx, choiceText)
+	if err != nil {
+		return Choice{}, err
+	}
+	res, err := tx.Exec(insertChoiceQuery, questionId, choiceContentId, correct)
 	if err != nil {
 		return Choice{}, err
 	}
@@ -45,8 +50,9 @@ func InsertChoice(tx *sql.Tx, questionId int64, choiceText string, correct bool)
 }
 
 const getChoiceQuery = `
-select ch.id, ch.question_id, ch.choice_text, ch.correct
+select ch.id, ch.question_id, c.content, ch.correct
 from choices ch
+join content c on ch.content_id = c.id
 where ch.id = ?;
 `
 
@@ -60,19 +66,7 @@ func (c *DbClient) GetChoice(choiceId int) (Choice, error) {
 	return choice, nil
 }
 
-const getChoicesForQuestionQuery = `
-select ch.id, ch.question_id, ch.choice_text, ch.correct
-from choices ch
-where ch.question_id = ?
-order by ch.id;
-`
-
-func (c *DbClient) GetChoicesForQuestion(questionId int) ([]Choice, error) {
-	choiceRows, err := c.db.Query(getChoicesForQuestionQuery, questionId)
-	if err != nil {
-		return nil, err
-	}
-	defer choiceRows.Close()
+func rowsToChoices(choiceRows *sql.Rows) ([]Choice, error) {
 	choices := []Choice{}
 	for choiceRows.Next() {
 		choice := Choice{}
@@ -86,4 +80,21 @@ func (c *DbClient) GetChoicesForQuestion(questionId int) ([]Choice, error) {
 		return nil, err
 	}
 	return choices, nil
+}
+
+const getChoicesForQuestionQuery = `
+select ch.id, ch.question_id, c.content, ch.correct
+from choices ch
+join content c on ch.content_id = c.id
+where ch.question_id = ?
+order by ch.id;
+`
+
+func (c *DbClient) GetChoicesForQuestion(questionId int) ([]Choice, error) {
+	choiceRows, err := c.db.Query(getChoicesForQuestionQuery, questionId)
+	if err != nil {
+		return nil, err
+	}
+	defer choiceRows.Close()
+	return rowsToChoices(choiceRows)
 }
