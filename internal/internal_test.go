@@ -220,18 +220,16 @@ func TestEditModule(t *testing.T) {
 	course, modules, blockInputs := client.initTestCourse()
 	courseId := 1
 
-	// Check that if we revisit the edit module page
-	// all of our changes are reflected
-	for i, module := range modules {
+	checkModule := func(module db.ModuleVersion, blockInput []blockInput) {
 		editModulePageLink := editModuleRoute(courseId, module.ModuleId)
 		body := client.getPageBody(editModulePageLink)
 		require.Contains(t, body, module.Title)
 		require.Contains(t, body, module.Description)
-		for _, block := range blockInputs[i] {
+		for _, block := range blockInput {
 			switch block.blockType {
 			case db.QuestionBlockType:
 				question := block.block.(internal.UiQuestion)
-				require.Contains(t, body, question.QuestionText)
+				require.Contains(t, body, question.Content.Content)
 				require.Contains(t, body, question.Explanation.Content)
 				for _, choice := range question.Choices {
 					require.Contains(t, body, choice.ChoiceText)
@@ -241,6 +239,12 @@ func TestEditModule(t *testing.T) {
 				require.Contains(t, body, content.Content)
 			}
 		}
+	}
+
+	// Check that if we revisit the edit module page
+	// all of our changes are reflected
+	for i, module := range modules {
+		checkModule(module, blockInputs[i])
 	}
 
 	modules = append(modules, db.NewModuleVersion(-1, -1, 1, "new module title3", "new module description3"))
@@ -256,6 +260,11 @@ func TestEditModule(t *testing.T) {
 	}
 	require.NotContains(t, body, modules[len(modules)-1].Title)
 	require.NotContains(t, body, modules[len(modules)-1].Description)
+
+	// Edit again and make sure creating new module version,
+	// with some things edited some things not, works.
+	client.editModule(courseId, modules[0], blockInputs[0])
+	checkModule(modules[0], blockInputs[0])
 
 	// require a user cannot edit a module for a course that's not theirs
 	// even if they put a course that is theirs
