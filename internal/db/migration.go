@@ -2,8 +2,15 @@ package db
 
 import (
 	"database/sql"
-	"fmt"
 )
+
+// Hey! So you're looking to make a DB migration.
+// Some things to remember to not blow everything up:
+// - Always make sure to make a backup of the DB in case things go wrong.
+// - If you are adding a foreign key column (and so need to create a new
+// table), make sure to not accidentally delete on cascade all the other
+// tables that reference the one you're replacing, i.e. you will need
+// to create new tables and migrate the existing data.
 
 const incrementVersionNumber = `
 update db_version
@@ -165,87 +172,87 @@ rename to explanations;
 `
 
 func markdownQuestionChoiceMigration(tx *sql.Tx) error {
-	// New tables with columns
-	_, err := tx.Exec(createNewQuestionChoiceTables)
-	if err != nil {
-		return err
-	}
-	// migrate data
-	questionRows, err := tx.Query(getAllQuestions)
-	if err != nil {
-		return err
-	}
-	defer questionRows.Close()
-	questions := []Question{}
-	for questionRows.Next() {
-		question := Question{}
-		err := questionRows.Scan(&question.Id, &question.BlockId, &question.QuestionText)
-		if err != nil {
-			return err
-		}
-		questions = append(questions, question)
-	}
-	for _, question := range questions {
-		questionContentId, err := InsertContent(tx, question.QuestionText)
-		if err != nil {
-			return err
-		}
-		res, err := tx.Exec(insertNewQuestionQuery, question.BlockId, questionContentId)
-		if err != nil {
-			return fmt.Errorf("error inserting new question: %v", err)
-		}
-		newQuestionId, err := res.LastInsertId()
-		if err != nil {
-			return err
-		}
-		answers, err := GetAnswersForQuestionOld(tx, question.Id)
-		if err != nil {
-			return err
-		}
-		choices, err := GetChoicesForQuestionOld(tx, question.Id)
-		if err != nil {
-			return err
-		}
-		newChoiceIds := map[int]int64{}
-		for _, choice := range choices {
-			// create content for choice
-			choiceContentId, err := InsertContent(tx, choice.ChoiceText)
-			if err != nil {
-				return fmt.Errorf("error inserting new choice content: %v", err)
-			}
-			// insert into new choices table
-			res, err = tx.Exec(insertNewChoiceQuery, newQuestionId, choiceContentId, choice.Correct)
-			if err != nil {
-				return fmt.Errorf("error inserting new choice: %v", err)
-			}
-			newChoiceId, err := res.LastInsertId()
-			if err != nil {
-				return err
-			}
-			newChoiceIds[choice.Id] = newChoiceId
-		}
-		for _, answer := range answers {
-			_, err = tx.Exec(insertNewAnswerQuery, answer.UserId, newQuestionId, newChoiceIds[answer.ChoiceId])
-			if err != nil {
-				return fmt.Errorf("error inserting new answer: %v", err)
-			}
-		}
-		explanationContent, err := GetExplanationForQuestion(tx, int64(question.Id))
-		if err != nil {
-			return err
-		}
-		if explanationContent.Id != -1 {
-			_, err = tx.Exec(insertNewExplanationQuery, newQuestionId, explanationContent.Id)
-			if err != nil {
-				return err
-			}
-		}
-	}
-
-	// delete old, rename new
-	_, err = tx.Exec(dropAndRenameOldQuestionChoiceTables)
-	if err != nil {
-		return err
-	}
+	// // New tables with columns
+	// _, err := tx.Exec(createNewQuestionChoiceTables)
+	// if err != nil {
+	// 	return err
+	// }
+	// // migrate data
+	// questionRows, err := tx.Query(getAllQuestions)
+	// if err != nil {
+	// 	return err
+	// }
+	// defer questionRows.Close()
+	// questions := []Question{}
+	// for questionRows.Next() {
+	// 	question := Question{}
+	// 	err := questionRows.Scan(&question.Id, &question.BlockId, &question.QuestionText)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	questions = append(questions, question)
+	// }
+	// for _, question := range questions {
+	// 	questionContentId, err := InsertContent(tx, question.QuestionText)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	res, err := tx.Exec(insertNewQuestionQuery, question.BlockId, questionContentId)
+	// 	if err != nil {
+	// 		return fmt.Errorf("error inserting new question: %v", err)
+	// 	}
+	// 	newQuestionId, err := res.LastInsertId()
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	answers, err := GetAnswersForQuestionOld(tx, question.Id)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	choices, err := GetChoicesForQuestionOld(tx, question.Id)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	newChoiceIds := map[int]int64{}
+	// 	for _, choice := range choices {
+	// 		// create content for choice
+	// 		choiceContentId, err := InsertContent(tx, choice.ChoiceText)
+	// 		if err != nil {
+	// 			return fmt.Errorf("error inserting new choice content: %v", err)
+	// 		}
+	// 		// insert into new choices table
+	// 		res, err = tx.Exec(insertNewChoiceQuery, newQuestionId, choiceContentId, choice.Correct)
+	// 		if err != nil {
+	// 			return fmt.Errorf("error inserting new choice: %v", err)
+	// 		}
+	// 		newChoiceId, err := res.LastInsertId()
+	// 		if err != nil {
+	// 			return err
+	// 		}
+	// 		newChoiceIds[choice.Id] = newChoiceId
+	// 	}
+	// 	for _, answer := range answers {
+	// 		_, err = tx.Exec(insertNewAnswerQuery, answer.UserId, newQuestionId, newChoiceIds[answer.ChoiceId])
+	// 		if err != nil {
+	// 			return fmt.Errorf("error inserting new answer: %v", err)
+	// 		}
+	// 	}
+	// 	explanationContent, err := GetExplanationForQuestion(tx, int64(question.Id))
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	if explanationContent.Id != -1 {
+	// 		_, err = tx.Exec(insertNewExplanationQuery, newQuestionId, explanationContent.Id)
+	// 		if err != nil {
+	// 			return err
+	// 		}
+	// 	}
+	// }
+	//
+	// // delete old, rename new
+	// _, err = tx.Exec(dropAndRenameOldQuestionChoiceTables)
+	// if err != nil {
+	// 	return err
+	// }
 	return nil
 }
