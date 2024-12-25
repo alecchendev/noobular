@@ -4,24 +4,14 @@ import (
 	"bytes"
 	"database/sql"
 	"fmt"
-	"html/template"
 	"log"
 	"net/http"
 	"sort"
 	"strconv"
 	"time"
 
-	"github.com/yuin/goldmark"
-	"github.com/graemephi/goldmark-qjs-katex"
-
 	"noobular/internal/db"
 )
-
-func newMd() goldmark.Markdown {
-	return goldmark.New(
-		goldmark.WithExtensions(&qjskatex.Extension{}),
-	)
-}
 
 // Student page
 
@@ -222,7 +212,14 @@ func getBlock(ctx HandlerContext, moduleVersionId int64, blockIdx int, userId in
 		if err != nil {
 			return UiBlock{}, fmt.Errorf("Error getting question for block %d: %v", block.Id, err)
 		}
+		questionContent, err := ctx.dbClient.GetContent(question.ContentId)
+		if err != nil {
+			return UiBlock{}, fmt.Errorf("Error getting question content for question %d: %v", question.Id, err)
+		}
 		choices, err := ctx.dbClient.GetChoicesForQuestion(question.Id)
+		if err != nil {
+			return UiBlock{}, fmt.Errorf("Error getting choices for question %d: %v", question.Id, err)
+		}
 		explanationContent, err := ctx.dbClient.GetExplanationForQuestion(question.Id)
 		if err != nil {
 			return UiBlock{}, fmt.Errorf("Error getting explanation for question %d: %v", question.Id, err)
@@ -231,16 +228,24 @@ func getBlock(ctx HandlerContext, moduleVersionId int64, blockIdx int, userId in
 		if err := newMd().Convert([]byte(explanationContent.Content), &buf); err != nil {
 			return UiBlock{}, fmt.Errorf("Error converting explanation content for question %d: %v", question.Id, err)
 		}
-		explanation := template.HTML(buf.String())
 		choiceId, err := ctx.dbClient.GetAnswer(userId, question.Id)
 		if err != nil {
 			return UiBlock{}, fmt.Errorf("Error getting answer for question %d: %v", question.Id, err)
 		}
+
+		questionRendered, err := NewUiContentRendered(questionContent)
+		if err != nil {
+			return UiBlock{}, fmt.Errorf("Error converting question content for question %d: %v", question.Id, err)
+		}
+		explanationRendered, err := NewUiContentRendered(explanationContent)
+		if err != nil {
+			return UiBlock{}, fmt.Errorf("Error converting explanation content for question %d: %v", question.Id, err)
+		}
 		var uiQuestion UiQuestion
 		if choiceId == -1 {
-			uiQuestion = NewUiQuestionTake(question, choices, NewUiContentRendered(explanationContent, explanation))
+			uiQuestion = NewUiQuestionTake(question, questionRendered, choices, explanationRendered)
 		} else {
-			uiQuestion = NewUiQuestionAnswered(question, choices, choiceId, NewUiContentRendered(explanationContent, explanation))
+			uiQuestion = NewUiQuestionAnswered(question, questionRendered, choices, choiceId, explanationRendered)
 		}
 		uiBlock := NewUiBlockQuestion(uiQuestion, blockIdx)
 		return uiBlock, nil
@@ -253,7 +258,11 @@ func getBlock(ctx HandlerContext, moduleVersionId int64, blockIdx int, userId in
 		if err := newMd().Convert([]byte(content.Content), &buf); err != nil {
 			return UiBlock{}, fmt.Errorf("Error converting content for block %d: %v", block.Id, err)
 		}
-		uiBlock := NewUiBlockContent(NewUiContentRendered(content, template.HTML(buf.String())), blockIdx)
+		rendered, err := NewUiContentRendered(content)
+		if err != nil {
+			return UiBlock{}, fmt.Errorf("Error converting content for block %d: %v", block.Id, err)
+		}
+		uiBlock := NewUiBlockContent(rendered, blockIdx)
 		return uiBlock, nil
 	} else {
 		return UiBlock{}, fmt.Errorf("Unknown block type %s", block.BlockType)

@@ -1,11 +1,16 @@
 package internal
 
 import (
+	"bytes"
+	"fmt"
 	"html/template"
 	"math/rand/v2"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/graemephi/goldmark-qjs-katex"
+	"github.com/yuin/goldmark"
 
 	"noobular/internal/db"
 )
@@ -199,30 +204,30 @@ type UiQuestion struct {
 	Id int
 	// This is a random integer created to differentiate questions in the UI.
 	Idx          int
-	QuestionText string
+	Content      UiContent
 	Choices      []UiChoice
 	Explanation  UiContent
 }
 
-func NewUiQuestionEdit(q db.Question, choices []db.Choice, explanation db.Content) UiQuestion {
+func NewUiQuestionEdit(q db.Question, content db.Content, choices []db.Choice, explanation db.Content) UiQuestion {
 	questionIdx := rand.Int()
 	uiChoices := make([]UiChoice, len(choices))
 	for i, choice := range choices {
 		uiChoices[i] = NewUiChoice(questionIdx, choice)
 	}
-	return UiQuestion{q.Id, questionIdx, q.QuestionText, uiChoices, NewUiContent(explanation)}
+	return UiQuestion{q.Id, questionIdx, NewUiContent(content), uiChoices, NewUiContent(explanation)}
 }
 
-func NewUiQuestionTake(q db.Question, choices []db.Choice, explanation UiContent) UiQuestion {
+func NewUiQuestionTake(q db.Question, content UiContent, choices []db.Choice, explanation UiContent) UiQuestion {
 	questionIdx := rand.Int()
 	uiChoices := make([]UiChoice, len(choices))
 	for i, choice := range choices {
 		uiChoices[i] = NewUiChoice(questionIdx, choice)
 	}
-	return UiQuestion{q.Id, questionIdx, q.QuestionText, uiChoices, explanation}
+	return UiQuestion{q.Id, questionIdx, content, uiChoices, explanation}
 }
 
-func NewUiQuestionAnswered(q db.Question, choices []db.Choice, chosenChoiceId int, explanation UiContent) UiQuestion {
+func NewUiQuestionAnswered(q db.Question, content UiContent, choices []db.Choice, chosenChoiceId int, explanation UiContent) UiQuestion {
 	questionIdx := rand.Int()
 	uiChoices := make([]UiChoice, len(choices))
 	for i, choice := range choices {
@@ -232,7 +237,7 @@ func NewUiQuestionAnswered(q db.Question, choices []db.Choice, chosenChoiceId in
 			uiChoices[i] = NewUiChoice(questionIdx, choice)
 		}
 	}
-	return UiQuestion{q.Id, questionIdx, q.QuestionText, uiChoices, explanation}
+	return UiQuestion{q.Id, questionIdx, content, uiChoices, explanation}
 }
 
 func (q UiQuestion) Answered() bool {
@@ -254,7 +259,7 @@ func (q UiQuestion) AnsweredCorrectly() bool {
 }
 
 func EmptyQuestion() UiQuestion {
-	return UiQuestion{-1, rand.Int(), "", []UiChoice{}, EmptyContent()}
+	return UiQuestion{-1, rand.Int(), EmptyContent(), []UiChoice{}, EmptyContent()}
 }
 
 func (q UiQuestion) ElementType() string {
@@ -262,7 +267,7 @@ func (q UiQuestion) ElementType() string {
 }
 
 func (q UiQuestion) ElementText() string {
-	return q.QuestionText
+	return q.Content.Content
 }
 
 func (q UiQuestion) IsEmpty() bool {
@@ -403,8 +408,18 @@ func NewUiContent(content db.Content) UiContent {
 	return UiContent{content.Id, rand.Int(), content.Content, template.HTML("")}
 }
 
-func NewUiContentRendered(content db.Content, tmpl template.HTML) UiContent {
-	return UiContent{content.Id, rand.Int(), content.Content, tmpl}
+func newMd() goldmark.Markdown {
+	return goldmark.New(
+		goldmark.WithExtensions(&qjskatex.Extension{}),
+	)
+}
+
+func NewUiContentRendered(content db.Content) (UiContent, error) {
+	var buf bytes.Buffer
+	if err := newMd().Convert([]byte(content.Content), &buf); err != nil {
+		return UiContent{}, fmt.Errorf("Error converting content: %v", err)
+	}
+	return UiContent{content.Id, rand.Int(), content.Content, template.HTML(buf.String())}, nil
 }
 
 func EmptyContent() UiContent {

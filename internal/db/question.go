@@ -19,11 +19,11 @@ create table if not exists questions (
 type Question struct {
 	Id           int
 	BlockId      int
-	QuestionText string
+	ContentId    int
 }
 
-func NewQuestion(id int, blockId int, question string) Question {
-	return Question{id, blockId, question}
+func NewQuestion(id int, blockId int, contentId int) Question {
+	return Question{id, blockId, contentId}
 }
 
 const insertQuestionQuery = `
@@ -63,7 +63,7 @@ func InsertQuestion(tx *sql.Tx, blockId int64, question string, choices []string
 }
 
 const getQuestionQuery = `
-select q.id, q.block_id, c.content
+select q.id, q.block_id, q.content_id
 from questions q
 join content c on q.content_id = c.id
 where q.block_id = ?;
@@ -71,10 +71,11 @@ where q.block_id = ?;
 
 func (c *DbClient) GetQuestionFromBlock(blockId int) (Question, error) {
 	questionRow := c.db.QueryRow(getQuestionQuery, blockId)
-	question := Question{}
-	err := questionRow.Scan(&question.Id, &question.BlockId, &question.QuestionText)
+	id := 0
+	contentId := 0
+	err := questionRow.Scan(&id, &blockId, &contentId)
 	if err != nil {
 		return Question{}, err
 	}
-	return question, nil
+	return NewQuestion(id, blockId, contentId), nil
 }

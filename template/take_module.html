@@ -198,7 +198,7 @@ img {
 	hx-swap="outerHTML"
 >
 	<div id="block-{{ .Block.BlockIndex }}" class="block">
-		<h2>{{ .Block.Question.QuestionText }}</h2>
+		{{ .Block.Question.Content.ContentTmpl }}
 		<div class="choices">
 		{{ range $choice := .Block.Question.Choices }}
 			<div class="choice">
@@ -214,7 +214,7 @@ img {
 
 {{ define "question_submitted" }}
 <div id="block-{{ .Block.BlockIndex }}" class="block">
-	<h2>{{ .Block.Question.QuestionText }}</h2>
+	{{ .Block.Question.Content.ContentTmpl }}
 	<div class="choices">
 	{{ range $choice := .Block.Question.Choices }}
 		<div class="choice">

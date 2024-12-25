@@ -572,12 +572,12 @@ func TestModuleVersioning(t *testing.T) {
 	// Take module initial page (first block = content)
 	body = client.getPageBody(takeModulePageRoute(courseId, moduleId))
 	require.Contains(t, body, contentStr)
-	require.NotContains(t, body, question.QuestionText)
+	require.NotContains(t, body, question.Content.Content)
 	require.Contains(t, body, takeModulePieceRoute(courseId, moduleId, 1))
 
 	// Next piece (question)
 	body = client.getPageBody(takeModulePieceRoute(courseId, moduleId, 1))
-	require.Contains(t, body, question.QuestionText)
+	require.Contains(t, body, question.Content.Content)
 	require.Contains(t, body, question.Choices[0].ChoiceText)
 	require.Contains(t, body, question.Choices[1].ChoiceText)
 	require.NotContains(t, body, question.Explanation.Content)
@@ -602,7 +602,7 @@ func TestModuleVersioning(t *testing.T) {
 	// Visit again, and show old version
 	body = client.getPageBody(takeModulePageRoute(courseId, moduleId))
 	require.Contains(t, body, contentStr)
-	require.Contains(t, body, question.QuestionText)
+	require.Contains(t, body, question.Content.Content)
 	require.Contains(t, body, question.Choices[0].ChoiceText)
 	require.Contains(t, body, question.Choices[1].ChoiceText)
 	require.NotContains(t, body, question.Explanation.Content)

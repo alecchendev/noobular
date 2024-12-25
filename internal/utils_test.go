@@ -247,7 +247,7 @@ func (b uiQuestionBuilder) explain(text string) uiQuestionBuilder {
 }
 
 func (b uiQuestionBuilder) build() internal.UiQuestion {
-	return internal.NewUiQuestionEdit(db.NewQuestion(-1, -1, b.questionText), b.choices, db.NewContent(-1, b.explanation))
+	return internal.NewUiQuestionEdit(db.NewQuestion(-1, -1, -1), db.NewContent(-1, b.questionText), b.choices, db.NewContent(-1, b.explanation))
 }
 
 func newTestUiQuestion(moduleId int64, questionNumber int) internal.UiQuestion {
@@ -287,7 +287,7 @@ func editModuleForm(moduleVersion db.ModuleVersion, blocks []blockInput) url.Val
 		switch block.blockType {
 		case db.QuestionBlockType:
 			question := block.block.(internal.UiQuestion)
-			formData.Add("question-title[]", question.QuestionText)
+			formData.Add("question-title[]", question.Content.Content)
 			formData.Add("question-idx[]", strconv.Itoa(question.Idx))
 			formData.Add("question-explanation[]", question.Explanation.Content)
 			for _, choice := range question.Choices {

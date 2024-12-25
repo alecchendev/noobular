@@ -374,17 +374,21 @@ func handleEditModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 		} else if block.BlockType == db.QuestionBlockType {
 			question, err := ctx.dbClient.GetQuestionFromBlock(block.Id)
 			if err != nil {
-				return err
+				return fmt.Errorf("Error getting question for block %d: %w", block.Id, err)
+			}
+			questionContent, err := ctx.dbClient.GetContent(question.ContentId)
+			if err != nil {
+				return fmt.Errorf("Error getting content for question %d: %w", question.Id, err)
 			}
 			choices, err := ctx.dbClient.GetChoicesForQuestion(question.Id)
 			if err != nil {
-				return err
+				return fmt.Errorf("Error getting choices for question %d: %w", question.Id, err)
 			}
 			explanation, err := ctx.dbClient.GetExplanationForQuestion(question.Id)
 			if err != nil {
 				return err
 			}
-			uiBlock.Question = NewUiQuestionEdit(question, choices, explanation)
+			uiBlock.Question = NewUiQuestionEdit(question, questionContent, choices, explanation)
 		} else {
 			return fmt.Errorf("invalid block type: %s", block.BlockType)
 		}

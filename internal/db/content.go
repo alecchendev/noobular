@@ -84,6 +84,22 @@ func UpdateContent(tx *sql.Tx, contentId int64, content string) error {
 	return err
 }
 
+const getContentQuery = `
+select id, content
+from content
+where id = ?;
+`
+
+func (c *DbClient) GetContent(contentId int) (Content, error) {
+	row := c.db.QueryRow(getContentQuery, contentId)
+	id := 0
+	content := ""
+	err := row.Scan(&id, &content)
+	if err != nil {
+		return Content{}, err
+	}
+	return NewContent(id, content), nil
+}
 
 const getContentForBlockQuery = `
 select c.id, c.content
