@@ -157,13 +157,24 @@ referenced_content_ids as (
 elsewhere_content_block_content_ids as (
 	select content_id from content_blocks where block_id not in module_version_block_ids
 ),
+elsewhere_question_ids as (
+	select id from questions where block_id not in module_version_block_ids
+),
+elsewhere_question_content_ids as (
+	select content_id from questions where id in elsewhere_question_ids
+),
+elsewhere_choice_content_ids as (
+	select content_id from choices where question_id in elsewhere_question_ids
+),
 elsewhere_explanation_content_ids as (
-	select content_id from explanations where question_id in (
-		select id from questions where block_id not in module_version_block_ids
-	)
+	select content_id from explanations where question_id in elsewhere_question_ids
 ),
 referenced_elsewhere_content_ids as (
 	select * from elsewhere_content_block_content_ids
+	union
+	select * from elsewhere_question_content_ids
+	union
+	select * from elsewhere_choice_content_ids
 	union
 	select * from elsewhere_explanation_content_ids
 ),
