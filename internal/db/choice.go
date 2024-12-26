@@ -20,12 +20,12 @@ create table if not exists choices (
 type Choice struct {
 	Id         int
 	QuestionId int
-	ChoiceText string
+	ContentId  int
 	Correct    bool
 }
 
-func NewChoice(id int, questionId int, choiceText string, correct bool) Choice {
-	return Choice{id, questionId, choiceText, correct}
+func NewChoice(id int, questionId int, contentId int, correct bool) Choice {
+	return Choice{id, questionId, contentId, correct}
 }
 
 const insertChoiceQuery = `
@@ -46,35 +46,40 @@ func InsertChoice(tx *sql.Tx, questionId int64, choiceText string, correct bool)
 	if err != nil {
 		return Choice{}, err
 	}
-	return Choice{int(choiceId), int(questionId), choiceText, correct}, nil
+	return NewChoice(int(choiceId), int(questionId), int(choiceContentId), correct), nil
 }
 
 const getChoiceQuery = `
-select ch.id, ch.question_id, c.content, ch.correct
+select ch.id, ch.question_id, ch.content_id, ch.correct
 from choices ch
-join content c on ch.content_id = c.id
 where ch.id = ?;
 `
 
 func (c *DbClient) GetChoice(choiceId int) (Choice, error) {
 	row := c.db.QueryRow(getChoiceQuery, choiceId)
-	choice := Choice{}
-	err := row.Scan(&choice.Id, &choice.QuestionId, &choice.ChoiceText, &choice.Correct)
+	id := 0
+	questionId := 0
+	contentId := 0
+	correct := false
+	err := row.Scan(&id, &questionId, &contentId, &correct)
 	if err != nil {
 		return Choice{}, err
 	}
-	return choice, nil
+	return NewChoice(id, questionId, contentId, correct), nil
 }
 
 func rowsToChoices(choiceRows *sql.Rows) ([]Choice, error) {
 	choices := []Choice{}
 	for choiceRows.Next() {
-		choice := Choice{}
-		err := choiceRows.Scan(&choice.Id, &choice.QuestionId, &choice.ChoiceText, &choice.Correct)
+		id := 0
+		questionId := 0
+		contentId := 0
+		correct := false
+		err := choiceRows.Scan(&id, &questionId, &contentId, &correct)
 		if err != nil {
 			return nil, err
 		}
-		choices = append(choices, choice)
+		choices = append(choices, NewChoice(id, questionId, contentId, correct))
 	}
 	if err := choiceRows.Err(); err != nil {
 		return nil, err
@@ -83,9 +88,8 @@ func rowsToChoices(choiceRows *sql.Rows) ([]Choice, error) {
 }
 
 const getChoicesForQuestionQuery = `
-select ch.id, ch.question_id, c.content, ch.correct
+select ch.id, ch.question_id, ch.content_id, ch.correct
 from choices ch
-join content c on ch.content_id = c.id
 where ch.question_id = ?
 order by ch.id;
 `

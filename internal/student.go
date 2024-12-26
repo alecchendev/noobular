@@ -220,6 +220,14 @@ func getBlock(ctx HandlerContext, moduleVersionId int64, blockIdx int, userId in
 		if err != nil {
 			return UiBlock{}, fmt.Errorf("Error getting choices for question %d: %v", question.Id, err)
 		}
+		choiceContents := make([]db.Content, 0)
+		for _, choice := range choices {
+			choiceContent, err := ctx.dbClient.GetContent(choice.ContentId)
+			if err != nil {
+				return UiBlock{}, fmt.Errorf("Error getting choice content for choice %d: %v", choice.Id, err)
+			}
+			choiceContents = append(choiceContents, choiceContent)
+		}
 		explanationContent, err := ctx.dbClient.GetExplanationForQuestion(question.Id)
 		if err != nil {
 			return UiBlock{}, fmt.Errorf("Error getting explanation for question %d: %v", question.Id, err)
@@ -237,15 +245,23 @@ func getBlock(ctx HandlerContext, moduleVersionId int64, blockIdx int, userId in
 		if err != nil {
 			return UiBlock{}, fmt.Errorf("Error converting question content for question %d: %v", question.Id, err)
 		}
+		choicesRendered := make([]UiContent, 0)
+		for _, choiceContent := range choiceContents {
+			rendered, err := NewUiContentRendered(choiceContent)
+			if err != nil {
+				return UiBlock{}, fmt.Errorf("Error converting choice content for question %d: %v", question.Id, err)
+			}
+			choicesRendered = append(choicesRendered, rendered)
+		}
 		explanationRendered, err := NewUiContentRendered(explanationContent)
 		if err != nil {
 			return UiBlock{}, fmt.Errorf("Error converting explanation content for question %d: %v", question.Id, err)
 		}
 		var uiQuestion UiQuestion
 		if choiceId == -1 {
-			uiQuestion = NewUiQuestionTake(question, questionRendered, choices, explanationRendered)
+			uiQuestion = NewUiQuestionTake(question, questionRendered, choices, choicesRendered, explanationRendered)
 		} else {
-			uiQuestion = NewUiQuestionAnswered(question, questionRendered, choices, choiceId, explanationRendered)
+			uiQuestion = NewUiQuestionAnswered(question, questionRendered, choices, choicesRendered, choiceId, explanationRendered)
 		}
 		uiBlock := NewUiBlockQuestion(uiQuestion, blockIdx)
 		return uiBlock, nil

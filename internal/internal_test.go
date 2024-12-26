@@ -232,7 +232,7 @@ func TestEditModule(t *testing.T) {
 				require.Contains(t, body, question.Content.Content)
 				require.Contains(t, body, question.Explanation.Content)
 				for _, choice := range question.Choices {
-					require.Contains(t, body, choice.ChoiceText)
+					require.Contains(t, body, choice.Content.Content)
 				}
 			case db.ContentBlockType:
 				content := block.block.(db.Content)
@@ -578,8 +578,8 @@ func TestModuleVersioning(t *testing.T) {
 	// Next piece (question)
 	body = client.getPageBody(takeModulePieceRoute(courseId, moduleId, 1))
 	require.Contains(t, body, question.Content.Content)
-	require.Contains(t, body, question.Choices[0].ChoiceText)
-	require.Contains(t, body, question.Choices[1].ChoiceText)
+	require.Contains(t, body, question.Choices[0].Content.Content)
+	require.Contains(t, body, question.Choices[1].Content.Content)
 	require.NotContains(t, body, question.Explanation.Content)
 
 	// TODO: Answer question + reveal explanation
@@ -603,7 +603,7 @@ func TestModuleVersioning(t *testing.T) {
 	body = client.getPageBody(takeModulePageRoute(courseId, moduleId))
 	require.Contains(t, body, contentStr)
 	require.Contains(t, body, question.Content.Content)
-	require.Contains(t, body, question.Choices[0].ChoiceText)
-	require.Contains(t, body, question.Choices[1].ChoiceText)
+	require.Contains(t, body, question.Choices[0].Content.Content)
+	require.Contains(t, body, question.Choices[1].Content.Content)
 	require.NotContains(t, body, question.Explanation.Content)
 }

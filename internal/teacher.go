@@ -384,11 +384,19 @@ func handleEditModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 			if err != nil {
 				return fmt.Errorf("Error getting choices for question %d: %w", question.Id, err)
 			}
+			choiceContents := make([]db.Content, 0)
+			for _, choice := range choices {
+				choiceContent, err := ctx.dbClient.GetContent(choice.ContentId)
+				if err != nil {
+					return fmt.Errorf("Error getting content for choice %d: %w", choice.Id, err)
+				}
+				choiceContents = append(choiceContents, choiceContent)
+			}
 			explanation, err := ctx.dbClient.GetExplanationForQuestion(question.Id)
 			if err != nil {
 				return err
 			}
-			uiBlock.Question = NewUiQuestionEdit(question, questionContent, choices, explanation)
+			uiBlock.Question = NewUiQuestionEdit(question, questionContent, choices, choiceContents, explanation)
 		} else {
 			return fmt.Errorf("invalid block type: %s", block.BlockType)
 		}

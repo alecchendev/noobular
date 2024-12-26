@@ -1,6 +1,14 @@
 {{ define "title" }}Module: {{ .Module.Title }}{{ end }}
 {{ define "style" }}
 
+:root {
+	--blue: #0077cc;
+	--dark-blue: #0055aa;
+	--green: #34d058;
+	--red: #ff4d4f;
+	--gray: #e0e0e0;
+}
+
 .take-module-body {
 	max-width: 800px;
 	padding-bottom: 200px;
@@ -42,15 +50,15 @@
 }
 
 .green-bg {
-	background-color: #34d058;
+	background-color: var(--green);
 }
 
 .blue-bg {
-	background-color: #0077cc;
+	background-color: var(--blue);
 }
 
 .gray-bg {
-	background-color: #e0e0e0;
+	background-color: var(--gray);
 }
 
 .progress-bar-button {
@@ -85,12 +93,24 @@
 }
 
 .choice {
-	margin: 0.5rem 0;
+	margin: 0;
 	display: flex;
 	flex-direction: row;
 	justify-content: flex-start;
 	gap: 0.5rem;
 	align-items: center;
+}
+
+.choice:hover, .choice *:hover {
+	cursor: pointer;
+}
+
+.choice label {
+	width: 100%;
+}
+
+.choice-result {
+	margin: 0;
 }
 
 pre {
@@ -108,22 +128,22 @@ img {
     margin-top: 1rem;
     width: 150px;
     height: 50px;
-    background-color: #0077cc;
+    background-color: var(--blue);
     color: white;
     border: none;
     border-radius: 10px;
 }
 
 #submit-button:hover {
-    background-color: #0055aa;
+    background-color: var(--dark-blue);
 }
 
 .red {
-	color: #ff4d4f;
+	color: var(--red);
 }
 
 .green {
-	color: #34d058;
+	color: var(--green);
 }
 {{ end }}
 {{ define "content" }}
@@ -203,7 +223,7 @@ img {
 		{{ range $choice := .Block.Question.Choices }}
 			<div class="choice">
 				<input type="radio" id="{{ $choice.Id }}" name="choice" value="{{ $choice.Id }}" required>
-				<label for="{{ $choice.Id }}">{{ $choice.ChoiceText }}</label>
+				<label for="{{ $choice.Id }}">{{ $choice.Content.ContentTmpl }}</label>
 			</div>
 		{{ end }}
 		</div>
@@ -220,11 +240,15 @@ img {
 		<div class="choice">
 			<input type="radio" id="{{ $choice.Id }}" name="choice" value="{{ $choice.Id }}" disabled>
 			<label for="{{ $choice.Id }}">
-				{{ $choice.ChoiceText }}
-				{{ if $choice.Chosen }} (Chosen){{ end }}
-				{{ if $choice.IsCorrect }} (Correct){{ end }}
+				{{ $choice.Content.ContentTmpl }}
 			</label>
 		</div>
+		{{ if (or $choice.Chosen $choice.IsCorrect) }}
+		<p class="choice-result">
+			{{ if $choice.Chosen }} (Chosen){{ end }}
+			{{ if $choice.IsCorrect }} (Correct){{ end }}
+		</p>
+		{{ end }}
 	{{ end }}
 	</div>
 

@@ -209,32 +209,32 @@ type UiQuestion struct {
 	Explanation  UiContent
 }
 
-func NewUiQuestionEdit(q db.Question, content db.Content, choices []db.Choice, explanation db.Content) UiQuestion {
+func NewUiQuestionEdit(q db.Question, content db.Content, choices []db.Choice, choiceContents []db.Content, explanation db.Content) UiQuestion {
 	questionIdx := rand.Int()
-	uiChoices := make([]UiChoice, len(choices))
+	uiChoices := make([]UiChoice, 0)
 	for i, choice := range choices {
-		uiChoices[i] = NewUiChoice(questionIdx, choice)
+		uiChoices = append(uiChoices, NewUiChoice(questionIdx, choice, NewUiContent(choiceContents[i])))
 	}
 	return UiQuestion{q.Id, questionIdx, NewUiContent(content), uiChoices, NewUiContent(explanation)}
 }
 
-func NewUiQuestionTake(q db.Question, content UiContent, choices []db.Choice, explanation UiContent) UiQuestion {
+func NewUiQuestionTake(q db.Question, content UiContent, choices []db.Choice, choiceContents []UiContent, explanation UiContent) UiQuestion {
 	questionIdx := rand.Int()
 	uiChoices := make([]UiChoice, len(choices))
 	for i, choice := range choices {
-		uiChoices[i] = NewUiChoice(questionIdx, choice)
+		uiChoices[i] = NewUiChoice(questionIdx, choice, choiceContents[i])
 	}
 	return UiQuestion{q.Id, questionIdx, content, uiChoices, explanation}
 }
 
-func NewUiQuestionAnswered(q db.Question, content UiContent, choices []db.Choice, chosenChoiceId int, explanation UiContent) UiQuestion {
+func NewUiQuestionAnswered(q db.Question, content UiContent, choices []db.Choice, choiceContents []UiContent, chosenChoiceId int, explanation UiContent) UiQuestion {
 	questionIdx := rand.Int()
 	uiChoices := make([]UiChoice, len(choices))
 	for i, choice := range choices {
 		if choice.Id == chosenChoiceId {
-			uiChoices[i] = NewUiChoiceChosen(questionIdx, choice)
+			uiChoices[i] = NewUiChoiceChosen(questionIdx, choice, choiceContents[i])
 		} else {
-			uiChoices[i] = NewUiChoice(questionIdx, choice)
+			uiChoices[i] = NewUiChoice(questionIdx, choice, choiceContents[i])
 		}
 	}
 	return UiQuestion{q.Id, questionIdx, content, uiChoices, explanation}
@@ -281,21 +281,21 @@ type UiChoice struct {
 	/// A random idx just to differentiate choices in the UI
 	/// so that label elements can be associated with certain choices.
 	Idx        int
-	ChoiceText string
+	Content    UiContent
 	Chosen     bool
 	IsCorrect  bool
 }
 
-func NewUiChoice(questionIdx int, c db.Choice) UiChoice {
-	return UiChoice{c.Id, questionIdx, rand.Int(), c.ChoiceText, false, c.Correct}
+func NewUiChoice(questionIdx int, c db.Choice, content UiContent) UiChoice {
+	return UiChoice{c.Id, questionIdx, rand.Int(), content, false, c.Correct}
 }
 
-func NewUiChoiceChosen(questionIdx int, c db.Choice) UiChoice {
-	return UiChoice{c.Id, questionIdx, rand.Int(), c.ChoiceText, true, c.Correct}
+func NewUiChoiceChosen(questionIdx int, c db.Choice, content UiContent) UiChoice {
+	return UiChoice{c.Id, questionIdx, rand.Int(), content, true, c.Correct}
 }
 
 func EmptyChoice(questionIdx int) UiChoice {
-	return UiChoice{-1, questionIdx, rand.Int(), "", false, false}
+	return UiChoice{-1, questionIdx, rand.Int(), UiContent{}, false, false}
 }
 
 func (c UiChoice) ElementType() string {
@@ -303,7 +303,7 @@ func (c UiChoice) ElementType() string {
 }
 
 func (c UiChoice) ElementText() string {
-	return c.ChoiceText
+	return c.Content.Content
 }
 
 func (c UiChoice) IsEmpty() bool {

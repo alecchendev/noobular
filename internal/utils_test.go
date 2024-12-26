@@ -221,9 +221,14 @@ func newContentBlockInput(content string) blockInput {
 	return blockInput{db.ContentBlockType, db.NewContent(-1, content)}
 }
 
+type uiQuestionBuilderChoice struct {
+	choiceText string
+	isCorrect bool
+}
+
 type uiQuestionBuilder struct {
 	questionText string
-	choices []db.Choice
+	choices []uiQuestionBuilderChoice
 	explanation string
 }
 
@@ -237,7 +242,7 @@ func (b uiQuestionBuilder) text(text string) uiQuestionBuilder {
 }
 
 func (b uiQuestionBuilder) choice(choiceText string, isCorrect bool) uiQuestionBuilder {
-	b.choices = append(b.choices, db.NewChoice(-1, -1, choiceText, isCorrect))
+	b.choices = append(b.choices, uiQuestionBuilderChoice{choiceText, isCorrect})
 	return b
 }
 
@@ -247,7 +252,13 @@ func (b uiQuestionBuilder) explain(text string) uiQuestionBuilder {
 }
 
 func (b uiQuestionBuilder) build() internal.UiQuestion {
-	return internal.NewUiQuestionEdit(db.NewQuestion(-1, -1, -1), db.NewContent(-1, b.questionText), b.choices, db.NewContent(-1, b.explanation))
+	choices := make([]db.Choice, 0)
+	choiceContents := make([]db.Content, 0)
+	for _, choice := range b.choices {
+		choiceContents = append(choiceContents, db.NewContent(-1, choice.choiceText))
+		choices = append(choices, db.NewChoice(-1, -1, -1, choice.isCorrect))
+	}
+	return internal.NewUiQuestionEdit(db.NewQuestion(-1, -1, -1), db.NewContent(-1, b.questionText), choices, choiceContents, db.NewContent(-1, b.explanation))
 }
 
 func newTestUiQuestion(moduleId int64, questionNumber int) internal.UiQuestion {
@@ -291,7 +302,7 @@ func editModuleForm(moduleVersion db.ModuleVersion, blocks []blockInput) url.Val
 			formData.Add("question-idx[]", strconv.Itoa(question.Idx))
 			formData.Add("question-explanation[]", question.Explanation.Content)
 			for _, choice := range question.Choices {
-				formData.Add("choice-title[]", choice.ChoiceText)
+				formData.Add("choice-title[]", choice.Content.Content)
 				formData.Add("choice-idx[]", strconv.Itoa(choice.Idx))
 				if choice.IsCorrect {
 					formData.Add("correct-choice-"+strconv.Itoa(choice.QuestionIdx), strconv.FormatBool(true))
