@@ -117,6 +117,12 @@ func (c testClient) getPageBody(path string) string {
 	return bodyText(c.t, resp)
 }
 
+func bodyText(t *testing.T, resp *http.Response) string {
+	bodyBytes, err := io.ReadAll(resp.Body)
+	require.Nil(t, err)
+	return string(bodyBytes)
+}
+
 type titleDescInput struct {
 	Title string
 	Description string
@@ -317,10 +323,28 @@ func editModuleForm(moduleVersion db.ModuleVersion, blocks []blockInput) url.Val
 	return formData
 }
 
-func bodyText(t *testing.T, resp *http.Response) string {
-	bodyBytes, err := io.ReadAll(resp.Body)
-	require.Nil(t, err)
-	return string(bodyBytes)
+func prereqForm(prereqs []int) url.Values {
+	formData := url.Values{}
+	for _, prereq := range prereqs {
+		formData.Add("prereqs[]", strconv.Itoa(prereq))
+	}
+	return formData
+}
+
+func setPreReqsRoute(courseId, moduleId int) string {
+	return fmt.Sprintf("/teacher/course/%d/module/%d/prereq", courseId, moduleId)
+}
+
+func (c testClient) setPrereqs(courseId int, moduleId int, prereqs []int) {
+	formData := prereqForm(prereqs)
+	resp := c.put(setPreReqsRoute(courseId, moduleId), formData.Encode())
+	require.Equal(c.t, 200, resp.StatusCode)
+}
+
+func (c testClient) setPrereqsFail(courseId int, moduleId int, prereqs []int) {
+	formData := prereqForm(prereqs)
+	resp := c.put(setPreReqsRoute(courseId, moduleId), formData.Encode())
+	require.NotEqual(c.t, 200, resp.StatusCode)
 }
 
 // Creates a test course with a module + edits the module to have content.
@@ -374,6 +398,11 @@ func (c testClient) enrollCourseFail(courseId int) {
 	require.NotEqual(c.t, 200, resp.StatusCode)
 }
 
+func (c testClient) completeModule(courseId int, moduleId int) {
+	resp := c.put(fmt.Sprintf("/student/course/%d/module/%d/complete", courseId, moduleId), "")
+	require.Equal(c.t, 200, resp.StatusCode)
+}
+
 func studentCoursePageRoute(courseId int) string {
 	return fmt.Sprintf("/student/course/%d", courseId)
 }
@@ -384,4 +413,8 @@ func takeModulePageRoute(courseId int, moduleId int) string {
 
 func takeModulePieceRoute(courseId int, moduleId int, blockIdx int) string {
 	return fmt.Sprintf("/student/course/%d/module/%d/block/%d/piece", courseId, moduleId, blockIdx)
+}
+
+func completeModuleRoute(courseId int, moduleId int) string {
+	return fmt.Sprintf("/student/course/%d/module/%d/complete", courseId, moduleId)
 }

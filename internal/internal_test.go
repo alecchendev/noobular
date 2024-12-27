@@ -607,3 +607,86 @@ func TestModuleVersioning(t *testing.T) {
 	require.Contains(t, body, question.Choices[1].Content.Content)
 	require.NotContains(t, body, question.Explanation.Content)
 }
+
+func TestPrerequisites(t *testing.T) {
+	ctx := startServer(t)
+	defer ctx.Close()
+
+	user := ctx.createUser()
+	client := newTestClient(t).login(user.Id)
+
+	moduleInputs := []titleDescInput{
+		newTitleDescInput("module1", "desc1"),
+		newTitleDescInput("module2", "desc2"),
+		newTitleDescInput("module3", "desc3"),
+		newTitleDescInput("module4", "desc4"),
+	}
+
+	client.createCourse(newTitleDescInput("course", "description"), moduleInputs)
+
+	// Make all modules visible by adding a content block to them
+	courseId := 1
+	for i := 0; i < len(moduleInputs); i++ {
+		moduleId := i + 1
+		newModuleVersion := db.NewModuleVersion(-1, moduleId, -1, moduleInputs[i].Title, moduleInputs[i].Description)
+		client.editModule(courseId, newModuleVersion, []blockInput{newContentBlockInput(moduleInputs[i].Title + "content")})
+	}
+
+	// Assert with no prereqs they all just show up on the course page
+	client.enrollCourse(courseId)
+	body := client.getPageBody(studentCoursePageRoute(courseId))
+	for _, moduleInput := range moduleInputs {
+		require.Contains(t, body, moduleInput.Title)
+	}
+
+	// Set a prereq graph of a diamond and assert you must take
+	// them in sequence. I.e. prev module id is a prereq.
+	client.setPrereqs(courseId, 2, []int{1})
+	client.setPrereqs(courseId, 3, []int{1})
+	client.setPrereqs(courseId, 4, []int{2, 3})
+
+	// Only module 1 should show up
+	body = client.getPageBody(studentCoursePageRoute(courseId))
+	require.Contains(t, body, moduleInputs[0].Title)
+	require.NotContains(t, body, moduleInputs[1].Title)
+	require.NotContains(t, body, moduleInputs[2].Title)
+	require.NotContains(t, body, moduleInputs[3].Title)
+
+	// Take module 1
+	body = client.getPageBody(takeModulePageRoute(courseId, 1))
+	require.Contains(t, body, completeModuleRoute(courseId, 1))
+	client.completeModule(courseId, 1)
+
+	// Module 2 and 3 should be unlocked
+	body = client.getPageBody(studentCoursePageRoute(courseId))
+	require.Contains(t, body, moduleInputs[0].Title) // Completed
+	require.Contains(t, body, moduleInputs[1].Title)
+	require.Contains(t, body, moduleInputs[2].Title)
+	require.NotContains(t, body, moduleInputs[3].Title)
+
+	// Take module 2
+	body = client.getPageBody(takeModulePageRoute(courseId, 2))
+	require.Contains(t, body, completeModuleRoute(courseId, 2))
+	client.completeModule(courseId, 2)
+
+	// Module 4 should still be locked
+	body = client.getPageBody(studentCoursePageRoute(courseId))
+	require.NotContains(t, body, moduleInputs[3].Title)
+
+	// Take module 3
+	body = client.getPageBody(takeModulePageRoute(courseId, 3))
+	require.Contains(t, body, completeModuleRoute(courseId, 3))
+	client.completeModule(courseId, 3)
+	
+	// Module 4 should now be unlocked
+	body = client.getPageBody(studentCoursePageRoute(courseId))
+	require.Contains(t, body, moduleInputs[3].Title)
+
+	// Test that we cannot make prereq cycles
+	client.setPrereqsFail(courseId, 1, []int{1})
+	client.setPrereqsFail(courseId, 1, []int{2})
+	client.setPrereqsFail(courseId, 1, []int{3})
+	client.setPrereqsFail(courseId, 1, []int{4})
+	client.setPrereqsFail(courseId, 2, []int{4})
+	client.setPrereqsFail(courseId, 3, []int{4})
+}
