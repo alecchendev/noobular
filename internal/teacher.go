@@ -765,17 +765,27 @@ func parsePrereqRequest(r *http.Request) (prereqRequest, error) {
 	return prereqRequest{courseId, moduleId, prereqModuleIds}, nil
 }
 
-func hasCycle(edges map[int][]int, curr int, visited map[int]bool) bool {
-	if _, ok := visited[curr]; ok {
-		return true
-	}
-	visited[curr] = true
-	for _, next := range edges[curr] {
-		if hasCycle(edges, next, visited) {
-			return true
+func hasCycle(edges map[int][]int, root int) bool {
+	visitPath := make(map[int]int) // curr -> parent
+	curr := root
+	visitPath[curr] = -1
+	for curr != -1 {
+		neighbors := edges[curr]
+		neighborCount := len(neighbors)
+		if neighborCount == 0 {
+			parent := visitPath[curr]
+			delete(visitPath, curr)
+			curr = parent
+		} else {
+			next := neighbors[neighborCount - 1]
+			if _, ok := visitPath[next]; ok {
+				return true
+			}
+			edges[curr] = neighbors[:neighborCount - 1]
+			visitPath[next] = curr
+			curr = next
 		}
 	}
-	delete(visited, curr)
 	return false
 }
 
@@ -814,9 +824,11 @@ func handleEditPrereqs(w http.ResponseWriter, r *http.Request, ctx HandlerContex
 			edges[prereq.PrereqModuleId] = append(edges[prereq.PrereqModuleId], module.Id)
 		}
 	}
-	if hasCycle(edges, req.moduleId, make(map[int]bool)) {
+	if hasCycle(edges, req.moduleId) {
 		return fmt.Errorf("Cannot create cycle in prereqs")
 	}
+	// Note: hasCycle modifies edges, so if we want to use it again
+	// afterwards we'll need to pass a copy in.
 
 	tx, err := ctx.dbClient.Begin()
 	defer tx.Rollback()
