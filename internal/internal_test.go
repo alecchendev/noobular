@@ -1,6 +1,7 @@
 package internal_test
 
 import (
+	"database/sql"
 	"noobular/internal"
 	"noobular/internal/db"
 	"strings"
@@ -689,4 +690,61 @@ func TestPrerequisites(t *testing.T) {
 	client.setPrereqsFail(courseId, 1, []int{4})
 	client.setPrereqsFail(courseId, 2, []int{4})
 	client.setPrereqsFail(courseId, 3, []int{4})
+}
+
+func TestPoints(t *testing.T) {
+	ctx := startServer(t)
+	defer ctx.Close()
+
+	user := ctx.createUser()
+	client := newTestClient(t).login(user.Id)
+
+	moduleInputs := []titleDescInput{
+		newTitleDescInput("module1", "desc1"),
+		newTitleDescInput("module2", "desc2"),
+	}
+	client.createCourse(newTitleDescInput("course", "description"), moduleInputs)
+
+	courseId := 1
+	for i := 0; i < len(moduleInputs); i++ {
+		moduleId := i + 1
+		newModuleVersion := db.NewModuleVersion(-1, moduleId, -1, moduleInputs[i].Title, moduleInputs[i].Description)
+		client.editModule(courseId, newModuleVersion, []blockInput{newContentBlockInput(moduleInputs[i].Title + "content")})
+	}
+
+	client.enrollCourse(courseId)
+
+	getTotalPoints := func() int {
+		points := 0
+		for _, moduleId := range []int{1, 2} {
+			point, err := ctx.db.GetPoint(user.Id, moduleId)
+			if err != nil && err != sql.ErrNoRows {
+				t.Fatal(err)
+			}
+			points += point.Count
+		}
+		return points
+	}
+
+	require.Equal(t, 0, getTotalPoints())
+
+	// Take module 1
+	body := client.getPageBody(takeModulePageRoute(courseId, 1))
+	require.Contains(t, body, completeModuleRoute(courseId, 1))
+	client.completeModule(courseId, 1)
+
+	require.Equal(t, 1, getTotalPoints())
+
+	// Take module 2
+	body = client.getPageBody(takeModulePageRoute(courseId, 2))
+	require.Contains(t, body, completeModuleRoute(courseId, 2))
+	client.completeModule(courseId, 2)
+
+	require.Equal(t, 2, getTotalPoints())
+
+	// Mark complete again, and shouldn't get more points
+	client.completeModule(courseId, 1)
+	require.Equal(t, 2, getTotalPoints())
+	client.completeModule(courseId, 2)
+	require.Equal(t, 2, getTotalPoints())
 }
