@@ -790,30 +790,7 @@ testc 2
 yea!
 `
 
-func TestFormat(t *testing.T) {
-	ctx := startServer(t)
-	defer ctx.Close()
-
-	user := ctx.createUser()
-	client := newTestClient(t).login(user.Id)
-
-	moduleInputs := []titleDescInput{
-		newTitleDescInput("module1", "desc1"),
-		newTitleDescInput("module2", "desc2"),
-	}
-	client.createCourse(newTitleDescInput("course", "description"), moduleInputs)
-
-	courseId := 1
-	for i := 0; i < len(moduleInputs); i++ {
-		moduleId := i + 1
-		newModuleVersion := db.NewModuleVersion(-1, moduleId, -1, moduleInputs[i].Title, moduleInputs[i].Description)
-		client.editModule(courseId, newModuleVersion, []blockInput{newContentBlockInput(moduleInputs[i].Title + "content")})
-	}
-
-	client.enrollCourse(courseId)
-
-
-	// Parse test module
+func parseModule(module string) (titleDescInput, []blockInput, error) {
 	metadataUnseen := 0
 	metadataProcessing := 1
 	metadataParsed := 2
@@ -831,32 +808,37 @@ func TestFormat(t *testing.T) {
 	blockInputs := []blockInput{}
 	questionBuilder := newUiQuestionBuilder()
 
-	finishPiece := func(parsingType int, newParsingType int, buffer []string, questionBuilder *uiQuestionBuilder, blockInputs *[]blockInput) {
+	finishPiece := func(parsingType int, newParsingType int, buffer []string, questionBuilder *uiQuestionBuilder, blockInputs *[]blockInput) error {
 		text := strings.Join(buffer, "\n")
 		text = strings.TrimSpace(text)
 		if parsingType == parsingContent {
 			*blockInputs = append(*blockInputs, newContentBlockInput(text))
 		} else if parsingType == parsingQuestion {
 			*questionBuilder = questionBuilder.text(text)
-			require.True(t, newParsingType == parsingChoice || newParsingType == parsingCorrectChoice)
 		} else if parsingType == parsingChoice {
 			*questionBuilder = questionBuilder.choice(text, false)
 		} else if parsingType == parsingCorrectChoice {
 			*questionBuilder = questionBuilder.choice(text, true)
 		} else if parsingType == parsingExplanation {
 			*questionBuilder = questionBuilder.explain(text)
-			*blockInputs = append(*blockInputs, newQuestionBlockInput(questionBuilder.build()))
-			*questionBuilder = newUiQuestionBuilder()
 		}
-		currentlyParsedChoice := parsingType == parsingChoice || parsingType == parsingCorrectChoice
+
+		if parsingType == parsingQuestion && !(newParsingType == parsingChoice || newParsingType == parsingCorrectChoice) {
+			return fmt.Errorf("question must be followed by choice or correct choice")
+		}
+
+		justParsedChoice := parsingType == parsingChoice || parsingType == parsingCorrectChoice
 		nextParsingNonQuestion := newParsingType != parsingChoice && newParsingType != parsingCorrectChoice && newParsingType != parsingExplanation
-		if currentlyParsedChoice && nextParsingNonQuestion {
+		justParsedExplanation := parsingType == parsingExplanation
+		finishedQuestion := justParsedExplanation || (justParsedChoice && nextParsingNonQuestion)
+		if finishedQuestion {
 			*blockInputs = append(*blockInputs, newQuestionBlockInput(questionBuilder.build()))
 			*questionBuilder = newUiQuestionBuilder()
 		}
+		return nil
 	}
 
-	scanner := bufio.NewScanner(strings.NewReader(testModule))
+	scanner := bufio.NewScanner(strings.NewReader(module))
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -873,7 +855,9 @@ func TestFormat(t *testing.T) {
 		}
 		if metadataStatus == metadataProcessing {
 			parts := strings.SplitN(line, ": ", 2)
-			require.Len(t, parts, 2)
+			if len(parts) != 2 {
+				return titleDescInput{}, nil, fmt.Errorf("metadata not key value")
+			}
 			key := parts[0]
 			value := parts[1]
 			if key == "title" {
@@ -883,7 +867,9 @@ func TestFormat(t *testing.T) {
 			}
 			continue
 		}
-		require.Equal(t, metadataParsed, metadataStatus, "unexpected line: %v", line)
+		if metadataStatus != metadataParsed {
+			return titleDescInput{}, nil, fmt.Errorf("metadata not parsed")
+		}
 
 		pattern := `^\[//\]: # \((.+?)\)$`
 		re := regexp.MustCompile(pattern)
@@ -922,15 +908,47 @@ func TestFormat(t *testing.T) {
 
 	finishPiece(parsingType, parsingNothing, buffer, &questionBuilder, &blockInputs)
 
-	require.NoError(t, scanner.Err())
-	require.Equal(t, metadataParsed, metadataStatus)
+	if err := scanner.Err(); err != nil {
+		return titleDescInput{}, nil, err
+	}
+	if metadataStatus != metadataParsed {
+		return titleDescInput{}, nil, fmt.Errorf("metadata not parsed")
+	}
+
+	return titleDescInput{moduleTitle, moduleDescription}, blockInputs, nil
+}
+
+func TestFormat(t *testing.T) {
+	ctx := startServer(t)
+	defer ctx.Close()
+
+	user := ctx.createUser()
+	client := newTestClient(t).login(user.Id)
+
+	moduleInputs := []titleDescInput{
+		newTitleDescInput("module1", "desc1"),
+		newTitleDescInput("module2", "desc2"),
+	}
+	client.createCourse(newTitleDescInput("course", "description"), moduleInputs)
+
+	courseId := 1
+	for i := 0; i < len(moduleInputs); i++ {
+		moduleId := i + 1
+		newModuleVersion := db.NewModuleVersion(-1, moduleId, -1, moduleInputs[i].Title, moduleInputs[i].Description)
+		client.editModule(courseId, newModuleVersion, []blockInput{newContentBlockInput(moduleInputs[i].Title + "content")})
+	}
+
+	client.enrollCourse(courseId)
+
+	titleDesc, blockInputs, err := parseModule(testModule)
+	require.Nil(t, err)
 
 	moduleId := 1
-	client.editModule(courseId, db.NewModuleVersion(-1, moduleId, -1, moduleTitle, moduleDescription), blockInputs)
+	client.editModule(courseId, db.NewModuleVersion(-1, moduleId, -1, titleDesc.Title, titleDesc.Description), blockInputs)
 
 	body := client.getPageBody(editModuleRoute(courseId, moduleId))
-	require.Contains(t, body, moduleTitle)
-	require.Contains(t, body, moduleDescription)
+	require.Contains(t, body, titleDesc.Title)
+	require.Contains(t, body, titleDesc.Description)
 	for _, block := range blockInputs {
 		if block.blockType == db.ContentBlockType {
 			require.Contains(t, body, block.block.(db.Content).Content)
