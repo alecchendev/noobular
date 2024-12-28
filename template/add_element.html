@@ -10,12 +10,22 @@
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
+	gap: 0.5rem;
 }
 
-.element-title {
+.new-module-title {
 	font-size: 1.2rem;
 	font-weight: bold;
 	width: 100%;
+}
+
+.element-title {
+	font-size: 1.1rem;
+	width: 100%;
+	border: 1px solid #e0e0e0;
+	border-radius: 10px;
+	padding: 0.8rem;
+	resize: none;
 }
 
 .cancel {
@@ -42,10 +52,6 @@
 	background-color: #f0f0f0;
 }
 
-.content-block-label {
-	margin: 0;
-}
-
 .choices {
 	display: flex;
 	flex-direction: column;
@@ -54,7 +60,6 @@
 #choices-container {
 	display: flex;
 	flex-direction: column;
-	padding-left: 1.2rem;
 }
 
 .element-description {
@@ -65,12 +70,11 @@
 .explanation-container {
 	display: flex;
 	width: 100%;
-	padding-left: 1.2rem;
+	margin-top: 1rem;
 }
 
 .explanation, .content-input {
 	font-size: 1rem;
-	margin: 1rem 0;
 	resize: none;
 	width: 100%;
 	border: 1px solid #e0e0e0;
@@ -106,7 +110,7 @@
 {{ define "add_module" }}
 <div class="element-container">
 	<div class="element-title-delete-container">
-		<input type="text" class="element-title" name="module-title[]" placeholder="Module name" value="{{ .ElementText }}" required autofocus>
+		<input type="text" class="new-module-title" name="module-title[]" placeholder="Module name" value="{{ .ElementText }}" required autofocus>
 		{{ if .IsEmpty }}
 			{{ template "delete_element_button" . }}
 		{{ else }}
@@ -122,9 +126,10 @@
 {{ define "add_question" }}
 <div class="element-container">
 	<div class="element-title-delete-container">
-		<input type="text" class="element-title" name="question-title[]" placeholder="Question" value="{{ .ElementText }}" required autofocus>
+		<h2 class="block-label">Question Block</h2>
 		{{ template "delete_element_button" . }}
 	</div>
+	<textarea type="text" class="element-title" name="question-title[]" placeholder="Question" required autofocus>{{ .ElementText }}</textarea>
 	<input type="text" name="question-idx[]" value="{{ .Idx }}" hidden>
 	<input type="text" name="block-type[]" value="question" hidden>
 
@@ -152,7 +157,7 @@
 {{ define "add_content" }}
 <div class="element-container">
 	<div class="element-title-delete-container">
-		<h2 class="content-block-label">Content Block</h2>
+		<h2 class="block-label">Content Block</h2>
 		{{ template "delete_element_button" . }}
 	</div>
 	<textarea class="content-input" name="content-text[]" placeholder="Content" required>{{ .Content }}</textarea>
@@ -163,7 +168,7 @@
 {{ define "add_choice" }}
 <div class="element-container">
 	<div class="element-title-delete-container">
-		<input type="text" class="element-title" name="choice-title[]" placeholder="Choice" value="{{ .ElementText }}" required autofocus>
+		<textarea class="element-title" name="choice-title[]" placeholder="Choice" required autofocus>{{ .ElementText }}</textarea>
 		{{ template "delete_element_button" . }}
 	</div>
 	<!-- Hidden input element to help backend differentiate choices for correct idx -->
