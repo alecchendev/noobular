@@ -274,6 +274,8 @@ func TestEditModule(t *testing.T) {
 	course2, _, _ := client2.initTestCourseN(1, 3)
 	client2.editModuleFail(course2.Id, modules[0], blockInputs[0])
 	client2.deleteModuleFail(course2.Id, modules[0].ModuleId)
+	resp := client2.get(exportModuleRoute(course2.Id, modules[0].ModuleId))
+	require.NotEqual(t, 200, resp.StatusCode)
 }
 
 func TestEditModuleInputValidation(t *testing.T) {

@@ -347,6 +347,10 @@ func (c testClient) setPrereqsFail(courseId int, moduleId int, prereqs []int) {
 	require.NotEqual(c.t, 200, resp.StatusCode)
 }
 
+func exportModuleRoute(courseId int, moduleId int) string {
+	return fmt.Sprintf("/teacher/course/%d/module/%d/export", courseId, moduleId)
+}
+
 // Creates a test course with a module + edits the module to have content.
 func (c testClient) initTestCourse() (db.Course, []db.ModuleVersion, [][]blockInput) {
 	return c.initTestCourseN(0, 0)

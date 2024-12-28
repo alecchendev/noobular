@@ -866,6 +866,10 @@ func handleExportModule(w http.ResponseWriter, r *http.Request, ctx HandlerConte
 	if err != nil {
 		return err
 	}
+	_, err = ctx.dbClient.GetModuleCourse(user.Id, moduleId)
+	if err != nil {
+		return err
+	}
 	moduleVersion, err := ctx.dbClient.GetLatestModuleVersion(moduleId)
 	if err != nil {
 		return err
