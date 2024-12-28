@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"bytes"
 	"database/sql"
 	"fmt"
 	"log"
@@ -232,10 +231,6 @@ func getBlock(ctx HandlerContext, moduleVersionId int64, blockIdx int, userId in
 		if err != nil {
 			return UiBlock{}, fmt.Errorf("Error getting explanation for question %d: %v", question.Id, err)
 		}
-		var buf bytes.Buffer
-		if err := newMd().Convert([]byte(explanationContent.Content), &buf); err != nil {
-			return UiBlock{}, fmt.Errorf("Error converting explanation content for question %d: %v", question.Id, err)
-		}
 		choiceId, err := ctx.dbClient.GetAnswer(userId, question.Id)
 		if err != nil {
 			return UiBlock{}, fmt.Errorf("Error getting answer for question %d: %v", question.Id, err)
@@ -269,10 +264,6 @@ func getBlock(ctx HandlerContext, moduleVersionId int64, blockIdx int, userId in
 		content, err := ctx.dbClient.GetContentFromBlock(block.Id)
 		if err != nil {
 			return UiBlock{}, fmt.Errorf("Error getting content for block %d: %v", block.Id, err)
-		}
-		var buf bytes.Buffer
-		if err := newMd().Convert([]byte(content.Content), &buf); err != nil {
-			return UiBlock{}, fmt.Errorf("Error converting content for block %d: %v", block.Id, err)
 		}
 		rendered, err := NewUiContentRendered(content)
 		if err != nil {
