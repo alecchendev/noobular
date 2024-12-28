@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"noobular/internal/db"
@@ -850,4 +851,85 @@ func handleEditPrereqs(w http.ResponseWriter, r *http.Request, ctx HandlerContex
 		return err
 	}
 	return ctx.renderer.RenderPrereqEditedResponse(w, NewUiModuleTeacher(req.courseId, moduleVersion))
+}
+
+func handleExportModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
+	courseId, err := strconv.Atoi(r.PathValue("courseId"))
+	if err != nil {
+		return err
+	}
+	moduleId, err := strconv.Atoi(r.PathValue("moduleId"))
+	if err != nil {
+		return err
+	}
+	_, err = ctx.dbClient.GetTeacherCourse(courseId, user.Id)
+	if err != nil {
+		return err
+	}
+	moduleVersion, err := ctx.dbClient.GetLatestModuleVersion(moduleId)
+	if err != nil {
+		return err
+	}
+	blocks, err := ctx.dbClient.GetBlocks(moduleVersion.Id)
+	if err != nil {
+		return err
+	}
+	metadataStr := func(text string) string {
+		return fmt.Sprintf("\n[//]: # (%s)", text)
+	}
+	textPieces := make([]string, 0)
+	textPieces = append(textPieces, fmt.Sprintf("---\ntitle: %s\ndescription: %s\n---\n", moduleVersion.Title, moduleVersion.Description))
+	for _, block := range blocks {
+		if block.BlockType == db.ContentBlockType {
+			content, err := ctx.dbClient.GetContentFromBlock(block.Id)
+			if err != nil {
+				return err
+			}
+			textPieces = append(textPieces, metadataStr("content"))
+			textPieces = append(textPieces, content.Content)
+		} else if block.BlockType == db.QuestionBlockType {
+			question, err := ctx.dbClient.GetQuestionFromBlock(block.Id)
+			if err != nil {
+				return err
+			}
+			questionContent, err := ctx.dbClient.GetContent(question.ContentId)
+			if err != nil {
+				return err
+			}
+			choices, err := ctx.dbClient.GetChoicesForQuestion(question.Id)
+			if err != nil {
+				return err
+			}
+			choiceContents := make([]db.Content, 0)
+			for _, choice := range choices {
+				choiceContent, err := ctx.dbClient.GetContent(choice.ContentId)
+				if err != nil {
+					return err
+				}
+				choiceContents = append(choiceContents, choiceContent)
+			}
+			explanation, err := ctx.dbClient.GetExplanationForQuestion(question.Id)
+			if err != nil {
+				return err
+			}
+			textPieces = append(textPieces, metadataStr("question"))
+			textPieces = append(textPieces, questionContent.Content)
+			for i, choice := range choices {
+				metadata := "choice"
+				if choice.Correct {
+					metadata += " correct"
+				}
+				textPieces = append(textPieces, metadataStr(metadata))
+				textPieces = append(textPieces, choiceContents[i].Content)
+			}
+			if explanation.Content != "" {
+				textPieces = append(textPieces, metadataStr("explanation"))
+				textPieces = append(textPieces, explanation.Content)
+			}
+		} else {
+			return fmt.Errorf("invalid block type: %s", block.BlockType)
+		}
+	}
+	text := strings.Join(textPieces, "\n")
+	return ctx.renderer.RenderExportedModule(w, text)
 }

@@ -133,6 +133,7 @@ html {
 					{{ if and $.LoggedIn $.Editor }}
 					<div class="preview-edit-container">
 						<a class="edit-module-link" href="/teacher/course/{{$course.Id}}/module/{{.Id}}/preview">Preview</a>
+						<a class="edit-module-link" href="/teacher/course/{{$course.Id}}/module/{{.Id}}/export">Export</a>
 						<a class="edit-module-link" href="/teacher/course/{{$course.Id}}/module/{{.Id}}">Edit</a>
 					</div>
 					{{ end }}

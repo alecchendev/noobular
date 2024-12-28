@@ -89,6 +89,8 @@ func initRouter(dbClient *db.DbClient, renderer Renderer, webAuthn *webauthn.Web
 	mux.Handle("/teacher/course/{courseId}/module/{moduleId}/prereq", newHandlerMap().
 		Get(authRequiredHandler(handlePrereqForm)).
 		Put(authRequiredHandler(handleEditPrereqs)))
+	mux.Handle("/teacher/course/{courseId}/module/{moduleId}/export", newHandlerMap().
+		Get(authRequiredHandler(handleExportModule)))
 
 	mux.Handle("/ui/{questionIdx}/choice", newHandlerMap().
 		Get(handleAddChoice))

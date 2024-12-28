@@ -61,11 +61,17 @@ func initTemplates(projectRootDir string) map[string]*template.Template {
 		"signup.html":        {"page.html", "signup.html"},
 		"student.html":       {"page.html", "student.html"},
 		"courses.html":       {"page.html", "courses.html"},
-		"create_course.html": {"page.html", "create_course.html", "add_element.html", "created_course_response.html", "edited_course_response.html"},
-		"edit_module.html":   {"page.html", "edit_module.html", "add_element.html", "edited_module_response.html"},
+		"create_course.html": {"page.html", "create_course.html",
+				       "add_element.html",
+				       "created_course_response.html",
+				       "edited_course_response.html"},
+		"edit_module.html":   {"page.html", "edit_module.html",
+				       "add_element.html",
+				       "edited_module_response.html"},
 		"prereq.html":        {"page.html", "prereq.html"},
 		"take_module.html":   {"page.html", "take_module.html"},
 		"add_element.html":   {"add_element.html"},
+		"export_module.html": {"export_module.html"},
 	}
 	templates := make(map[string]*template.Template)
 	for name, paths := range filePaths {
@@ -203,10 +209,10 @@ func NewUiBlockContent(content UiContent, idx int) UiBlock {
 type UiQuestion struct {
 	Id int
 	// This is a random integer created to differentiate questions in the UI.
-	Idx          int
-	Content      UiContent
-	Choices      []UiChoice
-	Explanation  UiContent
+	Idx         int
+	Content     UiContent
+	Choices     []UiChoice
+	Explanation UiContent
 }
 
 func NewUiQuestionEdit(q db.Question, content db.Content, choices []db.Choice, choiceContents []db.Content, explanation db.Content) UiQuestion {
@@ -280,10 +286,10 @@ type UiChoice struct {
 	QuestionIdx int
 	/// A random idx just to differentiate choices in the UI
 	/// so that label elements can be associated with certain choices.
-	Idx        int
-	Content    UiContent
-	Chosen     bool
-	IsCorrect  bool
+	Idx       int
+	Content   UiContent
+	Chosen    bool
+	IsCorrect bool
 }
 
 func NewUiChoice(questionIdx int, c db.Choice, content UiContent) UiChoice {
@@ -541,4 +547,8 @@ func (r *Renderer) RenderTakeModule(w http.ResponseWriter, module UiTakeModule) 
 
 func (r *Renderer) RenderQuestionSubmitted(w http.ResponseWriter, module UiTakeModule) error {
 	return r.templates["take_module.html"].ExecuteTemplate(w, "question_submitted", module)
+}
+
+func (r *Renderer) RenderExportedModule(w http.ResponseWriter, text string) error {
+	return r.templates["export_module.html"].ExecuteTemplate(w, "export_module.html", template.HTML(text)) // Use template.HTML to prevent escaping
 }
