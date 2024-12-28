@@ -311,7 +311,7 @@ func editModuleForm(moduleVersion db.ModuleVersion, blocks []blockInput) url.Val
 				formData.Add("choice-title[]", choice.Content.Content)
 				formData.Add("choice-idx[]", strconv.Itoa(choice.Idx))
 				if choice.IsCorrect {
-					formData.Add("correct-choice-"+strconv.Itoa(choice.QuestionIdx), strconv.FormatBool(true))
+					formData.Add("correct-choice-"+strconv.Itoa(choice.QuestionIdx), strconv.Itoa(choice.Idx))
 				}
 			}
 			formData.Add("choice-title[]", "end-choice")

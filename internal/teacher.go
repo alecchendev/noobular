@@ -459,8 +459,9 @@ func parseEditModuleRequest(r *http.Request) (editModuleRequest, error) {
 	for i, question := range questions {
 		uiChoices := make([]string, 0)
 		// This holds the choiceUiIdx of the correct choice for each question.
-		correctChoiceIdx := r.Form.Get(fmt.Sprintf("correct-choice-%s", questionIdxs[i]))
-		if correctChoiceIdx == "" {
+		correctChoiceIdxStr := r.Form.Get(fmt.Sprintf("correct-choice-%s", questionIdxs[i]))
+		correctChoiceIdx, err := strconv.Atoi(correctChoiceIdxStr)
+		if err != nil {
 			return editModuleRequest{}, fmt.Errorf("Each question must have a correct choice")
 		}
 		for ; choiceIdx < len(choices); choiceIdx++ {
@@ -470,7 +471,11 @@ func parseEditModuleRequest(r *http.Request) (editModuleRequest, error) {
 				break
 			}
 			uiChoices = append(uiChoices, choice)
-			if choiceUiIdxs[choiceIdx] == correctChoiceIdx {
+			choiceUiIdx, err := strconv.Atoi(choiceUiIdxs[choiceIdx])
+			if err != nil {
+				return editModuleRequest{}, fmt.Errorf("Error parsing choice index: %v", err)
+			}
+			if choiceUiIdx == correctChoiceIdx {
 				correctChoicesByQuestion[i] = len(uiChoices) - 1
 			}
 		}
