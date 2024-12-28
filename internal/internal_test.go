@@ -1,9 +1,12 @@
 package internal_test
 
 import (
+	"bufio"
 	"database/sql"
+	"fmt"
 	"noobular/internal"
 	"noobular/internal/db"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -749,4 +752,198 @@ func TestPoints(t *testing.T) {
 	require.Equal(t, 2, getTotalPoints())
 	client.completeModule(courseId, 2)
 	require.Equal(t, 2, getTotalPoints())
+}
+
+const testModule = `
+---
+title: m1
+description: asdf
+---
+
+
+[//]: # (question)
+hello? $x=3_2$asdf
+
+[//]: # (choice correct)
+wow! $x=5_3$
+
+[//]: # (choice)
+nice!
+
+[//]: # (explanation)
+# what is up?
+
+how is it going?
+
+[//]: # (question)
+testq
+
+[//]: # (choice)
+testc 1
+
+[//]: # (choice correct)
+testc 2
+
+[//]: # (content)
+## woohoo!
+
+yea!
+`
+
+func TestFormat(t *testing.T) {
+	ctx := startServer(t)
+	defer ctx.Close()
+
+	user := ctx.createUser()
+	client := newTestClient(t).login(user.Id)
+
+	moduleInputs := []titleDescInput{
+		newTitleDescInput("module1", "desc1"),
+		newTitleDescInput("module2", "desc2"),
+	}
+	client.createCourse(newTitleDescInput("course", "description"), moduleInputs)
+
+	courseId := 1
+	for i := 0; i < len(moduleInputs); i++ {
+		moduleId := i + 1
+		newModuleVersion := db.NewModuleVersion(-1, moduleId, -1, moduleInputs[i].Title, moduleInputs[i].Description)
+		client.editModule(courseId, newModuleVersion, []blockInput{newContentBlockInput(moduleInputs[i].Title + "content")})
+	}
+
+	client.enrollCourse(courseId)
+
+
+	// Parse test module
+	metadataUnseen := 0
+	metadataProcessing := 1
+	metadataParsed := 2
+	metadataStatus := metadataUnseen
+	moduleTitle := ""
+	moduleDescription := ""
+	parsingNothing := 0
+	parsingContent := 1
+	parsingQuestion := 2
+	parsingChoice := 3
+	parsingCorrectChoice := 4
+	parsingExplanation := 5
+	parsingType := parsingNothing
+	buffer := []string{}
+	blockInputs := []blockInput{}
+	questionBuilder := newUiQuestionBuilder()
+
+	finishPiece := func(parsingType int, newParsingType int, buffer []string, questionBuilder *uiQuestionBuilder, blockInputs *[]blockInput) {
+		text := strings.Join(buffer, "\n")
+		text = strings.TrimSpace(text)
+		if parsingType == parsingContent {
+			*blockInputs = append(*blockInputs, newContentBlockInput(text))
+		} else if parsingType == parsingQuestion {
+			*questionBuilder = questionBuilder.text(text)
+			require.True(t, newParsingType == parsingChoice || newParsingType == parsingCorrectChoice)
+		} else if parsingType == parsingChoice {
+			*questionBuilder = questionBuilder.choice(text, false)
+		} else if parsingType == parsingCorrectChoice {
+			*questionBuilder = questionBuilder.choice(text, true)
+		} else if parsingType == parsingExplanation {
+			*questionBuilder = questionBuilder.explain(text)
+			*blockInputs = append(*blockInputs, newQuestionBlockInput(questionBuilder.build()))
+			*questionBuilder = newUiQuestionBuilder()
+		}
+		currentlyParsedChoice := parsingType == parsingChoice || parsingType == parsingCorrectChoice
+		nextParsingNonQuestion := newParsingType != parsingChoice && newParsingType != parsingCorrectChoice && newParsingType != parsingExplanation
+		if currentlyParsedChoice && nextParsingNonQuestion {
+			*blockInputs = append(*blockInputs, newQuestionBlockInput(questionBuilder.build()))
+			*questionBuilder = newUiQuestionBuilder()
+		}
+	}
+
+	scanner := bufio.NewScanner(strings.NewReader(testModule))
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		if metadataStatus == metadataUnseen && line == "" {
+			continue
+		}
+		if metadataStatus == metadataUnseen && line == "---" {
+			metadataStatus = metadataProcessing
+			continue
+		}
+		if metadataStatus == metadataProcessing && line == "---" {
+			metadataStatus = metadataParsed
+			continue
+		}
+		if metadataStatus == metadataProcessing {
+			parts := strings.SplitN(line, ": ", 2)
+			require.Len(t, parts, 2)
+			key := parts[0]
+			value := parts[1]
+			if key == "title" {
+				moduleTitle = value
+			} else if key == "description" {
+				moduleDescription = value
+			}
+			continue
+		}
+		require.Equal(t, metadataParsed, metadataStatus, "unexpected line: %v", line)
+
+		pattern := `^\[//\]: # \((.+?)\)$`
+		re := regexp.MustCompile(pattern)
+		matches := re.FindStringSubmatch(line)
+		if matches == nil {
+			buffer = append(buffer, line)
+			continue
+		}
+
+		// The first element is the whole match, the second is the captured group
+		parsedValue := matches[1]
+		values := strings.Split(parsedValue, " ")
+		valueType := values[0]
+		newParsingType := parsingNothing
+		switch valueType {
+		case "content":
+			newParsingType = parsingContent
+		case "question":
+			newParsingType = parsingQuestion
+		case "choice":
+			newParsingType = parsingChoice
+			if len(values) == 2 && values[1] == "correct" {
+				newParsingType = parsingCorrectChoice
+			}
+		case "explanation":
+			newParsingType = parsingExplanation
+		}
+
+		// If we matched a new block, it means we're at the end
+		// of the previous block
+		finishPiece(parsingType, newParsingType, buffer, &questionBuilder, &blockInputs)
+
+		buffer = []string{}
+		parsingType = newParsingType
+	}
+
+	finishPiece(parsingType, parsingNothing, buffer, &questionBuilder, &blockInputs)
+
+	require.NoError(t, scanner.Err())
+	require.Equal(t, metadataParsed, metadataStatus)
+
+	moduleId := 1
+	client.editModule(courseId, db.NewModuleVersion(-1, moduleId, -1, moduleTitle, moduleDescription), blockInputs)
+
+	body := client.getPageBody(editModuleRoute(courseId, moduleId))
+	require.Contains(t, body, moduleTitle)
+	require.Contains(t, body, moduleDescription)
+	for _, block := range blockInputs {
+		if block.blockType == db.ContentBlockType {
+			require.Contains(t, body, block.block.(db.Content).Content)
+		} else {
+			question := block.block.(internal.UiQuestion)
+			require.Contains(t, body, question.Content.Content)
+			for _, choice := range question.Choices {
+				require.Contains(t, body, choice.Content.Content)
+			}
+			require.Contains(t, body, question.Explanation.Content)
+		}
+	}
+
+	body = client.getPageBody(exportModuleRoute(courseId, moduleId))
+	require.Equal(t, strings.TrimSpace(testModule), strings.TrimSpace(body))
 }
