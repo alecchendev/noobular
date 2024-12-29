@@ -48,85 +48,91 @@ func (c Client) delete(path string) *http.Response {
 	return c.request("DELETE", path, "")
 }
 
-type blockType int
+type BlockType int
 
 const (
-	questionBlockType blockType = iota
-	contentBlockType
+	QuestionBlockType BlockType = iota
+	ContentBlockType
 )
 
-func (b blockType) String() string {
+func (b BlockType) String() string {
 	switch b {
-	case questionBlockType:
+	case QuestionBlockType:
 		return "question"
-	case contentBlockType:
+	case ContentBlockType:
 		return "content"
 	}
 	return ""
 }
 
-type block struct {
-	blockType blockType
-	question  questionBlock
-	content   contentBlock
+type Block struct {
+	BlockType BlockType
+	Question  QuestionBlock
+	Content   ContentBlock
 }
 
-func newQuestionBlock(text string, choices []choice, explanation string) block {
-	question := questionBlock{text: text, choices: choices, explanation: explanation}
-	return block{blockType: questionBlockType, question: question}
+func NewQuestionBlock(text string, choices []Choice, explanation string) Block {
+	question := QuestionBlock{Text: text, Choices: choices, Explanation: explanation}
+	return Block{BlockType: QuestionBlockType, Question: question}
 }
 
-func newContentBlock(content string) block {
-	return block{blockType: contentBlockType, content: contentBlock{content}}
+func NewContentBlock(content string) Block {
+	return Block{BlockType: ContentBlockType, Content: ContentBlock{content}}
 }
 
-type questionBlock struct {
-	text       string
-	choices    []choice
-	explanation string
+type QuestionBlock struct {
+	Text        string
+	Choices     []Choice
+	Explanation string
 }
 
-type choice struct {
-	text    string
-	correct bool
+type Choice struct {
+	Text    string
+	Correct bool
 }
 
-type contentBlock struct {
-	text string
+type ContentBlock struct {
+	Text string
 }
 
-func editModuleRoute(courseId, moduleId int64) string {
+func EditModuleRoute(courseId, moduleId int64) string {
 	return fmt.Sprintf("/teacher/course/%d/module/%d", courseId, moduleId)
 }
 
-func editModuleForm(title string, description string, blocks []block) url.Values {
+func editModuleForm(title string, description string, blocks []Block) url.Values {
 	formData := url.Values{}
 	formData.Set("title", title)
 	formData.Set("description", description)
 	for _, block := range blocks {
-		formData.Add("block-type[]", block.blockType.String())
-		switch block.blockType {
-		case questionBlockType:
-			question := block.question
-			formData.Add("question-title[]", question.text)
+		formData.Add("block-type[]", block.BlockType.String())
+		switch block.BlockType {
+		case QuestionBlockType:
+			question := block.Question
+			formData.Add("question-title[]", question.Text)
 			questionIdx := rand.Int()
 			formData.Add("question-idx[]", strconv.Itoa(questionIdx))
-			formData.Add("question-explanation[]", question.explanation)
-			for _, choice := range question.choices {
-				formData.Add("choice-title[]", choice.text)
+			formData.Add("question-explanation[]", question.Explanation)
+			for _, choice := range question.Choices {
+				formData.Add("choice-title[]", choice.Text)
 				choiceIdx := rand.Int()
 				formData.Add("choice-idx[]", strconv.Itoa(choiceIdx))
-				if choice.correct {
+				if choice.Correct {
 					formData.Add("correct-choice-"+strconv.Itoa(questionIdx), strconv.Itoa(choiceIdx))
 				}
 			}
 			formData.Add("choice-title[]", "end-choice")
 			formData.Add("choice-idx[]", "end-choice")
-		case contentBlockType:
-			formData.Add("content-text[]", block.content.text)
+		case ContentBlockType:
+			formData.Add("content-text[]", block.Content.Text)
 		}
 	}
 	return formData
+}
+
+func (c Client) EditModule(courseId int64, moduleId int64, title string, description string, blocks []Block) *http.Response {
+	formData := editModuleForm(title, description, blocks)
+	resp := c.put(EditModuleRoute(courseId, moduleId), formData.Encode())
+	return resp
 }
 
 func (c Client) UploadModule(courseId int64, moduleId int64, module string) (*http.Response, error) {
@@ -134,12 +140,10 @@ func (c Client) UploadModule(courseId int64, moduleId int64, module string) (*ht
 	if err != nil {
 		return nil, err
 	}
-	formData := editModuleForm(moduleTitle, moduleDescription, blocks)
-	resp := c.put(editModuleRoute(courseId, moduleId), formData.Encode())
-	return resp, nil
+	return c.EditModule(courseId, moduleId, moduleTitle, moduleDescription, blocks), nil
 }
 
-func ParseModule(module string) (string, string, []block, error) {
+func ParseModule(module string) (string, string, []Block, error) {
 	metadataUnseen := 0
 	metadataProcessing := 1
 	metadataParsed := 2
@@ -154,22 +158,22 @@ func ParseModule(module string) (string, string, []block, error) {
 	parsingExplanation := 5
 	parsingType := parsingNothing
 	buffer := []string{}
-	blocks := []block{}
-	questionBuffer := questionBlock{}
+	blocks := []Block{}
+	questionBuffer := QuestionBlock{}
 
-	finishPiece := func(parsingType int, newParsingType int, buffer []string, questionBuffer *questionBlock, blocks *[]block) error {
+	finishPiece := func(parsingType int, newParsingType int, buffer []string, questionBuffer *QuestionBlock, blocks *[]Block) error {
 		text := strings.Join(buffer, "\n")
 		text = strings.TrimSpace(text)
 		if parsingType == parsingContent {
-			*blocks = append(*blocks, newContentBlock(text))
+			*blocks = append(*blocks, NewContentBlock(text))
 		} else if parsingType == parsingQuestion {
-			questionBuffer.text = text
+			questionBuffer.Text = text
 		} else if parsingType == parsingChoice {
-			questionBuffer.choices = append(questionBuffer.choices, choice{text, false})
+			questionBuffer.Choices = append(questionBuffer.Choices, Choice{text, false})
 		} else if parsingType == parsingCorrectChoice {
-			questionBuffer.choices = append(questionBuffer.choices, choice{text, true})
+			questionBuffer.Choices = append(questionBuffer.Choices, Choice{text, true})
 		} else if parsingType == parsingExplanation {
-			questionBuffer.explanation = text
+			questionBuffer.Explanation = text
 		}
 
 		if parsingType == parsingQuestion && !(newParsingType == parsingChoice || newParsingType == parsingCorrectChoice) {
@@ -181,8 +185,8 @@ func ParseModule(module string) (string, string, []block, error) {
 		justParsedExplanation := parsingType == parsingExplanation
 		finishedQuestion := justParsedExplanation || (justParsedChoice && nextParsingNonQuestion)
 		if finishedQuestion {
-			*blocks = append(*blocks, newQuestionBlock(questionBuffer.text, questionBuffer.choices, questionBuffer.explanation))
-			*questionBuffer = questionBlock{}
+			*blocks = append(*blocks, NewQuestionBlock(questionBuffer.Text, questionBuffer.Choices, questionBuffer.Explanation))
+			*questionBuffer = QuestionBlock{}
 		}
 		return nil
 	}

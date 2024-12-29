@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"noobular/internal"
+	"noobular/internal/client"
 	"noobular/internal/db"
 	"strconv"
 	"strings"
@@ -279,48 +280,43 @@ func newTestUiQuestion(moduleId int64, questionNumber int) internal.UiQuestion {
 		build()
 }
 
-func editModuleRoute(courseId, moduleId int) string {
-	return fmt.Sprintf("/teacher/course/%d/module/%d", courseId, moduleId)
+func blockInputsToBlocks(inputs []blockInput) []client.Block {
+	blocks := []client.Block{}
+	for _, input := range inputs {
+		switch input.blockType {
+		case db.QuestionBlockType:
+			question := input.block.(internal.UiQuestion)
+			choices := []client.Choice{}
+			for _, choice := range question.Choices {
+				choices = append(choices, client.Choice{Text: choice.Content.Content, Correct: choice.IsCorrect})
+			}
+			blocks = append(blocks, client.NewQuestionBlock(question.Content.Content, choices, question.Explanation.Content))
+		case db.ContentBlockType:
+			content := input.block.(db.Content)
+			blocks = append(blocks, client.NewContentBlock(content.Content))
+		}
+	}
+	return blocks
 }
 
-func (c testClient) editModule(courseId int, moduleVersion db.ModuleVersion, blocks []blockInput) {
-	formData := editModuleForm(moduleVersion, blocks)
-	resp := c.put(editModuleRoute(courseId, moduleVersion.ModuleId), formData.Encode())
+func (c testClient) editModule(courseId int64, moduleVersion db.ModuleVersion, blockInputs []blockInput) {
+	moduleId := int64(moduleVersion.ModuleId)
+	title := moduleVersion.Title
+	description := moduleVersion.Description
+	blocks := blockInputsToBlocks(blockInputs)
+	cli := client.NewClient(c.baseUrl, c.session_token)
+	resp := cli.EditModule(int64(courseId), moduleId, title, description, blocks)
 	require.Equal(c.t, 200, resp.StatusCode)
 }
 
-func (c testClient) editModuleFail(courseId int, moduleVersion db.ModuleVersion, blocks []blockInput) {
-	formData := editModuleForm(moduleVersion, blocks)
-	resp := c.put(editModuleRoute(courseId, moduleVersion.ModuleId), formData.Encode())
+func (c testClient) editModuleFail(courseId int, moduleVersion db.ModuleVersion, blockInputs []blockInput) {
+	moduleId := int64(moduleVersion.ModuleId)
+	title := moduleVersion.Title
+	description := moduleVersion.Description
+	blocks := blockInputsToBlocks(blockInputs)
+	cli := client.NewClient(c.baseUrl, c.session_token)
+	resp := cli.EditModule(int64(courseId), moduleId, title, description, blocks)
 	require.NotEqual(c.t, 200, resp.StatusCode)
-}
-
-func editModuleForm(moduleVersion db.ModuleVersion, blocks []blockInput) url.Values {
-	formData := url.Values{}
-	formData.Set("title", moduleVersion.Title)
-	formData.Set("description", moduleVersion.Description)
-	for _, block := range blocks {
-		formData.Add("block-type[]", string(block.blockType))
-		switch block.blockType {
-		case db.QuestionBlockType:
-			question := block.block.(internal.UiQuestion)
-			formData.Add("question-title[]", question.Content.Content)
-			formData.Add("question-idx[]", strconv.Itoa(question.Idx))
-			formData.Add("question-explanation[]", question.Explanation.Content)
-			for _, choice := range question.Choices {
-				formData.Add("choice-title[]", choice.Content.Content)
-				formData.Add("choice-idx[]", strconv.Itoa(choice.Idx))
-				if choice.IsCorrect {
-					formData.Add("correct-choice-"+strconv.Itoa(choice.QuestionIdx), strconv.Itoa(choice.Idx))
-				}
-			}
-			formData.Add("choice-title[]", "end-choice")
-			formData.Add("choice-idx[]", "end-choice")
-		case db.ContentBlockType:
-			formData.Add("content-text[]", block.block.(db.Content).Content)
-		}
-	}
-	return formData
 }
 
 func prereqForm(prereqs []int) url.Values {
@@ -366,11 +362,11 @@ func (c testClient) initTestCourseN(courseCount int, moduleCount int) (db.Course
 	moduleId := m
 
 	body := c.getPageBody("/teacher")
-	editModulePageLink := editModuleRoute(courseId, moduleId)
+	editModulePageLink := client.EditModuleRoute(int64(courseId), int64(moduleId))
 	require.Contains(c.t, body, editModulePageLink)
 
 	body = c.getPageBody(editModulePageLink)
-	require.Contains(c.t, body, editModuleRoute(courseId, moduleId))
+	require.Contains(c.t, body, client.EditModuleRoute(int64(courseId), int64(moduleId)))
 
 	newModules := []db.ModuleVersion{
 		db.NewModuleVersion(-1, m, 1, "new title1", "new description1"),
@@ -386,7 +382,7 @@ func (c testClient) initTestCourseN(courseCount int, moduleCount int) (db.Course
 			newQuestionBlockInput(newTestUiQuestion(int64(module.ModuleId), 2)),
 			newContentBlockInput("m" + mid + "_content2"),
 		}
-		c.editModule(courseId, module, blockInputs[i])
+		c.editModule(int64(courseId), module, blockInputs[i])
 	}
 
 	return db.NewCourse(n, course.Title, course.Description, true), newModules, blockInputs

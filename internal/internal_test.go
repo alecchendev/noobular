@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"noobular/internal"
 	"noobular/internal/db"
+	noob_client "noobular/internal/client"
 	"regexp"
 	"strings"
 	"testing"
@@ -222,10 +223,10 @@ func TestEditModule(t *testing.T) {
 	client := newTestClient(t).login(user.Id)
 
 	course, modules, blockInputs := client.initTestCourse()
-	courseId := 1
+	courseId := int64(1)
 
 	checkModule := func(module db.ModuleVersion, blockInput []blockInput) {
-		editModulePageLink := editModuleRoute(courseId, module.ModuleId)
+		editModulePageLink := noob_client.EditModuleRoute(courseId, int64(module.ModuleId))
 		body := client.getPageBody(editModulePageLink)
 		require.Contains(t, body, module.Title)
 		require.Contains(t, body, module.Description)
@@ -355,13 +356,13 @@ func TestAuth(t *testing.T) {
 	require.Contains(t, body, course.Title)
 	require.Contains(t, body, modules[0].Title)
 	require.Contains(t, body, editCourseRoute(course.Id))
-	require.Contains(t, body, editModuleRoute(course.Id, modules[0].ModuleId))
+	require.Contains(t, body, noob_client.EditModuleRoute(int64(course.Id), int64(modules[0].ModuleId)))
 
 	body = client2.getPageBody("/teacher")
 	require.NotContains(t, body, course.Title)
 	require.NotContains(t, body, modules[0].Title)
 	require.NotContains(t, body, editCourseRoute(course.Id))
-	require.NotContains(t, body, editModuleRoute(course.Id, modules[0].ModuleId))
+	require.NotContains(t, body, noob_client.EditModuleRoute(int64(course.Id), int64(modules[0].ModuleId)))
 
 	newCourse := db.NewCourse(course.Id, "new title", "new description", true)
 	newModules := []db.ModuleVersion{
@@ -419,7 +420,7 @@ func TestNoDuplicateContent(t *testing.T) {
 		newContentBlockInput(contentStr),
 		newContentBlockInput(contentStr2),
 	}
-	client.editModule(courseId, newModuleVersion, blocks)
+	client.editModule(int64(courseId), newModuleVersion, blocks)
 
 	// require contentStr2 is not duplicated (shared between explanation and content block)
 	// require question name/choice text is not duplicated
@@ -445,7 +446,7 @@ func TestNoDuplicateContent(t *testing.T) {
 		explain(explanation).
 		build()
 	blocks2 := []blockInput{ newQuestionBlockInput(question2), newContentBlockInput(contentStr) }
-	client.editModule(courseId, newModuleVersion2, blocks2)
+	client.editModule(int64(courseId), newModuleVersion2, blocks2)
 
 	// require contentStr is not duplicated
 	// require contentStr2 is deleted
@@ -492,7 +493,7 @@ func TestDeleteModuleSharedContent(t *testing.T) {
 		newContentBlockInput(contentStr),
 		newContentBlockInput(contentStr2),
 	}
-	client.editModule(courseId1, newModuleVersion1, blocks)
+	client.editModule(int64(courseId1), newModuleVersion1, blocks)
 
 	// Create a course with a module with one shared content
 	client.createCourse(course, modules)
@@ -504,7 +505,7 @@ func TestDeleteModuleSharedContent(t *testing.T) {
 	blocks = []blockInput{
 		newContentBlockInput(contentStr),
 	}
-	client.editModule(courseId2, newModuleVersion2, blocks)
+	client.editModule(int64(courseId2), newModuleVersion2, blocks)
 
 	// Delete first courses module
 	client.deleteModule(courseId1, moduleId1)
@@ -568,7 +569,7 @@ func TestModuleVersioning(t *testing.T) {
 		newContentBlockInput(contentStr),
 		newQuestionBlockInput(question),
 	}
-	client.editModule(courseId, newModuleVersion1, blocks)
+	client.editModule(int64(courseId), newModuleVersion1, blocks)
 
 	// Visit
 	client.enrollCourse(courseId)
@@ -603,7 +604,7 @@ func TestModuleVersioning(t *testing.T) {
 		newQuestionBlockInput(question2),
 		newContentBlockInput(contentStr2),
 	}
-	client.editModule(courseId, newModuleVersion2, blocks2)
+	client.editModule(int64(courseId), newModuleVersion2, blocks2)
 
 	// Visit again, and show old version
 	body = client.getPageBody(takeModulePageRoute(courseId, moduleId))
@@ -635,7 +636,7 @@ func TestPrerequisites(t *testing.T) {
 	for i := 0; i < len(moduleInputs); i++ {
 		moduleId := i + 1
 		newModuleVersion := db.NewModuleVersion(-1, moduleId, -1, moduleInputs[i].Title, moduleInputs[i].Description)
-		client.editModule(courseId, newModuleVersion, []blockInput{newContentBlockInput(moduleInputs[i].Title + "content")})
+		client.editModule(int64(courseId), newModuleVersion, []blockInput{newContentBlockInput(moduleInputs[i].Title + "content")})
 	}
 
 	// Assert with no prereqs they all just show up on the course page
@@ -714,7 +715,7 @@ func TestPoints(t *testing.T) {
 	for i := 0; i < len(moduleInputs); i++ {
 		moduleId := i + 1
 		newModuleVersion := db.NewModuleVersion(-1, moduleId, -1, moduleInputs[i].Title, moduleInputs[i].Description)
-		client.editModule(courseId, newModuleVersion, []blockInput{newContentBlockInput(moduleInputs[i].Title + "content")})
+		client.editModule(int64(courseId), newModuleVersion, []blockInput{newContentBlockInput(moduleInputs[i].Title + "content")})
 	}
 
 	client.enrollCourse(courseId)
@@ -931,14 +932,14 @@ func TestFormat(t *testing.T) {
 	}
 	client.createCourse(newTitleDescInput("course", "description"), moduleInputs)
 
-	courseId := 1
+	courseId := int64(1)
 	for i := 0; i < len(moduleInputs); i++ {
 		moduleId := i + 1
 		newModuleVersion := db.NewModuleVersion(-1, moduleId, -1, moduleInputs[i].Title, moduleInputs[i].Description)
 		client.editModule(courseId, newModuleVersion, []blockInput{newContentBlockInput(moduleInputs[i].Title + "content")})
 	}
 
-	client.enrollCourse(courseId)
+	client.enrollCourse(int(courseId))
 
 	titleDesc, blockInputs, err := parseModule(testModule)
 	require.Nil(t, err)
@@ -946,7 +947,7 @@ func TestFormat(t *testing.T) {
 	moduleId := 1
 	client.editModule(courseId, db.NewModuleVersion(-1, moduleId, -1, titleDesc.Title, titleDesc.Description), blockInputs)
 
-	body := client.getPageBody(editModuleRoute(courseId, moduleId))
+	body := client.getPageBody(noob_client.EditModuleRoute(int64(courseId), int64(moduleId)))
 	require.Contains(t, body, titleDesc.Title)
 	require.Contains(t, body, titleDesc.Description)
 	for _, block := range blockInputs {
@@ -962,6 +963,6 @@ func TestFormat(t *testing.T) {
 		}
 	}
 
-	body = client.getPageBody(exportModuleRoute(courseId, moduleId))
+	body = client.getPageBody(exportModuleRoute(int(courseId), moduleId))
 	require.Equal(t, strings.TrimSpace(testModule), strings.TrimSpace(body))
 }
