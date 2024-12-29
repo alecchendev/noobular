@@ -48,6 +48,11 @@ func (c Client) delete(path string) *http.Response {
 	return c.request("DELETE", path, "")
 }
 
+type ModuleInit struct {
+	Title       string
+	Description string
+}
+
 type BlockType int
 
 const (
@@ -93,6 +98,31 @@ type Choice struct {
 
 type ContentBlock struct {
 	Text string
+}
+
+func CreateCourseRoute() string {
+	return "/teacher/course/create"
+}
+
+func CreateCourseForm(title string, description string, public bool, modules []ModuleInit) url.Values {
+	formData := url.Values{}
+	formData.Set("title", title)
+	formData.Set("description", description)
+	if public {
+		formData.Set("public", "on")
+	}
+	for _, module := range modules {
+		formData.Add("module-title[]", module.Title)
+		formData.Add("module-id[]", "-1")
+		formData.Add("module-description[]", module.Description)
+	}
+	return formData
+}
+
+func (c Client) CreateCourse(title string, description string, public bool, modules []ModuleInit) *http.Response {
+	formData := CreateCourseForm(title, description, public, modules)
+	resp := c.post(CreateCourseRoute(), formData.Encode())
+	return resp
 }
 
 func EditModuleRoute(courseId, moduleId int64) string {

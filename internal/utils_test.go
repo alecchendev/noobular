@@ -112,6 +112,10 @@ func (c testClient) login(userId int64) testClient {
 	return c
 }
 
+func (c testClient) noobClient() client.Client {
+	return client.NewClient(c.baseUrl, c.session_token)
+}
+
 func (c testClient) getPageBody(path string) string {
 	resp := c.get(path)
 	require.Equal(c.t, 200, resp.StatusCode)
@@ -160,10 +164,16 @@ func newDbCourseAndModules(in titleDescInput, modules []titleDescInput) (db.Cour
 	return dbCourse, dbModules
 }
 
-func (c testClient) createCourse(course titleDescInput, modules []titleDescInput) {
-	dbCourse, dbModules := newDbCourseAndModules(course, modules)
-	formData := createOrEditCourseForm(dbCourse, dbModules)
-	resp := c.post(createCourseRoute, formData.Encode())
+func (c testClient) createCourse(course titleDescInput, moduleInputs []titleDescInput) {
+	modules := make([]client.ModuleInit, 0)
+	for _, module := range moduleInputs {
+		modules = append(modules, client.ModuleInit{
+			Title: module.Title,
+			Description: module.Description,
+		})
+	}
+	cli := client.NewClient(c.baseUrl, c.session_token)
+	resp := cli.CreateCourse(course.Title, course.Description, true, modules)
 	require.Equal(c.t, 200, resp.StatusCode)
 }
 
