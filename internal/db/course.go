@@ -118,9 +118,11 @@ const getPublicCoursesQuery = `
 select c.id, c.title, c.description, c.public
 from courses c
 where c.public = true
-order by c.id;
+order by c.id
+limit 32;
 `
 
+// TODO: Add pagination
 func (c *DbClient) GetPublicCourses() ([]Course, error) {
 	courseRows, err := c.db.Query(getPublicCoursesQuery)
 	if err != nil {
