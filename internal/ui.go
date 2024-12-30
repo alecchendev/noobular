@@ -12,6 +12,7 @@ import (
 	"github.com/graemephi/goldmark-qjs-katex"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
+	"github.com/yuin/goldmark/renderer/html"
 
 	"noobular/internal/db"
 )
@@ -416,7 +417,15 @@ func NewUiContent(content db.Content) UiContent {
 }
 
 func newMd() goldmark.Markdown {
+	// For some of these, I should consider how rendering
+	// these fits into the protocol. For example, I want
+	// to allow people to include custom interactive diagrams
+	// via iframes, but the requirement to support this makes
+	// the protocol more web-centric.
 	return goldmark.New(
+		goldmark.WithRendererOptions(
+			html.WithUnsafe(), // For iframes, etc.
+		),
 		goldmark.WithExtensions(
 			&qjskatex.Extension{},
 			extension.Table,
