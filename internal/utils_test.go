@@ -122,6 +122,11 @@ func (c testClient) getPageBody(path string) string {
 	return bodyText(c.t, resp)
 }
 
+func (c testClient) getPageFail(path string) {
+	resp := c.get(path)
+	require.NotEqual(c.t, 200, resp.StatusCode)
+}
+
 func bodyText(t *testing.T, resp *http.Response) string {
 	bodyBytes, err := io.ReadAll(resp.Body)
 	require.Nil(t, err)
@@ -427,4 +432,8 @@ func takeModulePieceRoute(courseId int, moduleId int, blockIdx int) string {
 
 func completeModuleRoute(courseId int, moduleId int) string {
 	return fmt.Sprintf("/student/course/%d/module/%d/complete", courseId, moduleId)
+}
+
+func nextModulePieceRoute(courseId int, moduleId int, blockIdx int) string {
+	return fmt.Sprintf("/student/course/%d/module/%d/block/%d/piece", courseId, moduleId, blockIdx)
 }

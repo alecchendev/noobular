@@ -180,14 +180,22 @@ func parseTakeModuleRequest(r *http.Request) (takeModuleRequest, error) {
 	return takeModuleRequest{courseId, moduleId, blockIdx}, nil
 }
 
-func getModule(ctx HandlerContext, courseId int, moduleId int, userId int64) (UiModule, db.Visit, error) {
+func getModule(ctx HandlerContext, courseId int, moduleId int, userId int64, createVisit bool) (UiModule, db.Visit, error) {
 	module, err := ctx.dbClient.GetModule(courseId, moduleId)
 	if err != nil {
 		return UiModule{}, db.Visit{}, err
 	}
-	visit, err := ctx.dbClient.GetOrCreateVisit(userId, moduleId)
-	if err != nil {
+	visit, err := ctx.dbClient.GetVisit(userId, moduleId)
+	if err != nil && err != sql.ErrNoRows {
 		return UiModule{}, db.Visit{}, err
+	}
+	if err == sql.ErrNoRows && createVisit {
+		visit, err = ctx.dbClient.CreateVisit(userId, moduleId)
+		if err != nil {
+			return UiModule{}, db.Visit{}, err
+		}
+	} else if err == sql.ErrNoRows {
+		return UiModule{}, db.Visit{}, fmt.Errorf("No visit found for module %d", moduleId)
 	}
 	moduleVersion, err := ctx.dbClient.GetModuleVersion(visit.ModuleVersionId)
 	if err != nil {
@@ -285,7 +293,32 @@ func handleTakeModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	if err != nil {
 		return err
 	}
-	module, visit, err := getModule(ctx, courseId, moduleId, user.Id)
+
+	prereqs, err := ctx.dbClient.GetPrereqs(moduleId)
+	if err != nil {
+		return err
+	}
+	completedAllPrereqs := true
+	for _, prereq := range prereqs {
+		visit, err := ctx.dbClient.GetVisit(user.Id, prereq.PrereqModuleId)
+		if err != nil && err != sql.ErrNoRows {
+			return err
+		}
+		if err == sql.ErrNoRows {
+			completedAllPrereqs = false
+			break
+		}
+		blockCount, err := ctx.dbClient.GetBlockCount(visit.ModuleVersionId)
+		if visit.BlockIndex != blockCount {
+			completedAllPrereqs = false
+			break
+		}
+	}
+	if !completedAllPrereqs {
+		return fmt.Errorf("Cannot take module %d because prereqs are not completed", moduleId)
+	}
+
+	module, visit, err := getModule(ctx, courseId, moduleId, user.Id, true)
 	if err != nil {
 		return fmt.Errorf("Error getting module %d: %v", moduleId, err)
 	}
@@ -311,7 +344,7 @@ func handleTakeModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 }
 
 func getTakeModule(req takeModuleRequest, ctx HandlerContext, userId int64) (UiTakeModule, db.Visit, error) {
-	module, visit, err := getModule(ctx, req.courseId, req.moduleId, userId)
+	module, visit, err := getModule(ctx, req.courseId, req.moduleId, userId, false)
 	if err != nil {
 		return UiTakeModule{}, db.Visit{}, err
 	}

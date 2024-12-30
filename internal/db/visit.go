@@ -81,26 +81,21 @@ func (c *DbClient) GetVisit(userId int64, moduleId int) (Visit, error) {
 	return visit, nil
 }
 
-func (c *DbClient) GetOrCreateVisit(userId int64, moduleId int) (Visit, error) {
-	visit, err := c.GetVisit(userId, moduleId)
-	if err != nil && err == sql.ErrNoRows {
-		tx, err := c.db.Begin()
-		if err != nil {
-			return Visit{}, err
-		}
-		version, err := GetLatestModuleVersion(tx, moduleId)
-		if err != nil {
-			return Visit{}, err
-		}
-		visit, err = InsertVisit(tx, userId, version.Id, 0)
-		if err != nil {
-			return Visit{}, err
-		}
-		err = tx.Commit()
-		if err != nil {
-			return Visit{}, err
-		}
-	} else if err != nil {
+func (c *DbClient) CreateVisit(userId int64, moduleId int) (Visit, error) {
+	tx, err := c.db.Begin()
+	if err != nil {
+		return Visit{}, err
+	}
+	version, err := GetLatestModuleVersion(tx, moduleId)
+	if err != nil {
+		return Visit{}, err
+	}
+	visit, err := InsertVisit(tx, userId, version.Id, 0)
+	if err != nil {
+		return Visit{}, err
+	}
+	err = tx.Commit()
+	if err != nil {
 		return Visit{}, err
 	}
 	return visit, nil

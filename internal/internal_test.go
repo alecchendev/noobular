@@ -636,7 +636,10 @@ func TestPrerequisites(t *testing.T) {
 	for i := 0; i < len(moduleInputs); i++ {
 		moduleId := i + 1
 		newModuleVersion := db.NewModuleVersion(-1, moduleId, -1, moduleInputs[i].Title, moduleInputs[i].Description)
-		client.editModule(int64(courseId), newModuleVersion, []blockInput{newContentBlockInput(moduleInputs[i].Title + "content")})
+		client.editModule(int64(courseId), newModuleVersion, []blockInput{
+			newContentBlockInput(moduleInputs[i].Title + "content"),
+			newContentBlockInput(moduleInputs[i].Title + "content2"),
+		})
 	}
 
 	// Assert with no prereqs they all just show up on the course page
@@ -652,6 +655,14 @@ func TestPrerequisites(t *testing.T) {
 	client.setPrereqs(courseId, 3, []int{1})
 	client.setPrereqs(courseId, 4, []int{2, 3})
 
+	// Test that we cannot make prereq cycles
+	client.setPrereqsFail(courseId, 1, []int{1})
+	client.setPrereqsFail(courseId, 1, []int{2})
+	client.setPrereqsFail(courseId, 1, []int{3})
+	client.setPrereqsFail(courseId, 1, []int{4})
+	client.setPrereqsFail(courseId, 2, []int{4})
+	client.setPrereqsFail(courseId, 3, []int{4})
+
 	// Only module 1 should show up
 	body = client.getPageBody(studentCoursePageRoute(courseId))
 	require.Contains(t, body, moduleInputs[0].Title)
@@ -659,10 +670,23 @@ func TestPrerequisites(t *testing.T) {
 	require.NotContains(t, body, moduleInputs[2].Title)
 	require.NotContains(t, body, moduleInputs[3].Title)
 
-	// Take module 1
-	body = client.getPageBody(takeModulePageRoute(courseId, 1))
-	require.Contains(t, body, completeModuleRoute(courseId, 1))
-	client.completeModule(courseId, 1)
+	// Test that we cannot just take subsequent modules without prereqs
+	client.getPageFail(takeModulePageRoute(courseId, 2))
+	client.getPageFail(nextModulePieceRoute(courseId, 2, 1))
+	client.getPageFail(takeModulePageRoute(courseId, 3))
+	client.getPageFail(nextModulePieceRoute(courseId, 3, 1))
+	client.getPageFail(takeModulePageRoute(courseId, 4))
+	client.getPageFail(nextModulePieceRoute(courseId, 4, 1))
+
+	takeModule := func(moduleId int) {
+		body := client.getPageBody(takeModulePageRoute(courseId, moduleId))
+		require.Contains(t, body, nextModulePieceRoute(courseId, moduleId, 1))
+		body = client.getPageBody(nextModulePieceRoute(courseId, moduleId, 1))
+		require.Contains(t, body, completeModuleRoute(courseId, moduleId))
+		client.completeModule(courseId, moduleId)
+	}
+
+	takeModule(1)
 
 	// Module 2 and 3 should be unlocked
 	body = client.getPageBody(studentCoursePageRoute(courseId))
@@ -671,31 +695,17 @@ func TestPrerequisites(t *testing.T) {
 	require.Contains(t, body, moduleInputs[2].Title)
 	require.NotContains(t, body, moduleInputs[3].Title)
 
-	// Take module 2
-	body = client.getPageBody(takeModulePageRoute(courseId, 2))
-	require.Contains(t, body, completeModuleRoute(courseId, 2))
-	client.completeModule(courseId, 2)
+	takeModule(2)
 
 	// Module 4 should still be locked
 	body = client.getPageBody(studentCoursePageRoute(courseId))
 	require.NotContains(t, body, moduleInputs[3].Title)
 
-	// Take module 3
-	body = client.getPageBody(takeModulePageRoute(courseId, 3))
-	require.Contains(t, body, completeModuleRoute(courseId, 3))
-	client.completeModule(courseId, 3)
+	takeModule(3)
 	
 	// Module 4 should now be unlocked
 	body = client.getPageBody(studentCoursePageRoute(courseId))
 	require.Contains(t, body, moduleInputs[3].Title)
-
-	// Test that we cannot make prereq cycles
-	client.setPrereqsFail(courseId, 1, []int{1})
-	client.setPrereqsFail(courseId, 1, []int{2})
-	client.setPrereqsFail(courseId, 1, []int{3})
-	client.setPrereqsFail(courseId, 1, []int{4})
-	client.setPrereqsFail(courseId, 2, []int{4})
-	client.setPrereqsFail(courseId, 3, []int{4})
 }
 
 func TestPoints(t *testing.T) {
