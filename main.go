@@ -25,14 +25,20 @@ func main() {
 
 	envStr := os.Getenv("ENVIRONMENT")
 	env := internal.Environment(envStr)
-	if env != internal.Local && env != internal.Production {
-		log.Fatal("ENVIRONMENT must be set to 'local' or 'production'")
-	}
+	envNotSet := env != internal.Local && env != internal.Production
 
 	if len(os.Args) == 5 {
+		if envNotSet {
+			log.Println("No environment set: defaulting to production for upload")
+			env = internal.Production
+		}
 		cfg := parseUploadConfig(env)
 		uploadModule(cfg)
 	} else {
+		if envNotSet {
+			log.Println("No environment set: defaulting to local for server")
+			env = internal.Local
+		}
 		cfg := parseServerConfig(env)
 		runServer(cfg)
 	}
