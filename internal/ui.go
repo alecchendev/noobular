@@ -11,6 +11,7 @@ import (
 
 	"github.com/graemephi/goldmark-qjs-katex"
 	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/extension"
 
 	"noobular/internal/db"
 )
@@ -416,7 +417,10 @@ func NewUiContent(content db.Content) UiContent {
 
 func newMd() goldmark.Markdown {
 	return goldmark.New(
-		goldmark.WithExtensions(&qjskatex.Extension{}),
+		goldmark.WithExtensions(
+			&qjskatex.Extension{},
+			extension.Table,
+		),
 	)
 }
 
