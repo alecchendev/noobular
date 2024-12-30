@@ -283,13 +283,19 @@ func ParseModule(module string) (string, string, []Block, error) {
 
 		// If we matched a new block, it means we're at the end
 		// of the previous block
-		finishPiece(parsingType, newParsingType, buffer, &questionBuffer, &blocks)
+		err := finishPiece(parsingType, newParsingType, buffer, &questionBuffer, &blocks)
+		if err != nil {
+			return "", "", nil, err
+		}
 
 		buffer = []string{}
 		parsingType = newParsingType
 	}
 
-	finishPiece(parsingType, parsingNothing, buffer, &questionBuffer, &blocks)
+	err := finishPiece(parsingType, parsingNothing, buffer, &questionBuffer, &blocks)
+	if err != nil {
+		return "", "", nil, err
+	}
 
 	if err := scanner.Err(); err != nil {
 		return "", "", nil, err
