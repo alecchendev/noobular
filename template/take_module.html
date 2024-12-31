@@ -102,7 +102,7 @@
 	align-items: center;
 }
 
-.choice:hover, .choice *:hover {
+.enabled:hover, .enabled *:hover {
 	cursor: pointer;
 }
 
@@ -236,7 +236,7 @@ th, td {
 		{{ .Block.Question.Content.ContentTmpl }}
 		<div class="choices">
 		{{ range $choice := .Block.Question.Choices }}
-			<div class="choice">
+			<div class="choice enabled">
 				<input type="radio" id="{{ $choice.Id }}" name="choice" value="{{ $choice.Id }}" required>
 				<label for="{{ $choice.Id }}">{{ $choice.Content.ContentTmpl }}</label>
 			</div>
