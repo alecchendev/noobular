@@ -3,10 +3,11 @@ package internal_test
 import (
 	"bufio"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"noobular/internal"
-	"noobular/internal/db"
 	noob_client "noobular/internal/client"
+	"noobular/internal/db"
 	"regexp"
 	"strings"
 	"testing"
@@ -975,4 +976,20 @@ func TestFormat(t *testing.T) {
 
 	body = client.getPageBody(exportModuleRoute(int(courseId), moduleId))
 	require.Equal(t, strings.TrimSpace(testModule), strings.TrimSpace(body))
+}
+
+func TestKnowledgePoint(t *testing.T) {
+	ctx := startServer(t)
+	defer ctx.Close()
+
+	user := ctx.createUser()
+	jwtSecret, _ := hex.DecodeString(testJwtSecretHex)
+	cookie, _ := internal.CreateAuthCookie(jwtSecret, user.Id, false)
+	client := noob_client.NewClient(testUrl, &cookie)
+
+	client.CreateCourse("course", "description", true, []noob_client.ModuleInit{})
+	courseId := int64(1)
+
+	resp := client.CreateKnowledgePoint(courseId, "kp1")
+	require.Equal(t, 200, resp.StatusCode)
 }

@@ -11,6 +11,7 @@ import (
 // table), make sure to not accidentally delete on cascade all the other
 // tables that reference the one you're replacing, i.e. you will need
 // to create new tables and migrate the existing data.
+// - Adding a new table for the first time does not require a migration.
 
 const incrementVersionNumber = `
 update db_version

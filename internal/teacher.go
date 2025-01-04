@@ -942,3 +942,28 @@ func handleExportModule(w http.ResponseWriter, r *http.Request, ctx HandlerConte
 	text := strings.Join(textPieces, "\n")
 	return ctx.renderer.RenderExportedModule(w, text)
 }
+
+// Knowledge Points
+
+func handleCreateKnowledgePoint(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
+	courseIdInt, err := strconv.Atoi(r.PathValue("courseId"))
+	if err != nil {
+		return err
+	}
+	courseId := int64(courseIdInt)
+	err = r.ParseForm()
+	if err != nil {
+		return err
+	}
+	name := r.Form.Get("name")
+	if name == "" {
+		return fmt.Errorf("Name cannot be empty")
+	}
+	tx, err := ctx.dbClient.Begin()
+	defer tx.Rollback()
+	if err != nil {
+		return err
+	}
+	_, err = db.InsertKnowledgePoint(tx, courseId, name)
+	return err
+}

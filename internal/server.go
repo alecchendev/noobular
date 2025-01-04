@@ -91,6 +91,8 @@ func initRouter(dbClient *db.DbClient, renderer Renderer, webAuthn *webauthn.Web
 		Put(authRequiredHandler(handleEditPrereqs)))
 	mux.Handle("/teacher/course/{courseId}/module/{moduleId}/export", newHandlerMap().
 		Get(authRequiredHandler(handleExportModule)))
+	mux.Handle("/teacher/course/{courseId}/knowledge-point", newHandlerMap().
+		Post(authRequiredHandler(handleCreateKnowledgePoint)))
 
 	mux.Handle("/ui/{questionIdx}/choice", newHandlerMap().
 		Get(handleAddChoice))
