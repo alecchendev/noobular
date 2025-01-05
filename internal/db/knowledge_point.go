@@ -44,3 +44,44 @@ func InsertKnowledgePoint(tx *sql.Tx, courseId int64, name string) (KnowledgePoi
 	}
 	return NewKnowledgePoint(id, courseId, name), nil
 }
+
+// Knowledge point block
+
+const createKnowledgePointBlockTable = `
+create table if not exists knowledge_point_blocks (
+	id integer primary key autoincrement,
+	block_id integer not null unique,
+	knowledge_point_id integer not null,
+	foreign key (block_id) references blocks(id) on delete cascade,
+	foreign key (knowledge_point_id) references knowledge_points(id) on delete cascade
+);
+`
+
+const insertKnowledgePointBlockQuery = `
+insert into knowledge_point_blocks(block_id, knowledge_point_id)
+values(?, ?);
+`
+
+func InsertKnowledgePointBlock(tx *sql.Tx, blockId int64, knowledgePointId int64) error {
+	_, err := tx.Exec(insertKnowledgePointBlockQuery, blockId, knowledgePointId)
+	return err
+}
+	
+const getKnowledgePointFromBlockQuery = `
+select k.id, k.course_id, k.name
+from knowledge_points k
+join knowledge_point_blocks kb on k.id = kb.knowledge_point_id
+where kb.block_id = ?;
+`
+
+func (c *DbClient) GetKnowledgePointFromBlock(blockId int) (KnowledgePoint, error) {
+	row := c.db.QueryRow(getKnowledgePointFromBlockQuery, blockId)
+	var id int64
+	var courseId int64
+	var name string
+	err := row.Scan(&id, &courseId, &name)
+	if err != nil {
+		return KnowledgePoint{}, err
+	}
+	return NewKnowledgePoint(id, courseId, name), nil
+}

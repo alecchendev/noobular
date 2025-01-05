@@ -236,7 +236,7 @@ type blockInput struct {
 }
 
 func newQuestionBlockInput(question internal.UiQuestion) blockInput {
-	return blockInput{db.QuestionBlockType, question}
+	return blockInput{db.KnowledgePointBlockType, question}
 }
 
 func newContentBlockInput(content string) blockInput {
@@ -299,7 +299,7 @@ func blockInputsToBlocks(inputs []blockInput) []client.Block {
 	blocks := []client.Block{}
 	for _, input := range inputs {
 		switch input.blockType {
-		case db.QuestionBlockType:
+		case db.KnowledgePointBlockType:
 			question := input.block.(internal.UiQuestion)
 			choices := []client.Choice{}
 			for _, choice := range question.Choices {

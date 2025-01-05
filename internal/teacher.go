@@ -372,8 +372,12 @@ func handleEditModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 				return err
 			}
 			uiBlock.Content = NewUiContent(content)
-		} else if block.BlockType == db.QuestionBlockType {
-			question, err := ctx.dbClient.GetQuestionFromBlock(block.Id)
+		} else if block.BlockType == db.KnowledgePointBlockType {
+			knowledgePoint, err := ctx.dbClient.GetKnowledgePointFromBlock(block.Id)
+			if err != nil {
+				return fmt.Errorf("Error getting knowledge point for block %d: %w", block.Id, err)
+			}
+			question, err := ctx.dbClient.GetQuestionFromKnowledgePoint(knowledgePoint.Id)
 			if err != nil {
 				return fmt.Errorf("Error getting question for block %d: %w", block.Id, err)
 			}
@@ -414,6 +418,7 @@ func handleEditModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 }
 
 type editModuleRequest struct {
+	courseId	  int64
 	moduleId          int
 	title             string
 	description       string
@@ -426,6 +431,11 @@ type editModuleRequest struct {
 }
 
 func parseEditModuleRequest(r *http.Request) (editModuleRequest, error) {
+	courseIdInt, err := strconv.Atoi(r.PathValue("courseId"))
+	if err != nil {
+		return editModuleRequest{}, err
+	}
+	courseId := int64(courseIdInt)
 	moduleId, err := strconv.Atoi(r.PathValue("moduleId"))
 	if err != nil {
 		return editModuleRequest{}, err
@@ -483,6 +493,7 @@ func parseEditModuleRequest(r *http.Request) (editModuleRequest, error) {
 		uiChoicesByQuestion[i] = uiChoices
 	}
 	return editModuleRequest{
+		courseId,
 		moduleId,
 		title,
 		description,
@@ -585,8 +596,17 @@ func handleEditModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 				return err
 			}
 			contentIdx += 1
-		} else if db.BlockType(blockType) == db.QuestionBlockType {
-			err = db.InsertQuestion(tx, blockId, req.questions[questionIdx], req.choicesByQuestion[questionIdx], req.correctChoiceIdxs[questionIdx], req.explanations[questionIdx])
+		} else if db.BlockType(blockType) == db.KnowledgePointBlockType {
+			knowledgePointName := "knowledge point: " + req.questions[questionIdx]
+			knowledgePoint, err := db.InsertKnowledgePoint(tx, req.courseId, knowledgePointName)
+			if err != nil {
+				return err
+			}
+			err = db.InsertKnowledgePointBlock(tx, blockId, knowledgePoint.Id)
+			if err != nil {
+				return err
+			}
+			err = db.InsertQuestion(tx, knowledgePoint.Id, req.questions[questionIdx], req.choicesByQuestion[questionIdx], req.correctChoiceIdxs[questionIdx], req.explanations[questionIdx])
 			if err != nil {
 				return err
 			}
@@ -896,8 +916,12 @@ func handleExportModule(w http.ResponseWriter, r *http.Request, ctx HandlerConte
 			}
 			textPieces = append(textPieces, metadataStr("content"))
 			textPieces = append(textPieces, content.Content)
-		} else if block.BlockType == db.QuestionBlockType {
-			question, err := ctx.dbClient.GetQuestionFromBlock(block.Id)
+		} else if block.BlockType == db.KnowledgePointBlockType {
+			knowledgePoint, err := ctx.dbClient.GetKnowledgePointFromBlock(block.Id)
+			if err != nil {
+				return err
+			}
+			question, err := ctx.dbClient.GetQuestionFromKnowledgePoint(knowledgePoint.Id)
 			if err != nil {
 				return err
 			}

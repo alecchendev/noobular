@@ -9,35 +9,35 @@ import (
 const createQuestionTable = `
 create table if not exists questions (
 	id integer primary key autoincrement,
-	block_id integer not null unique,
+	knowledge_point_id integer not null unique,
 	content_id integer not null,
-	foreign key (block_id) references blocks(id) on delete cascade,
+	foreign key (knowledge_point_id) references knowledge_points(id) on delete cascade,
 	foreign key (content_id) references content(id) on delete cascade
 );
 `
 
 type Question struct {
-	Id           int
-	BlockId      int
-	ContentId    int
+	Id             int
+	KnowledgePoint int64
+	ContentId      int
 }
 
-func NewQuestion(id int, blockId int, contentId int) Question {
-	return Question{id, blockId, contentId}
+func NewQuestion(id int, knowledgePointId int64, contentId int) Question {
+	return Question{id, knowledgePointId, contentId}
 }
 
 const insertQuestionQuery = `
-insert into questions(block_id, content_id)
+insert into questions(knowledge_point_id, content_id)
 values(?, ?);
 `
 
 // Need to rollback tx upon error one level up the stack because this function will not do that.
-func InsertQuestion(tx *sql.Tx, blockId int64, question string, choices []string, correctChoiceIdx int, explanation string) error {
+func InsertQuestion(tx *sql.Tx, knowledgePointId int64, question string, choices []string, correctChoiceIdx int, explanation string) error {
 	questionContentId, err := InsertContent(tx, question)
 	if err != nil {
 		return err
 	}
-	res, err := tx.Exec(insertQuestionQuery, blockId, questionContentId)
+	res, err := tx.Exec(insertQuestionQuery, knowledgePointId, questionContentId)
 	if err != nil {
 		return err
 	}
@@ -62,20 +62,21 @@ func InsertQuestion(tx *sql.Tx, blockId int64, question string, choices []string
 	return nil
 }
 
-const getQuestionQuery = `
-select q.id, q.block_id, q.content_id
+const getQuestionFromKnowledgePointQuery = `
+select q.id, q.knowledge_point_id, q.content_id
 from questions q
 join content c on q.content_id = c.id
-where q.block_id = ?;
+where q.knowledge_point_id = ?;
 `
 
-func (c *DbClient) GetQuestionFromBlock(blockId int) (Question, error) {
-	questionRow := c.db.QueryRow(getQuestionQuery, blockId)
+// TODO: handle multiple questions per knowledge point
+func (c *DbClient) GetQuestionFromKnowledgePoint(knowledgePointId int64) (Question, error) {
+	questionRow := c.db.QueryRow(getQuestionFromKnowledgePointQuery, knowledgePointId)
 	id := 0
 	contentId := 0
-	err := questionRow.Scan(&id, &blockId, &contentId)
+	err := questionRow.Scan(&id, &knowledgePointId, &contentId)
 	if err != nil {
 		return Question{}, err
 	}
-	return NewQuestion(id, blockId, contentId), nil
+	return NewQuestion(id, knowledgePointId, contentId), nil
 }

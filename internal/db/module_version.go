@@ -133,8 +133,11 @@ with module_version_block_ids as (
 content_block_content_ids as (
 	select content_id from content_blocks where block_id in module_version_block_ids
 ),
+knowledge_point_ids as (
+	select knowledge_point_id from knowledge_point_blocks where block_id in module_version_block_ids
+),
 question_ids as (
-	select id from questions where block_id in module_version_block_ids
+	select id from questions where knowledge_point_id in knowledge_point_ids
 ),
 question_content_ids as (
 	select content_id from questions where id in question_ids
@@ -157,8 +160,11 @@ referenced_content_ids as (
 elsewhere_content_block_content_ids as (
 	select content_id from content_blocks where block_id not in module_version_block_ids
 ),
+elsewhere_knowledge_point_ids as (
+	select knowledge_point_id from knowledge_point_blocks where block_id not in module_version_block_ids
+),
 elsewhere_question_ids as (
-	select id from questions where block_id not in module_version_block_ids
+	select id from questions where knowledge_point_id in elsewhere_knowledge_point_ids
 ),
 elsewhere_question_content_ids as (
 	select content_id from questions where id in elsewhere_question_ids

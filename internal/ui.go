@@ -201,7 +201,7 @@ type UiBlock struct {
 }
 
 func NewUiBlockQuestion(question UiQuestion, idx int) UiBlock {
-	return UiBlock{db.QuestionBlockType, idx, EmptyContent(), question}
+	return UiBlock{db.KnowledgePointBlockType, idx, EmptyContent(), question}
 }
 
 func NewUiBlockContent(content UiContent, idx int) UiBlock {

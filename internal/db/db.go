@@ -68,6 +68,7 @@ func initDb(db *sql.DB) {
 		createPrereqTable,
 		createDbVersionTable,
 		createKnowledgePointTable,
+		createKnowledgePointBlockTable,
 	}
 	for _, stmt := range stmts {
 		_, err := tx.Exec(stmt)

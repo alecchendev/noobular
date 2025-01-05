@@ -58,6 +58,7 @@ type BlockType int
 const (
 	QuestionBlockType BlockType = iota
 	ContentBlockType
+	KnowledgePointBlockType
 )
 
 func (b BlockType) String() string {
@@ -66,6 +67,8 @@ func (b BlockType) String() string {
 		return "question"
 	case ContentBlockType:
 		return "content"
+	case KnowledgePointBlockType:
+		return "knowledge_point"
 	}
 	return ""
 }
@@ -78,7 +81,7 @@ type Block struct {
 
 func NewQuestionBlock(text string, choices []Choice, explanation string) Block {
 	question := QuestionBlock{Text: text, Choices: choices, Explanation: explanation}
-	return Block{BlockType: QuestionBlockType, Question: question}
+	return Block{BlockType: KnowledgePointBlockType, Question: question}
 }
 
 func NewContentBlock(content string) Block {
@@ -136,7 +139,7 @@ func editModuleForm(title string, description string, blocks []Block) url.Values
 	for _, block := range blocks {
 		formData.Add("block-type[]", block.BlockType.String())
 		switch block.BlockType {
-		case QuestionBlockType:
+		case KnowledgePointBlockType:
 			question := block.Question
 			formData.Add("question-title[]", question.Text)
 			questionIdx := rand.Int()
@@ -154,6 +157,8 @@ func editModuleForm(title string, description string, blocks []Block) url.Values
 			formData.Add("choice-idx[]", "end-choice")
 		case ContentBlockType:
 			formData.Add("content-text[]", block.Content.Text)
+		case QuestionBlockType:
+			panic("QuestionBlockType not supported")
 		}
 	}
 	return formData

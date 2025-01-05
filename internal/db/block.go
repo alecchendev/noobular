@@ -18,11 +18,12 @@ create table if not exists blocks (
 );
 `
 
+// TODO: turn this into an enum
 type BlockType string
 
 const (
-	QuestionBlockType BlockType = "question"
 	ContentBlockType  BlockType = "content"
+	KnowledgePointBlockType BlockType = "knowledge_point"
 )
 
 type Block struct {

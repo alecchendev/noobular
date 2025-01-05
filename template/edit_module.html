@@ -84,7 +84,7 @@ button {
 	    {{ range $block := .Blocks }}
 		{{ if eq $block.BlockType "content" }}
 		    {{ template "add_element.html" $block.Content }}
-		{{ else }}{{ if eq $block.BlockType "question" }}
+		{{ else }}{{ if eq $block.BlockType "knowledge_point" }}
 		    {{ template "add_element.html" $block.Question }}
 		{{ end }}{{ end }}
 	    {{ end }}

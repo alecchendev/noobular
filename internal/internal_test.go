@@ -233,7 +233,7 @@ func TestEditModule(t *testing.T) {
 		require.Contains(t, body, module.Description)
 		for _, block := range blockInput {
 			switch block.blockType {
-			case db.QuestionBlockType:
+			case db.KnowledgePointBlockType:
 				question := block.block.(internal.UiQuestion)
 				require.Contains(t, body, question.Content.Content)
 				require.Contains(t, body, question.Explanation.Content)
@@ -283,7 +283,7 @@ func TestEditModule(t *testing.T) {
 	require.NotEqual(t, 200, resp.StatusCode)
 }
 
-func TestEditModuleInputValidation(t *testing.T) {
+func TestInputValidationEditModule(t *testing.T) {
 	ctx := startServer(t)
 	defer ctx.Close()
 

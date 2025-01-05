@@ -214,10 +214,14 @@ func getBlock(ctx HandlerContext, moduleVersionId int64, blockIdx int, userId in
 		return UiBlock{}, fmt.Errorf("Error getting block %d for module %d: %v", blockIdx, moduleVersionId, err)
 	}
 	// TODO: use a html sanitizer like blue monday?
-	if block.BlockType == db.QuestionBlockType {
-		question, err := ctx.dbClient.GetQuestionFromBlock(block.Id)
+	if block.BlockType == db.KnowledgePointBlockType {
+		knowledgePoint, err := ctx.dbClient.GetKnowledgePointFromBlock(block.Id)
 		if err != nil {
-			return UiBlock{}, fmt.Errorf("Error getting question for block %d: %v", block.Id, err)
+			return UiBlock{}, fmt.Errorf("Error getting knowledge point for block %d: %v", block.Id, err)
+		}
+		question, err := ctx.dbClient.GetQuestionFromKnowledgePoint(knowledgePoint.Id)
+		if err != nil {
+			return UiBlock{}, fmt.Errorf("Error getting question for knowledge point %d: %v", knowledgePoint.Id, err)
 		}
 		questionContent, err := ctx.dbClient.GetContent(question.ContentId)
 		if err != nil {
@@ -391,8 +395,8 @@ func handleAnswerQuestion(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	if err != nil {
 		return err
 	}
-	if uiTakeModule.Block.BlockType != db.QuestionBlockType {
-		return fmt.Errorf("Tried to submit answer, but block at index %d for module %d is not a question block", req.blockIdx, req.moduleId)
+	if uiTakeModule.Block.BlockType != db.KnowledgePointBlockType {
+		return fmt.Errorf("Tried to submit answer, but block at index %d for module %d is not a knowledge point block", req.blockIdx, req.moduleId)
 	}
 	err = r.ParseForm()
 	if err != nil {
@@ -449,9 +453,13 @@ func handleCompleteModule(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	correctAnswers := 0
 	questionCount := 0
 	for _, block := range blocks {
-		if block.BlockType == db.QuestionBlockType {
+		if block.BlockType == db.KnowledgePointBlockType {
 			questionCount += 1
-			question, err := ctx.dbClient.GetQuestionFromBlock(block.Id)
+			knowledgePoint, err := ctx.dbClient.GetKnowledgePointFromBlock(block.Id)
+			if err != nil {
+				return err
+			}
+			question, err := ctx.dbClient.GetQuestionFromKnowledgePoint(knowledgePoint.Id)
 			if err != nil {
 				return err
 			}

@@ -214,7 +214,7 @@ th, td {
 {{ define "block" }}
 {{ if eq .Block.BlockType "content" }}
 	{{ template "content_block" . }}
-{{ else if eq .Block.BlockType "question" }}
+{{ else if eq .Block.BlockType "knowledge_point" }}
 	{{ if .Preview }}
 		{{ template "question_submitted" . }}
 	{{ else if not .Block.Question.Answered }}
