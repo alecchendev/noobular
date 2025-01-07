@@ -86,6 +86,26 @@ html {
 	padding: 0 1.2rem 0 1.2rem;
 
 }
+
+@media (max-width: 700px) {
+	.course-title-edit-container, .edit-module {
+		flex-direction: column;
+	}
+
+	.course-description {
+		margin-top: 1rem;
+	}
+
+	.delete-edit-container, .preview-edit-container {
+		justify-content: flex-start;
+		gap: 1rem;
+		align-items: center;
+	}
+
+	.module-title {
+		margin-bottom: 1rem;
+	}
+}
 {{ end }}
 {{ define "content" }}
 {{ if .Editor }}
@@ -104,6 +124,7 @@ html {
 			<h2 class="course-title">{{.Title}}</h2>
 			<div class="delete-edit-container">
 				{{ if $.Editor }}
+				<a class="edit-course-link" href="/teacher/course/{{$course.Id}}/knowledge-point">Knowledge Points</a>
 				<a class="edit-course-link" href="/teacher/course/{{$course.Id}}/prereq">Prereqs</a>
 				<a class="edit-course-link" href="/teacher/course/{{$course.Id}}">Edit</a>
 				{{ template "delete_course_link" $course }}

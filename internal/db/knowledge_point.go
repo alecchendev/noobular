@@ -45,6 +45,35 @@ func InsertKnowledgePoint(tx *sql.Tx, courseId int64, name string) (KnowledgePoi
 	return NewKnowledgePoint(id, courseId, name), nil
 }
 
+const getKnowledgePointsForCourseQuery = `
+select k.id, k.course_id, k.name
+from knowledge_points k
+where k.course_id = ?;
+`
+
+func (c *DbClient) GetKnowledgePoints(courseId int64) ([]KnowledgePoint, error) {
+	rows, err := c.db.Query(getKnowledgePointsForCourseQuery, courseId)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	knowledgePoints := []KnowledgePoint{}
+	for rows.Next() {
+		var id int64
+		var courseId int64
+		var name string
+		err := rows.Scan(&id, &courseId, &name)
+		if err != nil {
+			return nil, err
+		}
+		knowledgePoints = append(knowledgePoints, NewKnowledgePoint(id, courseId, name))
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return knowledgePoints, nil
+}
+
 // Knowledge point block
 
 const createKnowledgePointBlockTable = `

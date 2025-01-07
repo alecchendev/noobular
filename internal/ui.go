@@ -71,6 +71,7 @@ func initTemplates(projectRootDir string) map[string]*template.Template {
 				       "add_element.html",
 				       "edited_module_response.html"},
 		"prereq.html":        {"page.html", "prereq.html"},
+		"knowledge_point.html": {"page.html", "knowledge_point.html"},
 		"take_module.html":   {"page.html", "take_module.html"},
 		"add_element.html":   {"add_element.html"},
 		"export_module.html": {"export_module.html"},
@@ -511,6 +512,25 @@ func (r *Renderer) RenderPrereqForm(w http.ResponseWriter, prereqForm UiPrereqFo
 
 func (r *Renderer) RenderPrereqEditedResponse(w http.ResponseWriter, module UiModule) error {
 	return r.templates["prereq.html"].ExecuteTemplate(w, "edit_prereq_response", module)
+}
+
+type UiKnowledgePointPageArgs struct {
+	CourseId int64
+	CourseTitle string
+	KnowledgePoints []UiKnowledgePoint
+}
+
+type UiKnowledgePoint struct {
+	Id int64
+	Name string
+}
+
+func NewUiKnowledgePoint(k db.KnowledgePoint) UiKnowledgePoint {
+	return UiKnowledgePoint{k.Id, k.Name}
+}
+
+func (r *Renderer) RenderKnowledgePointPage(w http.ResponseWriter, pageArgs UiKnowledgePointPageArgs) error {
+	return r.templates["knowledge_point.html"].ExecuteTemplate(w, "page.html", NewPageArgs(true, true, pageArgs))
 }
 
 type UiTakeModulePage struct {
