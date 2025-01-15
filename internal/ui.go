@@ -71,7 +71,7 @@ func initTemplates(projectRootDir string) map[string]*template.Template {
 				       "add_element.html",
 				       "edited_module_response.html"},
 		"prereq.html":        {"page.html", "prereq.html"},
-		"knowledge_point.html": {"page.html", "knowledge_point.html"},
+		"knowledge_points.html": {"page.html", "knowledge_points.html"},
 		"take_module.html":   {"page.html", "take_module.html"},
 		"add_element.html":   {"add_element.html"},
 		"export_module.html": {"export_module.html"},
@@ -530,7 +530,7 @@ func NewUiKnowledgePoint(k db.KnowledgePoint) UiKnowledgePoint {
 }
 
 func (r *Renderer) RenderKnowledgePointPage(w http.ResponseWriter, pageArgs UiKnowledgePointPageArgs) error {
-	return r.templates["knowledge_point.html"].ExecuteTemplate(w, "page.html", NewPageArgs(true, true, pageArgs))
+	return r.templates["knowledge_points.html"].ExecuteTemplate(w, "page.html", NewPageArgs(true, true, pageArgs))
 }
 
 type UiTakeModulePage struct {
