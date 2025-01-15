@@ -59,22 +59,23 @@ func initTemplates(projectRootDir string) map[string]*template.Template {
 		},
 	}
 	filePaths := map[string][]string{
-		"index.html":         {"page.html", "index.html"},
-		"signup.html":        {"page.html", "signup.html"},
-		"student.html":       {"page.html", "student.html"},
-		"courses.html":       {"page.html", "courses.html"},
+		"index.html":   {"page.html", "index.html"},
+		"signup.html":  {"page.html", "signup.html"},
+		"student.html": {"page.html", "student.html"},
+		"courses.html": {"page.html", "courses.html"},
 		"create_course.html": {"page.html", "create_course.html",
-				       "add_element.html",
-				       "created_course_response.html",
-				       "edited_course_response.html"},
-		"edit_module.html":   {"page.html", "edit_module.html",
-				       "add_element.html",
-				       "edited_module_response.html"},
-		"prereq.html":        {"page.html", "prereq.html"},
+			"add_element.html",
+			"created_course_response.html",
+			"edited_course_response.html"},
+		"edit_module.html": {"page.html", "edit_module.html",
+			"add_element.html",
+			"edited_module_response.html"},
+		"prereq.html":           {"page.html", "prereq.html"},
 		"knowledge_points.html": {"page.html", "knowledge_points.html"},
-		"take_module.html":   {"page.html", "take_module.html"},
-		"add_element.html":   {"add_element.html"},
-		"export_module.html": {"export_module.html"},
+		"knowledge_point.html":  {"page.html", "knowledge_point.html"},
+		"take_module.html":      {"page.html", "take_module.html"},
+		"add_element.html":      {"add_element.html"},
+		"export_module.html":    {"export_module.html"},
 	}
 	templates := make(map[string]*template.Template)
 	for name, paths := range filePaths {
@@ -514,22 +515,22 @@ func (r *Renderer) RenderPrereqEditedResponse(w http.ResponseWriter, module UiMo
 	return r.templates["prereq.html"].ExecuteTemplate(w, "edit_prereq_response", module)
 }
 
-type UiKnowledgePointPageArgs struct {
-	CourseId int64
-	CourseTitle string
-	KnowledgePoints []UiKnowledgePoint
+type UiKnowledgePointListPageArgs struct {
+	CourseId        int64
+	CourseTitle     string
+	KnowledgePoints []UiKnowledgePointListItem
 }
 
-type UiKnowledgePoint struct {
-	Id int64
+type UiKnowledgePointListItem struct {
+	Id   int64
 	Name string
 }
 
-func NewUiKnowledgePoint(k db.KnowledgePoint) UiKnowledgePoint {
-	return UiKnowledgePoint{k.Id, k.Name}
+func NewUiKnowledgePointListItem(k db.KnowledgePoint) UiKnowledgePointListItem {
+	return UiKnowledgePointListItem{k.Id, k.Name}
 }
 
-func (r *Renderer) RenderKnowledgePointPage(w http.ResponseWriter, pageArgs UiKnowledgePointPageArgs) error {
+func (r *Renderer) RenderKnowledgePointListPage(w http.ResponseWriter, pageArgs UiKnowledgePointListPageArgs) error {
 	return r.templates["knowledge_points.html"].ExecuteTemplate(w, "page.html", NewPageArgs(true, true, pageArgs))
 }
 

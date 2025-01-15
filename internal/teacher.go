@@ -981,17 +981,17 @@ func handleKnowledgePointPage(w http.ResponseWriter, r *http.Request, ctx Handle
 	}
 
 	knowledgePoints, err := ctx.dbClient.GetKnowledgePoints(courseId)
-	uiKnowledgePoints := make([]UiKnowledgePoint, 0)
+	uiKnowledgePoints := make([]UiKnowledgePointListItem, 0)
 	for _, knowledgePoint := range knowledgePoints {
-		uiKnowledgePoints = append(uiKnowledgePoints, NewUiKnowledgePoint(knowledgePoint))
+		uiKnowledgePoints = append(uiKnowledgePoints, NewUiKnowledgePointListItem(knowledgePoint))
 	}
-	pageArgs := UiKnowledgePointPageArgs{
+	pageArgs := UiKnowledgePointListPageArgs{
 		CourseId: courseId,
 		CourseTitle: course.Title,
 		KnowledgePoints: uiKnowledgePoints,
 	}
 
-	return ctx.renderer.RenderKnowledgePointPage(w, pageArgs)
+	return ctx.renderer.RenderKnowledgePointListPage(w, pageArgs)
 }
 
 func handleCreateKnowledgePoint(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
