@@ -284,6 +284,8 @@ func ParseModule(module string) (string, string, []Block, error) {
 			}
 		case "explanation":
 			newParsingType = parsingExplanation
+		default:
+			continue // Comments
 		}
 
 		// If we matched a new block, it means we're at the end
