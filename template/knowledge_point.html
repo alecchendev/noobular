@@ -1,0 +1,88 @@
+{{ define "title" }}Create Course{{ end }}
+{{ define "style" }}
+.path {
+	margin-top: 1rem;
+}
+
+form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+#kp-name {
+    font-size: 1.5rem;
+    font-weight: bold;
+}
+
+#questions {
+    display: flex;
+    flex-direction: column;
+}
+
+#add-question-button {
+    height: 50px;
+    background-color: #f0f0f0;
+    color: black;
+    border: none;
+    border-radius: 10px;
+}
+
+#add-question-button:hover {
+    background-color: #e0e0e0;
+}
+
+#submit-button {
+    margin-top: 1rem;
+    height: 50px;
+    background-color: #0077cc;
+    color: white;
+    border: none;
+    border-radius: 10px;
+}
+
+#submit-button:hover {
+    background-color: #0055aa;
+}
+
+{{ template "substyle"}}
+{{ end }}
+{{ define "content" }}
+
+{{ $edit := not (eq .KnowledgePoint.Id -1) }}
+
+{{ if $edit }}
+<div class="path">
+	<a href="/teacher">Courses</a> &gt; <a href="/teacher/course/{{ .CourseId }}">{{ .CourseTitle }}</a> &gt; <a href="/teacher/course/{{ .CourseId }}/knowledge-point">Knowledge Points</a> &gt; <a href="/teacher/course/{{ .CourseId }}/knowledge-point/{{ .KnowledgePoint.Id }}">{{ .KnowledgePoint.Name }}</a>
+</div>
+<h1>Edit Knowledge Point</h1>
+{{ else }}
+<h1>New Knowledge Point</h1>
+{{ end }}
+<form
+    {{ if $edit }}
+    hx-put="/teacher/course/{{ .CourseId }}/knowledge-point/{{ .KnowledgePoint.Id }}"
+    hx-target="#response-message"
+    hx-swap="outerHTML"
+    {{ else }}
+    hx-post="/teacher/course/{{ .CourseId }}/knowledge-point"
+    {{ end }}
+>
+    <input type="text" id="kp-name" name="name" placeholder="Knowlege point name" value="{{ .KnowledgePoint.Name }}" autofocus required>
+
+    <h2>Questions</h2>
+
+    <div id="questions">
+	    {{ range $question := .KnowledgePoint.Questions }}
+		    {{ template "add_element.html" $question }}
+	    {{ end }}
+    </div>
+
+    <button id="add-question-button" type="button" hx-get="/ui/question" hx-target="#questions" hx-swap="beforeend">Add Question</button>
+
+    <button id="submit-button" type="submit">Submit</button>
+</form>
+
+<!-- Placeholder for response message -->
+<div id="response-message"></div>
+{{ end }}

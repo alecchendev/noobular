@@ -2,7 +2,6 @@ package internal
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -418,7 +417,7 @@ func handleEditModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 }
 
 type editModuleRequest struct {
-	courseId	  int64
+	courseId          int64
 	moduleId          int
 	title             string
 	description       string
@@ -430,29 +429,11 @@ type editModuleRequest struct {
 	explanations      []string
 }
 
-func parseEditModuleRequest(r *http.Request) (editModuleRequest, error) {
-	courseIdInt, err := strconv.Atoi(r.PathValue("courseId"))
-	if err != nil {
-		return editModuleRequest{}, err
-	}
-	courseId := int64(courseIdInt)
-	moduleId, err := strconv.Atoi(r.PathValue("moduleId"))
-	if err != nil {
-		return editModuleRequest{}, err
-	}
-	err = r.ParseForm()
-	if err != nil {
-		return editModuleRequest{}, err
-	}
-	log.Println("Form:", r.Form)
-	title := r.Form.Get("title")
-	description := r.Form.Get("description")
-	blockTypes := r.Form["block-type[]"]
-	contents := r.Form["content-text[]"]
+func parseQuestions(r *http.Request) ([]string, [][]string, []int, []string, error) {
 	questions := r.Form["question-title[]"]
 	questionIdxs := r.Form["question-idx[]"]
 	if len(questions) != len(questionIdxs) {
-		return editModuleRequest{}, fmt.Errorf("Each question must have an index")
+		return []string{}, [][]string{}, []int{}, []string{}, fmt.Errorf("Each question must have an index")
 	}
 	explanations := r.Form["question-explanation[]"]
 	choices := r.Form["choice-title[]"]
@@ -472,7 +453,7 @@ func parseEditModuleRequest(r *http.Request) (editModuleRequest, error) {
 		correctChoiceIdxStr := r.Form.Get(fmt.Sprintf("correct-choice-%s", questionIdxs[i]))
 		correctChoiceIdx, err := strconv.Atoi(correctChoiceIdxStr)
 		if err != nil {
-			return editModuleRequest{}, fmt.Errorf("Each question must have a correct choice")
+			return []string{}, [][]string{}, []int{}, []string{}, fmt.Errorf("Each question must have a correct choice")
 		}
 		for ; choiceIdx < len(choices); choiceIdx++ {
 			choice := choices[choiceIdx]
@@ -483,7 +464,7 @@ func parseEditModuleRequest(r *http.Request) (editModuleRequest, error) {
 			uiChoices = append(uiChoices, choice)
 			choiceUiIdx, err := strconv.Atoi(choiceUiIdxs[choiceIdx])
 			if err != nil {
-				return editModuleRequest{}, fmt.Errorf("Error parsing choice index: %v", err)
+				return []string{}, [][]string{}, []int{}, []string{}, fmt.Errorf("Error parsing choice index: %v", err)
 			}
 			if choiceUiIdx == correctChoiceIdx {
 				correctChoicesByQuestion[i] = len(uiChoices) - 1
@@ -491,6 +472,31 @@ func parseEditModuleRequest(r *http.Request) (editModuleRequest, error) {
 		}
 		uiQuestions[i] = question
 		uiChoicesByQuestion[i] = uiChoices
+	}
+	return uiQuestions, uiChoicesByQuestion, correctChoicesByQuestion, explanations, nil
+}
+
+func parseEditModuleRequest(r *http.Request) (editModuleRequest, error) {
+	courseIdInt, err := strconv.Atoi(r.PathValue("courseId"))
+	if err != nil {
+		return editModuleRequest{}, err
+	}
+	courseId := int64(courseIdInt)
+	moduleId, err := strconv.Atoi(r.PathValue("moduleId"))
+	if err != nil {
+		return editModuleRequest{}, err
+	}
+	err = r.ParseForm()
+	if err != nil {
+		return editModuleRequest{}, err
+	}
+	title := r.Form.Get("title")
+	description := r.Form.Get("description")
+	blockTypes := r.Form["block-type[]"]
+	contents := r.Form["content-text[]"]
+	uiQuestions, uiChoicesByQuestion, correctChoicesByQuestion, explanations, err := parseQuestions(r)
+	if err != nil {
+		return editModuleRequest{}, err
 	}
 	return editModuleRequest{
 		courseId,
@@ -512,6 +518,32 @@ const MaxQuestionLength = 2048
 const MaxChoices = 16
 const MaxChoiceLength = 1024
 
+func validateQuestions(questions []string, choicesByQuestion [][]string, correctChoicesByQuestion []int, explanations []string) error {
+	for i, question := range questions {
+		if question == "" {
+			return fmt.Errorf("Questions cannot be empty")
+		}
+		if len(question) > MaxQuestionLength {
+			return fmt.Errorf("Questions cannot be longer than %d characters", MaxQuestionLength)
+		}
+		if len(choicesByQuestion[i]) == 0 {
+			return fmt.Errorf("Questions must have at least one choice")
+		}
+		if len(choicesByQuestion[i]) > MaxChoices {
+			return fmt.Errorf("Questions cannot have more than %d choices", MaxChoices)
+		}
+		for _, choice := range choicesByQuestion[i] {
+			if choice == "" {
+				return fmt.Errorf("Choices cannot be empty")
+			}
+			if len(choice) > MaxChoiceLength {
+				return fmt.Errorf("Choices cannot be longer than %d characters", MaxChoiceLength)
+			}
+		}
+	}
+	return nil
+}
+
 func validateEditModuleRequest(req editModuleRequest) error {
 	if len(req.blockTypes) > MaxBlocks {
 		return fmt.Errorf("Cannot have more than %d blocks", MaxBlocks)
@@ -528,27 +560,9 @@ func validateEditModuleRequest(req editModuleRequest) error {
 	if len(req.description) > DescriptionMaxLength {
 		return fmt.Errorf("Description cannot be longer than %d characters", DescriptionMaxLength)
 	}
-	for i, question := range req.questions {
-		if question == "" {
-			return fmt.Errorf("Questions cannot be empty")
-		}
-		if len(question) > MaxQuestionLength {
-			return fmt.Errorf("Questions cannot be longer than %d characters", MaxQuestionLength)
-		}
-		if len(req.choicesByQuestion[i]) == 0 {
-			return fmt.Errorf("Questions must have at least one choice")
-		}
-		if len(req.choicesByQuestion[i]) > MaxChoices {
-			return fmt.Errorf("Questions cannot have more than %d choices", MaxChoices)
-		}
-		for _, choice := range req.choicesByQuestion[i] {
-			if choice == "" {
-				return fmt.Errorf("Choices cannot be empty")
-			}
-			if len(choice) > MaxChoiceLength {
-				return fmt.Errorf("Choices cannot be longer than %d characters", MaxChoiceLength)
-			}
-		}
+	err := validateQuestions(req.questions, req.choicesByQuestion, req.correctChoiceIdxs, req.explanations)
+	if err != nil {
+		return fmt.Errorf("Error validating questions: %v", err)
 	}
 	for _, content := range req.contents {
 		if content == "" {
@@ -803,11 +817,11 @@ func hasCycle(edges map[int][]int, root int) bool {
 			delete(visitPath, curr)
 			curr = parent
 		} else {
-			next := neighbors[neighborCount - 1]
+			next := neighbors[neighborCount-1]
 			if _, ok := visitPath[next]; ok {
 				return true
 			}
-			edges[curr] = neighbors[:neighborCount - 1]
+			edges[curr] = neighbors[:neighborCount-1]
 			visitPath[next] = curr
 			curr = next
 		}
@@ -986,37 +1000,111 @@ func handleKnowledgePointPage(w http.ResponseWriter, r *http.Request, ctx Handle
 		uiKnowledgePoints = append(uiKnowledgePoints, NewUiKnowledgePointListItem(knowledgePoint))
 	}
 	pageArgs := UiKnowledgePointListPageArgs{
-		CourseId: courseId,
-		CourseTitle: course.Title,
+		CourseId:        courseId,
+		CourseTitle:     course.Title,
 		KnowledgePoints: uiKnowledgePoints,
 	}
 
 	return ctx.renderer.RenderKnowledgePointListPage(w, pageArgs)
 }
 
-func handleCreateKnowledgePoint(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
+func handleCreateKnowledgePointPage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
 	courseIdInt, err := strconv.Atoi(r.PathValue("courseId"))
 	if err != nil {
 		return err
 	}
 	courseId := int64(courseIdInt)
-	_, err = ctx.dbClient.GetTeacherCourse(int(courseId), user.Id)
+	course, err := ctx.dbClient.GetTeacherCourse(int(courseId), user.Id)
 	if err != nil {
 		return err
 	}
+	pageArgs := UiKnowledgePointPageArgs{
+		CourseId:       courseId,
+		CourseTitle:    course.Title,
+		KnowledgePoint: NewUiKnowledgePointEmpty(),
+	}
+	return ctx.renderer.RenderCreateKnowledgePointPage(w, pageArgs)
+}
+
+type createKnowledgePointRequest struct {
+	courseId          int64
+	name              string
+	questions         []string
+	choicesByQuestion [][]string
+	correctChoiceIdxs []int
+	explanations      []string
+}
+
+func parseCreateKnowledgePointRequest(r *http.Request) (createKnowledgePointRequest, error) {
+	courseIdInt, err := strconv.Atoi(r.PathValue("courseId"))
+	if err != nil {
+		return createKnowledgePointRequest{}, err
+	}
+	courseId := int64(courseIdInt)
 	err = r.ParseForm()
 	if err != nil {
-		return err
+		return createKnowledgePointRequest{}, err
 	}
 	name := r.Form.Get("name")
-	if name == "" {
+	uiQuestions, uiChoicesByQuestion, correctChoicesByQuestion, explanations, err := parseQuestions(r)
+	if err != nil {
+		return createKnowledgePointRequest{}, err
+	}
+	return createKnowledgePointRequest{
+		courseId,
+		name,
+		uiQuestions,
+		uiChoicesByQuestion,
+		correctChoicesByQuestion,
+		explanations,
+	}, nil
+}
+
+func validateCreateKnowledgePointRequest(req createKnowledgePointRequest) error {
+	if req.name == "" {
 		return fmt.Errorf("Name cannot be empty")
+	}
+	err := validateQuestions(req.questions, req.choicesByQuestion, req.correctChoiceIdxs, req.explanations)
+	if err != nil {
+		return fmt.Errorf("Error validating questions: %v", err)
+	}
+	// TODO: require at least 1 or X questions
+	// TODO: handle more than one question per knowledge point
+	if len(req.questions) > 1 {
+		return fmt.Errorf("Cannot have more than one question")
+	}
+	return nil
+}
+
+func handleCreateKnowledgePoint(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
+	req, err := parseCreateKnowledgePointRequest(r)
+	if err != nil {
+		return fmt.Errorf("Error parsing create knowledge point request: %v", err)
+	}
+	err = validateCreateKnowledgePointRequest(req)
+	if err != nil {
+		return fmt.Errorf("Error validating create knowledge point request: %v", err)
+	}
+	_, err = ctx.dbClient.GetTeacherCourse(int(req.courseId), user.Id)
+	if err != nil {
+		return err
 	}
 	tx, err := ctx.dbClient.Begin()
 	defer tx.Rollback()
 	if err != nil {
 		return err
 	}
-	_, err = db.InsertKnowledgePoint(tx, courseId, name)
+	knowledgePoint, err := db.InsertKnowledgePoint(tx, req.courseId, req.name)
+	if err != nil {
+		return err
+	}
+
+	for i, _ := range req.questions {
+		err = db.InsertQuestion(tx, knowledgePoint.Id, req.questions[i], req.choicesByQuestion[i], req.correctChoiceIdxs[i], req.explanations[i])
+		if err != nil {
+			return err
+		}
+	}
+	err = tx.Commit()
 	return err
 }

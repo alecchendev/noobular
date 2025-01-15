@@ -94,6 +94,8 @@ func initRouter(dbClient *db.DbClient, renderer Renderer, webAuthn *webauthn.Web
 	mux.Handle("/teacher/course/{courseId}/knowledge-point", newHandlerMap().
 		Get(authRequiredHandler(handleKnowledgePointPage)).
 		Post(authRequiredHandler(handleCreateKnowledgePoint)))
+	mux.Handle("/teacher/course/{courseId}/knowledge-point/create", newHandlerMap().
+		Get(authRequiredHandler(handleCreateKnowledgePointPage)))
 
 	mux.Handle("/ui/{questionIdx}/choice", newHandlerMap().
 		Get(handleAddChoice))
