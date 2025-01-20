@@ -88,16 +88,82 @@ func (c *DbClient) GetKnowledgePoints(courseId int64) ([]KnowledgePoint, error) 
 	return knowledgePoints, nil
 }
 
-// TODO: delete content for questions
-const deleteUnansweredQuestionsForKnowledgePointQuery = `
-delete from questions
-where knowledge_point_id = ? and id not in (
+const deleteUnansweredQuestionsContentForKnowledgePointQuery = `
+with knowledge_point_ids as (
+	select id from knowledge_points where id = ?
+),
+answered_question_ids as (
 	select question_id from answers
-);
+),
+question_ids as (
+	select id from questions where knowledge_point_id in knowledge_point_ids and id not in answered_question_ids
+),
+question_content_ids as (
+	select content_id from questions where id in question_ids
+),
+choice_content_ids as (
+	select content_id from choices where question_id in question_ids
+),
+explanation_content_ids as (
+	select content_id from explanations where question_id in question_ids
+),
+referenced_content_ids as (
+	select * from question_content_ids
+	union
+	select * from choice_content_ids
+	union
+	select * from explanation_content_ids
+),
+elsewhere_content_block_content_ids as (
+	select content_id from content_blocks
+),
+elsewhere_knowledge_point_ids as (
+	select knowledge_point_id from knowledge_point_blocks where knowledge_point_id not in knowledge_point_ids
+),
+elsewhere_question_ids as (
+	select id from questions where knowledge_point_id in elsewhere_knowledge_point_ids
+),
+elsewhere_question_content_ids as (
+	select content_id from questions where id in elsewhere_question_ids
+),
+elsewhere_choice_content_ids as (
+	select content_id from choices where question_id in elsewhere_question_ids
+),
+elsewhere_explanation_content_ids as (
+	select content_id from explanations where question_id in elsewhere_question_ids
+),
+referenced_elsewhere_content_ids as (
+	select * from elsewhere_content_block_content_ids
+	union
+	select * from elsewhere_question_content_ids
+	union
+	select * from elsewhere_choice_content_ids
+	union
+	select * from elsewhere_explanation_content_ids
+),
+referenced_only_here_content_ids as (
+	select * from referenced_content_ids
+	except
+	select * from referenced_elsewhere_content_ids
+)
+delete from content
+where id in referenced_only_here_content_ids;
+`
+
+const deleteUnansweredQuestionsForKnowledgePointQuery = `
+with answered_question_ids as (
+	select question_id from answers
+)
+delete from questions
+where knowledge_point_id = ? and id not in answered_question_ids;
 `
 
 func DeleteUnansweredQuestionsForKnowledgePoint(tx *sql.Tx, kpId int64) error {
-	_, err := tx.Exec(deleteUnansweredQuestionsForKnowledgePointQuery, kpId)
+	_, err := tx.Exec(deleteUnansweredQuestionsContentForKnowledgePointQuery, kpId)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(deleteUnansweredQuestionsForKnowledgePointQuery, kpId)
 	return err
 }
 
