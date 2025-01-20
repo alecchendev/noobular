@@ -558,6 +558,10 @@ func (r *Renderer) RenderCreateKnowledgePointPage(w http.ResponseWriter, pageArg
 	return r.templates["knowledge_point.html"].ExecuteTemplate(w, "page.html", NewPageArgs(true, true, pageArgs))
 }
 
+func (r *Renderer) RenderKnowledgePointEdited(w http.ResponseWriter) error {
+	return r.templates["knowledge_point.html"].ExecuteTemplate(w, "edited", nil)
+}
+
 type UiTakeModulePage struct {
 	Module     UiModule
 	Blocks     []UiBlock

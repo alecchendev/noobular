@@ -45,6 +45,20 @@ func InsertKnowledgePoint(tx *sql.Tx, courseId int64, name string) (KnowledgePoi
 	return NewKnowledgePoint(id, courseId, name), nil
 }
 
+const updateKnowledgePointQuery = `
+update knowledge_points
+set name = ?
+where id = ? and course_id = ?;
+`
+
+func UpdateKnowledgePoint(tx *sql.Tx, kpId int64, courseId int64, name string) (KnowledgePoint, error) {
+	_, err := tx.Exec(updateKnowledgePointQuery, name, kpId, courseId)
+	if err != nil {
+		return KnowledgePoint{}, err
+	}
+	return NewKnowledgePoint(kpId, courseId, name), nil
+}
+
 const getKnowledgePointsForCourseQuery = `
 select k.id, k.course_id, k.name
 from knowledge_points k

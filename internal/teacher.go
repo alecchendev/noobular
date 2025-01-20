@@ -1167,7 +1167,44 @@ func handleCreateKnowledgePoint(w http.ResponseWriter, r *http.Request, ctx Hand
 }
 
 func handleEditKnowledgePoint(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
-	return nil
+	req, err := parseCreateKnowledgePointRequest(r)
+	if err != nil {
+		return fmt.Errorf("Error parsing create knowledge point request: %v", err)
+	}
+	err = validateCreateKnowledgePointRequest(req)
+	if err != nil {
+		return fmt.Errorf("Error validating create knowledge point request: %v", err)
+	}
+	_, err = ctx.dbClient.GetTeacherCourse(int(req.courseId), user.Id)
+	if err != nil {
+		return err
+	}
+	kpIdInt, err := strconv.Atoi(r.PathValue("kpId"))
+	if err != nil {
+		return err
+	}
+	kpId := int64(kpIdInt)
+	tx, err := ctx.dbClient.Begin()
+	defer tx.Rollback()
+	if err != nil {
+		return err
+	}
+	knowledgePoint, err := db.UpdateKnowledgePoint(tx, kpId, req.courseId, req.name)
+	if err != nil {
+		return err
+	}
+
+	for i, _ := range req.questions {
+		err = db.InsertQuestion(tx, knowledgePoint.Id, req.questions[i], req.choicesByQuestion[i], req.correctChoiceIdxs[i], req.explanations[i])
+		if err != nil {
+			return err
+		}
+	}
+	err = tx.Commit()
+	if err != nil {
+		return err
+	}
+	return ctx.renderer.RenderKnowledgePointEdited(w)
 }
 
 func handleDeleteKnowledgePoint(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
