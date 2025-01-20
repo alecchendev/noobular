@@ -400,7 +400,7 @@ func handleEditModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 			if err != nil {
 				return fmt.Errorf("Error getting knowledge point for block %d: %w", block.Id, err)
 			}
-			questions, err := ctx.dbClient.GetQuestionsForKnowledgePoint(knowledgePoint.Id)
+			questions, err := ctx.dbClient.GetLatestQuestionsForKnowledgePoint(knowledgePoint.Id)
 			if err != nil {
 				return fmt.Errorf("Error getting question for block %d: %w", block.Id, err)
 			}
@@ -958,7 +958,7 @@ func handleExportModule(w http.ResponseWriter, r *http.Request, ctx HandlerConte
 			if err != nil {
 				return err
 			}
-			questions, err := ctx.dbClient.GetQuestionsForKnowledgePoint(knowledgePoint.Id)
+			questions, err := ctx.dbClient.GetLatestQuestionsForKnowledgePoint(knowledgePoint.Id)
 			if err != nil {
 				return err
 			}
@@ -1070,7 +1070,7 @@ func handleEditKnowledgePointPage(w http.ResponseWriter, r *http.Request, ctx Ha
 	if err != nil {
 		return err
 	}
-	questions, err := ctx.dbClient.GetQuestionsForKnowledgePoint(knowledgePoint.Id)
+	questions, err := ctx.dbClient.GetLatestQuestionsForKnowledgePoint(knowledgePoint.Id)
 	if err != nil {
 		return err
 	}
@@ -1206,6 +1206,10 @@ func handleEditKnowledgePoint(w http.ResponseWriter, r *http.Request, ctx Handle
 	}
 
 	err = db.DeleteUnansweredQuestionsForKnowledgePoint(tx, knowledgePoint.Id)
+	if err != nil {
+		return err
+	}
+	err = db.MarkQuestionsOld(tx, knowledgePoint.Id)
 	if err != nil {
 		return err
 	}

@@ -77,9 +77,38 @@ func (c *DbClient) GetQuestionsForKnowledgePoint(knowledgePointId int64) ([]Ques
 	if err != nil {
 		return nil, err
 	}
+	questions, err := rowsToQuestions(questionRows)
+	if err != nil {
+		return nil, err
+	}
+	return questions, nil
+}
+
+const getLatestQuestionsForKnowledgePointQuery = `
+select q.id, q.knowledge_point_id, q.content_id, q.latest
+from questions q
+join content c on q.content_id = c.id
+where q.knowledge_point_id = ? and q.latest = true;
+`
+
+func (c *DbClient) GetLatestQuestionsForKnowledgePoint(knowledgePointId int64) ([]Question, error) {
+	questionRows, err := c.db.Query(getLatestQuestionsForKnowledgePointQuery, knowledgePointId)
+	defer questionRows.Close()
+	if err != nil {
+		return nil, err
+	}
+	questions, err := rowsToQuestions(questionRows)
+	if err != nil {
+		return nil, err
+	}
+	return questions, nil
+}
+
+func rowsToQuestions(questionRows *sql.Rows) ([]Question, error) {
 	questions := []Question{}
 	for questionRows.Next() {
 		id := 0
+		knowledgePointId := int64(0)
 		contentId := 0
 		latest := false
 		err := questionRows.Scan(&id, &knowledgePointId, &contentId, &latest)

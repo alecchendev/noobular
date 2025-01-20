@@ -88,6 +88,7 @@ func (c *DbClient) GetKnowledgePoints(courseId int64) ([]KnowledgePoint, error) 
 	return knowledgePoints, nil
 }
 
+// TODO: delete content for questions
 const deleteUnansweredQuestionsForKnowledgePointQuery = `
 delete from questions
 where knowledge_point_id = ? and id not in (
@@ -97,6 +98,17 @@ where knowledge_point_id = ? and id not in (
 
 func DeleteUnansweredQuestionsForKnowledgePoint(tx *sql.Tx, kpId int64) error {
 	_, err := tx.Exec(deleteUnansweredQuestionsForKnowledgePointQuery, kpId)
+	return err
+}
+
+const markQuestionsOld = `
+update questions
+set latest = false
+where knowledge_point_id = ?;
+`
+
+func MarkQuestionsOld(tx *sql.Tx, kpId int64) error {
+	_, err := tx.Exec(markQuestionsOld, kpId)
 	return err
 }
 

@@ -219,6 +219,7 @@ func getBlock(ctx HandlerContext, moduleVersionId int64, blockIdx int, userId in
 		if err != nil {
 			return UiBlock{}, fmt.Errorf("Error getting knowledge point for block %d: %v", block.Id, err)
 		}
+		// Figure out getting question for when student has answered
 		questions, err := ctx.dbClient.GetQuestionsForKnowledgePoint(knowledgePoint.Id)
 		if err != nil {
 			return UiBlock{}, fmt.Errorf("Error getting question for knowledge point %d: %v", knowledgePoint.Id, err)
@@ -461,6 +462,7 @@ func handleCompleteModule(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 			if err != nil {
 				return err
 			}
+			// Figure out getting question for when student has answered
 			questions, err := ctx.dbClient.GetQuestionsForKnowledgePoint(knowledgePoint.Id)
 			if err != nil {
 				return err
