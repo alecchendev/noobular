@@ -9,7 +9,7 @@ import (
 const createQuestionTable = `
 create table if not exists questions (
 	id integer primary key autoincrement,
-	knowledge_point_id integer not null unique,
+	knowledge_point_id integer not null,
 	content_id integer not null,
 	foreign key (knowledge_point_id) references knowledge_points(id) on delete cascade,
 	foreign key (content_id) references content(id) on delete cascade

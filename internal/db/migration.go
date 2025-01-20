@@ -37,6 +37,7 @@ func migrations() []DbMigration {
 		addPublicColumnToCoursesTable,
 		markdownQuestionChoiceMigration,
 		knowledgePointQuestionMigration,
+		multiKnowledgePointQuestionMigration,
 	}
 }
 
@@ -451,6 +452,162 @@ func knowledgePointQuestionMigration(tx *sql.Tx) error {
 	}
 	// migrate data
 	err = migrateOldQuestionsToKnowledgePointQuestions(tx)
+	if err != nil {
+		return err
+	}
+	// delete old tables
+	_, err = tx.Exec(deleteOldNonKnowledgePointQuestionTables)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// Remove the unique constraint on knowledge_point_id column on questions
+
+const createMultiKnowledgePointQuestionTables = `
+create table if not exists questions (
+	id integer primary key autoincrement,
+	knowledge_point_id integer not null,
+	content_id integer not null,
+	foreign key (knowledge_point_id) references knowledge_points(id) on delete cascade,
+	foreign key (content_id) references content(id) on delete cascade
+);
+
+create table if not exists choices (
+	id integer primary key autoincrement,
+	question_id integer not null,
+	content_id integer not null,
+	correct bool not null,
+	foreign key (question_id) references questions(id) on delete cascade,
+	foreign key (content_id) references content(id) on delete cascade
+);
+
+create table if not exists answers (
+	id integer primary key autoincrement,
+	user_id integer not null,
+	question_id integer not null,
+	choice_id integer not null,
+	foreign key (user_id) references users(id) on delete cascade,
+	foreign key (question_id) references questions(id) on delete cascade
+);
+
+create table if not exists explanations (
+	id integer primary key autoincrement,
+	question_id integer not null,
+	content_id integer not null,
+	foreign key (question_id) references questions(id) on delete cascade,
+	foreign key (content_id) references content(id) on delete cascade
+);
+`
+
+func migrateSingleToMultiKnowledgePointQuestions(tx *sql.Tx) error {
+	// get old questions
+	rows, err := tx.Query(`
+		select q.id, q.knowledge_point_id, q.content_id
+		from questions_old q;
+	`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		// Get question
+		var questionId int64
+		var knowledgePointId int64
+		var contentId int64
+		err := rows.Scan(&questionId, &knowledgePointId, &contentId)
+		if err != nil {
+			return err
+		}
+		// Create question in new table
+		res, err := tx.Exec("insert into questions(knowledge_point_id, content_id) values(?, ?);", knowledgePointId, contentId)
+		if err != nil {
+			return err
+		}
+		newQuestionId, err := res.LastInsertId()
+		if err != nil {
+			return err
+		}
+		// Get old choices
+		choiceRows, err := tx.Query("select id, content_id, correct from choices_old where question_id = ?;", questionId)
+		if err != nil {
+			return err
+		}
+		defer choiceRows.Close()
+		newChoiceIds := map[int64]int64{}
+		// Fill new choices
+		for choiceRows.Next() {
+			var id int64
+			var contentId int64
+			var correct bool
+			err := choiceRows.Scan(&id, &contentId, &correct)
+			if err != nil {
+				return err
+			}
+			// Create choice in new table
+			res, err = tx.Exec("insert into choices(question_id, content_id, correct) values(?, ?, ?);", newQuestionId, contentId, correct)
+			if err != nil {
+				return err
+			}
+			choiceId, err := res.LastInsertId()
+			if err != nil {
+				return err
+			}
+			newChoiceIds[id] = choiceId
+		}
+
+		// Get old answers
+		answerRows, err := tx.Query("select id, user_id, choice_id from answers_old where question_id = ?;", questionId)
+		if err != nil {
+			return err
+		}
+		defer answerRows.Close()
+		// Fill new answers
+		for answerRows.Next() {
+			var id int64
+			var userId int64
+			var choiceId int64
+			err := answerRows.Scan(&id, &userId, &choiceId)
+			if err != nil {
+				return err
+			}
+			_, err = tx.Exec("insert into answers(user_id, question_id, choice_id) values(?, ?, ?);", userId, newQuestionId, newChoiceIds[choiceId])
+			if err != nil {
+				return err
+			}
+		}
+		// Migrate explanation
+		explainRow := tx.QueryRow("select id, content_id from explanations_old where question_id = ?;", questionId)
+		var explanationId int64
+		var explanationContentId int64
+		err = explainRow.Scan(&explanationId, &explanationContentId)
+		if err != nil && err != sql.ErrNoRows {
+			return err
+		}
+		if err == nil {
+			_, err = tx.Exec("insert into explanations(question_id, content_id) values(?, ?);", newQuestionId, explanationContentId)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func multiKnowledgePointQuestionMigration(tx *sql.Tx) error {
+	// rename old tables
+	_, err := tx.Exec(renameOldNonKnowledgePointQuestionTables)
+	if err != nil {
+		return err
+	}
+	// create new tables
+	_, err = tx.Exec(createMultiKnowledgePointQuestionTables)
+	if err != nil {
+		return err
+	}
+	// migrate data
+	err = migrateSingleToMultiKnowledgePointQuestions(tx)
 	if err != nil {
 		return err
 	}
