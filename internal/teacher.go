@@ -1134,6 +1134,9 @@ func validateCreateKnowledgePointRequest(req createKnowledgePointRequest) error 
 	if err != nil {
 		return fmt.Errorf("Error validating questions: %v", err)
 	}
+	if len(req.questions) == 0 {
+		return fmt.Errorf("Knowledge point must have at least one question")
+	}
 	return nil
 }
 

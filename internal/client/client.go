@@ -132,6 +132,23 @@ func EditModuleRoute(courseId, moduleId int64) string {
 	return fmt.Sprintf("/teacher/course/%d/module/%d", courseId, moduleId)
 }
 
+func addQuestionToForm(formData url.Values, question QuestionBlock) {
+	formData.Add("question-title[]", question.Text)
+	questionIdx := rand.Int()
+	formData.Add("question-idx[]", strconv.Itoa(questionIdx))
+	formData.Add("question-explanation[]", question.Explanation)
+	for _, choice := range question.Choices {
+		formData.Add("choice-title[]", choice.Text)
+		choiceIdx := rand.Int()
+		formData.Add("choice-idx[]", strconv.Itoa(choiceIdx))
+		if choice.Correct {
+			formData.Add("correct-choice-"+strconv.Itoa(questionIdx), strconv.Itoa(choiceIdx))
+		}
+	}
+	formData.Add("choice-title[]", "end-choice")
+	formData.Add("choice-idx[]", "end-choice")
+}
+
 func editModuleForm(title string, description string, blocks []Block) url.Values {
 	formData := url.Values{}
 	formData.Set("title", title)
@@ -141,20 +158,7 @@ func editModuleForm(title string, description string, blocks []Block) url.Values
 		switch block.BlockType {
 		case KnowledgePointBlockType:
 			question := block.Question
-			formData.Add("question-title[]", question.Text)
-			questionIdx := rand.Int()
-			formData.Add("question-idx[]", strconv.Itoa(questionIdx))
-			formData.Add("question-explanation[]", question.Explanation)
-			for _, choice := range question.Choices {
-				formData.Add("choice-title[]", choice.Text)
-				choiceIdx := rand.Int()
-				formData.Add("choice-idx[]", strconv.Itoa(choiceIdx))
-				if choice.Correct {
-					formData.Add("correct-choice-"+strconv.Itoa(questionIdx), strconv.Itoa(choiceIdx))
-				}
-			}
-			formData.Add("choice-title[]", "end-choice")
-			formData.Add("choice-idx[]", "end-choice")
+			addQuestionToForm(formData, question)
 		case ContentBlockType:
 			formData.Add("content-text[]", block.Content.Text)
 		case QuestionBlockType:
@@ -314,9 +318,10 @@ func ParseModule(module string) (string, string, []Block, error) {
 	return moduleTitle, moduleDescription, blocks, nil
 }
 
-func (c Client) CreateKnowledgePoint(courseId int64, name string) *http.Response {
+func (c Client) CreateKnowledgePoint(courseId int64, name string, question QuestionBlock) *http.Response {
 	formData := url.Values{}
 	formData.Set("kp-name", name)
+	addQuestionToForm(formData, question)
 	resp := c.post(fmt.Sprintf("/teacher/course/%d/knowledge-point", courseId), formData.Encode())
 	return resp
 }

@@ -990,6 +990,14 @@ func TestKnowledgePoint(t *testing.T) {
 	client.CreateCourse("course", "description", true, []noob_client.ModuleInit{})
 	courseId := int64(1)
 
-	resp := client.CreateKnowledgePoint(courseId, "kp1")
+	question := noob_client.QuestionBlock {
+		Text: "kp question",
+		Choices: []noob_client.Choice{
+			{Text: "choice1", Correct: false},
+			{Text: "choice2", Correct: true},
+		},
+		Explanation: "kp explanation",
+	}
+	resp := client.CreateKnowledgePoint(courseId, "kp1", question)
 	require.Equal(t, 200, resp.StatusCode)
 }
