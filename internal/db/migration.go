@@ -38,6 +38,7 @@ func migrations() []DbMigration {
 		markdownQuestionChoiceMigration,
 		knowledgePointQuestionMigration,
 		multiKnowledgePointQuestionMigration,
+		latestQuestionMigration,
 	}
 }
 
@@ -613,6 +614,20 @@ func multiKnowledgePointQuestionMigration(tx *sql.Tx) error {
 	}
 	// delete old tables
 	_, err = tx.Exec(deleteOldNonKnowledgePointQuestionTables)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+const addLatestColumnToQuestionTable = `
+alter table questions
+add column
+latest bool not null default true;
+`
+
+func latestQuestionMigration(tx *sql.Tx) error {
+	_, err := tx.Exec(addLatestColumnToQuestionTable)
 	if err != nil {
 		return err
 	}

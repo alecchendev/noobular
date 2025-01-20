@@ -280,7 +280,7 @@ func (b uiQuestionBuilder) build() internal.UiQuestion {
 		choiceContents = append(choiceContents, db.NewContent(-1, choice.choiceText))
 		choices = append(choices, db.NewChoice(-1, -1, -1, choice.isCorrect))
 	}
-	return internal.NewUiQuestionEdit(db.NewQuestion(-1, -1, -1), db.NewContent(-1, b.questionText), choices, choiceContents, db.NewContent(-1, b.explanation))
+	return internal.NewUiQuestionEdit(db.NewQuestion(-1, -1, -1, true), db.NewContent(-1, b.questionText), choices, choiceContents, db.NewContent(-1, b.explanation))
 }
 
 func newTestUiQuestion(moduleId int64, questionNumber int) internal.UiQuestion {
