@@ -219,10 +219,12 @@ func getBlock(ctx HandlerContext, moduleVersionId int64, blockIdx int, userId in
 		if err != nil {
 			return UiBlock{}, fmt.Errorf("Error getting knowledge point for block %d: %v", block.Id, err)
 		}
-		question, err := ctx.dbClient.GetQuestionFromKnowledgePoint(knowledgePoint.Id)
+		questions, err := ctx.dbClient.GetQuestionsForKnowledgePoint(knowledgePoint.Id)
 		if err != nil {
 			return UiBlock{}, fmt.Errorf("Error getting question for knowledge point %d: %v", knowledgePoint.Id, err)
 		}
+		// TODO: handle multiple questions
+		question := questions[0]
 		questionContent, err := ctx.dbClient.GetContent(question.ContentId)
 		if err != nil {
 			return UiBlock{}, fmt.Errorf("Error getting question content for question %d: %v", question.Id, err)
@@ -459,10 +461,12 @@ func handleCompleteModule(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 			if err != nil {
 				return err
 			}
-			question, err := ctx.dbClient.GetQuestionFromKnowledgePoint(knowledgePoint.Id)
+			questions, err := ctx.dbClient.GetQuestionsForKnowledgePoint(knowledgePoint.Id)
 			if err != nil {
 				return err
 			}
+			// TODO: handle multiple questions
+			question := questions[0]
 			choiceId, err := ctx.dbClient.GetAnswer(user.Id, question.Id)
 			if err != nil {
 				return err

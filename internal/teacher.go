@@ -341,6 +341,30 @@ func handleDeleteModule(w http.ResponseWriter, r *http.Request, ctx HandlerConte
 
 // Edit module page
 
+func getQuestion(ctx HandlerContext, question db.Question) (db.Content, []db.Choice, []db.Content, db.Content, error) {
+	questionContent, err := ctx.dbClient.GetContent(question.ContentId)
+	if err != nil {
+		return db.Content{}, []db.Choice{}, []db.Content{}, db.Content{}, fmt.Errorf("Error getting content for question %d: %w", question.Id, err)
+	}
+	choices, err := ctx.dbClient.GetChoicesForQuestion(question.Id)
+	if err != nil {
+		return db.Content{}, nil, nil, db.Content{}, fmt.Errorf("Error getting choices for question %d: %w", question.Id, err)
+	}
+	choiceContents := make([]db.Content, 0)
+	for _, choice := range choices {
+		choiceContent, err := ctx.dbClient.GetContent(choice.ContentId)
+		if err != nil {
+			return db.Content{}, nil, nil, db.Content{}, fmt.Errorf("Error getting content for choice %d: %w", choice.Id, err)
+		}
+		choiceContents = append(choiceContents, choiceContent)
+	}
+	explanation, err := ctx.dbClient.GetExplanationForQuestion(question.Id)
+	if err != nil {
+		return db.Content{}, nil, nil, db.Content{}, err
+	}
+	return questionContent, choices, choiceContents, explanation, nil
+}
+
 func handleEditModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
 	courseId, err := strconv.Atoi(r.PathValue("courseId"))
 	if err != nil {
@@ -376,27 +400,13 @@ func handleEditModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 			if err != nil {
 				return fmt.Errorf("Error getting knowledge point for block %d: %w", block.Id, err)
 			}
-			question, err := ctx.dbClient.GetQuestionFromKnowledgePoint(knowledgePoint.Id)
+			questions, err := ctx.dbClient.GetQuestionsForKnowledgePoint(knowledgePoint.Id)
 			if err != nil {
 				return fmt.Errorf("Error getting question for block %d: %w", block.Id, err)
 			}
-			questionContent, err := ctx.dbClient.GetContent(question.ContentId)
-			if err != nil {
-				return fmt.Errorf("Error getting content for question %d: %w", question.Id, err)
-			}
-			choices, err := ctx.dbClient.GetChoicesForQuestion(question.Id)
-			if err != nil {
-				return fmt.Errorf("Error getting choices for question %d: %w", question.Id, err)
-			}
-			choiceContents := make([]db.Content, 0)
-			for _, choice := range choices {
-				choiceContent, err := ctx.dbClient.GetContent(choice.ContentId)
-				if err != nil {
-					return fmt.Errorf("Error getting content for choice %d: %w", choice.Id, err)
-				}
-				choiceContents = append(choiceContents, choiceContent)
-			}
-			explanation, err := ctx.dbClient.GetExplanationForQuestion(question.Id)
+			// TODO: handle multiple questions later
+			question := questions[0]
+			questionContent, choices, choiceContents, explanation, err := getQuestion(ctx, question)
 			if err != nil {
 				return err
 			}
@@ -935,10 +945,12 @@ func handleExportModule(w http.ResponseWriter, r *http.Request, ctx HandlerConte
 			if err != nil {
 				return err
 			}
-			question, err := ctx.dbClient.GetQuestionFromKnowledgePoint(knowledgePoint.Id)
+			questions, err := ctx.dbClient.GetQuestionsForKnowledgePoint(knowledgePoint.Id)
 			if err != nil {
 				return err
 			}
+			// TODO: handle multiple questions later
+			question := questions[0]
 			questionContent, err := ctx.dbClient.GetContent(question.ContentId)
 			if err != nil {
 				return err
@@ -1022,6 +1034,47 @@ func handleCreateKnowledgePointPage(w http.ResponseWriter, r *http.Request, ctx 
 		CourseId:       courseId,
 		CourseTitle:    course.Title,
 		KnowledgePoint: NewUiKnowledgePointEmpty(),
+	}
+	return ctx.renderer.RenderCreateKnowledgePointPage(w, pageArgs)
+}
+
+func handleEditKnowledgePointPage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
+	courseIdInt, err := strconv.Atoi(r.PathValue("courseId"))
+	if err != nil {
+		return err
+	}
+	courseId := int64(courseIdInt)
+	course, err := ctx.dbClient.GetTeacherCourse(int(courseId), user.Id)
+	if err != nil {
+		return err
+	}
+	kpIdInt, err := strconv.Atoi(r.PathValue("kpId"))
+	if err != nil {
+		return err
+	}
+	kpId := int64(kpIdInt)
+	knowledgePoint, err := ctx.dbClient.GetKnowledgePoint(kpId)
+	if err != nil {
+		return err
+	}
+	questions, err := ctx.dbClient.GetQuestionsForKnowledgePoint(knowledgePoint.Id)
+	if err != nil {
+		return err
+	}
+	uiQuestions := make([]UiQuestion, 0)
+	for _, question := range questions {
+		questionContent, choices, choiceContents, explanation, err := getQuestion(ctx, question)
+		if err != nil {
+			return err
+		}
+		uiQuestion := NewUiQuestionEdit(question, questionContent, choices, choiceContents, explanation)
+		uiQuestions = append(uiQuestions, uiQuestion)
+	}
+	uiKp := NewUiKnowledgePoint(kpId, knowledgePoint.Name, uiQuestions)
+	pageArgs := UiKnowledgePointPageArgs{
+		CourseId:       courseId,
+		CourseTitle:    course.Title,
+		KnowledgePoint: uiKp,
 	}
 	return ctx.renderer.RenderCreateKnowledgePointPage(w, pageArgs)
 }
@@ -1110,5 +1163,13 @@ func handleCreateKnowledgePoint(w http.ResponseWriter, r *http.Request, ctx Hand
 		return err
 	}
 	w.Header().Add("HX-Redirect", fmt.Sprintf("/teacher/course/%d/knowledge-point", req.courseId))
+	return nil
+}
+
+func handleEditKnowledgePoint(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
+	return nil
+}
+
+func handleDeleteKnowledgePoint(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
 	return nil
 }

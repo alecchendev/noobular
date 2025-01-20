@@ -62,21 +62,31 @@ func InsertQuestion(tx *sql.Tx, knowledgePointId int64, question string, choices
 	return nil
 }
 
-const getQuestionFromKnowledgePointQuery = `
+const getQuestionsForKnowledgePointQuery = `
 select q.id, q.knowledge_point_id, q.content_id
 from questions q
 join content c on q.content_id = c.id
 where q.knowledge_point_id = ?;
 `
 
-// TODO: handle multiple questions per knowledge point
-func (c *DbClient) GetQuestionFromKnowledgePoint(knowledgePointId int64) (Question, error) {
-	questionRow := c.db.QueryRow(getQuestionFromKnowledgePointQuery, knowledgePointId)
-	id := 0
-	contentId := 0
-	err := questionRow.Scan(&id, &knowledgePointId, &contentId)
+func (c *DbClient) GetQuestionsForKnowledgePoint(knowledgePointId int64) ([]Question, error) {
+	questionRows, err := c.db.Query(getQuestionsForKnowledgePointQuery, knowledgePointId)
+	defer questionRows.Close()
 	if err != nil {
-		return Question{}, err
+		return nil, err
 	}
-	return NewQuestion(id, knowledgePointId, contentId), nil
+	questions := []Question{}
+	for questionRows.Next() {
+		id := 0
+		contentId := 0
+		err := questionRows.Scan(&id, &knowledgePointId, &contentId)
+		if err != nil {
+			return nil, err
+		}
+		questions = append(questions, NewQuestion(id, knowledgePointId, contentId))
+	}
+	if err := questionRows.Err(); err != nil {
+		return nil, err
+	}
+	return questions, nil
 }
