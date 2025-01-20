@@ -316,7 +316,7 @@ func ParseModule(module string) (string, string, []Block, error) {
 
 func (c Client) CreateKnowledgePoint(courseId int64, name string) *http.Response {
 	formData := url.Values{}
-	formData.Set("name", name)
+	formData.Set("kp-name", name)
 	resp := c.post(fmt.Sprintf("/teacher/course/%d/knowledge-point", courseId), formData.Encode())
 	return resp
 }

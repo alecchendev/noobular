@@ -1045,7 +1045,7 @@ func parseCreateKnowledgePointRequest(r *http.Request) (createKnowledgePointRequ
 	if err != nil {
 		return createKnowledgePointRequest{}, err
 	}
-	name := r.Form.Get("name")
+	name := r.Form.Get("kp-name")
 	uiQuestions, uiChoicesByQuestion, correctChoicesByQuestion, explanations, err := parseQuestions(r)
 	if err != nil {
 		return createKnowledgePointRequest{}, err
@@ -1106,5 +1106,9 @@ func handleCreateKnowledgePoint(w http.ResponseWriter, r *http.Request, ctx Hand
 		}
 	}
 	err = tx.Commit()
-	return err
+	if err != nil {
+		return err
+	}
+	w.Header().Add("HX-Redirect", fmt.Sprintf("/teacher/course/%d/knowledge-point", req.courseId))
+	return nil
 }

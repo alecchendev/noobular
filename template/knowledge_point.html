@@ -68,7 +68,7 @@ form {
     hx-post="/teacher/course/{{ .CourseId }}/knowledge-point"
     {{ end }}
 >
-    <input type="text" id="kp-name" name="name" placeholder="Knowlege point name" value="{{ .KnowledgePoint.Name }}" autofocus required>
+    <input type="text" id="kp-name" name="kp-name" placeholder="Knowlege point name" value="{{ .KnowledgePoint.Name }}" autofocus required>
 
     <h2>Questions</h2>
 
