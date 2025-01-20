@@ -524,11 +524,24 @@ func parseEditModuleRequest(r *http.Request) (editModuleRequest, error) {
 
 const MaxBlocks = 64
 const MaxContentLength = 4096
+const MaxQuestions = 64
 const MaxQuestionLength = 2048
 const MaxChoices = 16
 const MaxChoiceLength = 1024
 
 func validateQuestions(questions []string, choicesByQuestion [][]string, correctChoicesByQuestion []int, explanations []string) error {
+	if len(questions) > MaxQuestions {
+		return fmt.Errorf("Cannot have more than %d questions", MaxQuestions)
+	}
+	if len(questions) != len(choicesByQuestion) {
+		return fmt.Errorf("Each question must have choices")
+	}
+	if len(questions) != len(correctChoicesByQuestion) {
+		return fmt.Errorf("Each question must have a correct choice")
+	}
+	if len(questions) != len(explanations) {
+		return fmt.Errorf("Each question must have an input (though the explanation itself can be empty)")
+	}
 	for i, question := range questions {
 		if question == "" {
 			return fmt.Errorf("Questions cannot be empty")
@@ -1121,11 +1134,6 @@ func validateCreateKnowledgePointRequest(req createKnowledgePointRequest) error 
 	if err != nil {
 		return fmt.Errorf("Error validating questions: %v", err)
 	}
-	// TODO: require at least 1 or X questions
-	// TODO: handle more than one question per knowledge point
-	if len(req.questions) > 1 {
-		return fmt.Errorf("Cannot have more than one question")
-	}
 	return nil
 }
 
@@ -1194,6 +1202,10 @@ func handleEditKnowledgePoint(w http.ResponseWriter, r *http.Request, ctx Handle
 		return err
 	}
 
+	err = db.DeleteUnansweredQuestionsForKnowledgePoint(tx, knowledgePoint.Id)
+	if err != nil {
+		return err
+	}
 	for i, _ := range req.questions {
 		err = db.InsertQuestion(tx, knowledgePoint.Id, req.questions[i], req.choicesByQuestion[i], req.correctChoiceIdxs[i], req.explanations[i])
 		if err != nil {

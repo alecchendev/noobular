@@ -88,6 +88,18 @@ func (c *DbClient) GetKnowledgePoints(courseId int64) ([]KnowledgePoint, error) 
 	return knowledgePoints, nil
 }
 
+const deleteUnansweredQuestionsForKnowledgePointQuery = `
+delete from questions
+where knowledge_point_id = ? and id not in (
+	select question_id from answers
+);
+`
+
+func DeleteUnansweredQuestionsForKnowledgePoint(tx *sql.Tx, kpId int64) error {
+	_, err := tx.Exec(deleteUnansweredQuestionsForKnowledgePointQuery, kpId)
+	return err
+}
+
 // Knowledge point block
 
 const createKnowledgePointBlockTable = `
