@@ -203,15 +203,15 @@ func InsertKnowledgePointBlock(tx *sql.Tx, blockId int64, knowledgePointId int64
 const getKnowledgePointQuery = `
 select id, course_id, name
 from knowledge_points
-where id = ?;
+where course_id = ? and id = ?;
 `
 
-func (c *DbClient) GetKnowledgePoint(kpId int64) (KnowledgePoint, error) {
-	row := c.db.QueryRow(getKnowledgePointQuery, kpId)
+func (c *DbClient) GetKnowledgePoint(kpCourseId int64, kpId int64) (KnowledgePoint, error) {
+	row := c.db.QueryRow(getKnowledgePointQuery, kpCourseId, kpId)
 	var id int64
 	var courseId int64
 	var name string
-	err := row.Scan(&id, &courseId, &name)
+	err := row.Scan(&id, &kpCourseId, &name)
 	if err != nil {
 		return KnowledgePoint{}, err
 	}

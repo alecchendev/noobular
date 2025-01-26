@@ -27,7 +27,7 @@ textarea:selected, input:selected{
 	border: none;
 }
 
-textarea:focus, input:focus{
+textarea:focus, input:focus, select:focus {
 	/* TODO: this is apparently an accessibility issue */
 	outline: none;
 }

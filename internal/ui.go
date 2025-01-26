@@ -467,13 +467,46 @@ func (r *Renderer) RenderNewChoice(w http.ResponseWriter, choice UiChoice) error
 	return r.templates["add_element.html"].ExecuteTemplate(w, "add_element.html", choice)
 }
 
+type UiKnowledgePointDropdown struct {
+	KnowledgePoints []UiKnowledgePointDropdownItem
+}
+
+func (kps UiKnowledgePointDropdown) ElementType() string {
+	return "knowledge_point"
+}
+
+func (r *Renderer) RenderNewKnowledgePoint(w http.ResponseWriter, knowledgePoints UiKnowledgePointDropdown) error {
+	return r.templates["add_element.html"].ExecuteTemplate(w, "add_element.html", knowledgePoints)
+}
+
+
+type UiKnowledgePointDropdownItem struct {
+	Id   int64
+	Name string
+	Selected bool
+}
+
+func NewUiKnowledgePointDropdownItem(id int64, name string, selected bool) UiKnowledgePointDropdownItem {
+	return UiKnowledgePointDropdownItem{id, name, selected}
+}
+
+type UiEditModuleBlock struct {
+	BlockType db.BlockType
+	Content   UiContent
+	KnowledgePoints UiKnowledgePointDropdown
+}
+
+func NewUiEditModuleBlock(blockType db.BlockType, content UiContent, kp []UiKnowledgePointDropdownItem) UiEditModuleBlock {
+	return UiEditModuleBlock{blockType, content, UiKnowledgePointDropdown{kp}}
+}
+
 type UiEditModule struct {
 	CourseId    int
 	CourseTitle string
 	ModuleId    int
 	ModuleTitle string
 	ModuleDesc  string
-	Blocks      []UiBlock
+	Blocks      []UiEditModuleBlock
 }
 
 func (r *Renderer) RenderEditModulePage(w http.ResponseWriter, module UiEditModule) error {

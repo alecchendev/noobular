@@ -72,12 +72,12 @@ button {
 		{{ if eq $block.BlockType "content" }}
 		    {{ template "add_element.html" $block.Content }}
 		{{ else }}{{ if eq $block.BlockType "knowledge_point" }}
-		    {{ template "add_element.html" $block.Question }}
+		    {{ template "add_element.html" $block.KnowledgePoints }}
 		{{ end }}{{ end }}
 	    {{ end }}
     </div>
     <div id="add-submodule-buttons">
-	<button id="add-element-button" type="button" hx-get="/ui/question" hx-target="#submodules" hx-swap="beforeend">Add Question</button>
+	<button id="add-element-button" type="button" hx-get="/ui/{{ .CourseId }}/knowledge-point" hx-target="#submodules" hx-swap="beforeend">Add Knowledge Point</button>
 	<button id="add-element-button" type="button" hx-get="/ui/content" hx-target="#submodules" hx-swap="beforeend">Add Content</button>
     </div>
 

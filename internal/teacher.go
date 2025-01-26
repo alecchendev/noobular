@@ -309,6 +309,30 @@ func handleAddElement(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 	return err
 }
 
+// TODO: The set of knowledge points should really only be loaded once
+// on the first page load.
+func handleAddKnowledgePoint(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
+	courseId, err := strconv.Atoi(r.PathValue("courseId"))
+	if err != nil {
+		return err
+	}
+	_, err = ctx.dbClient.GetTeacherCourse(courseId, user.Id)
+	if err != nil {
+		return err
+	}
+	knowledgePoints, err := ctx.dbClient.GetKnowledgePoints(int64(courseId))
+	if err != nil {
+		return err
+	}
+	uiKnowledgePoints := make([]UiKnowledgePointDropdownItem, 0)
+	for _, kp := range knowledgePoints {
+		uiKnowledgePoints = append(uiKnowledgePoints, NewUiKnowledgePointDropdownItem(kp.Id, kp.Name, false))
+	}
+	return ctx.renderer.RenderNewKnowledgePoint(w, UiKnowledgePointDropdown{
+		KnowledgePoints: uiKnowledgePoints,
+	})
+}
+
 func handleAddChoice(w http.ResponseWriter, r *http.Request, ctx HandlerContext) error {
 	questionIdx, err := strconv.Atoi(r.PathValue("questionIdx"))
 	if err != nil {
@@ -374,7 +398,11 @@ func handleEditModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	if err != nil {
 		return err
 	}
-	course, err := ctx.dbClient.GetEditCourse(user.Id, courseId)
+	course, err := ctx.dbClient.GetTeacherCourse(courseId, user.Id)
+	if err != nil {
+		return err
+	}
+	knowledgePoints, err := ctx.dbClient.GetKnowledgePoints(int64(courseId))
 	if err != nil {
 		return err
 	}
@@ -386,35 +414,30 @@ func handleEditModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	if err != nil {
 		return fmt.Errorf("Error getting blocks: %w", err)
 	}
-	uiBlocks := make([]UiBlock, len(blocks))
+	uiBlocks := make([]UiEditModuleBlock, len(blocks))
 	for _, block := range blocks {
-		uiBlock := UiBlock{BlockType: block.BlockType}
 		if block.BlockType == db.ContentBlockType {
 			content, err := ctx.dbClient.GetContentFromBlock(block.Id)
 			if err != nil {
 				return err
 			}
-			uiBlock.Content = NewUiContent(content)
+			uiEditModuleBlock := NewUiEditModuleBlock(db.ContentBlockType, NewUiContent(content), []UiKnowledgePointDropdownItem{})
+			uiBlocks = append(uiBlocks, uiEditModuleBlock)
 		} else if block.BlockType == db.KnowledgePointBlockType {
 			knowledgePoint, err := ctx.dbClient.GetKnowledgePointFromBlock(block.Id)
 			if err != nil {
 				return fmt.Errorf("Error getting knowledge point for block %d: %w", block.Id, err)
 			}
-			questions, err := ctx.dbClient.GetLatestQuestionsForKnowledgePoint(knowledgePoint.Id)
-			if err != nil {
-				return fmt.Errorf("Error getting question for block %d: %w", block.Id, err)
+			uiKnowledgePoints := make([]UiKnowledgePointDropdownItem, 0)
+			for _, kp := range knowledgePoints {
+				selected := kp.Id == knowledgePoint.Id
+				uiKnowledgePoints = append(uiKnowledgePoints, NewUiKnowledgePointDropdownItem(kp.Id, kp.Name, selected))
 			}
-			// TODO: handle multiple questions later
-			question := questions[0]
-			questionContent, choices, choiceContents, explanation, err := getQuestion(ctx, question)
-			if err != nil {
-				return err
-			}
-			uiBlock.Question = NewUiQuestionEdit(question, questionContent, choices, choiceContents, explanation)
+			uiEditModuleBlock := NewUiEditModuleBlock(db.KnowledgePointBlockType, UiContent{}, uiKnowledgePoints)
+			uiBlocks = append(uiBlocks, uiEditModuleBlock)
 		} else {
 			return fmt.Errorf("invalid block type: %s", block.BlockType)
 		}
-		uiBlocks = append(uiBlocks, uiBlock)
 	}
 	return ctx.renderer.RenderEditModulePage(w, UiEditModule{
 		CourseId:    courseId,
@@ -433,6 +456,7 @@ type editModuleRequest struct {
 	description       string
 	blockTypes        []string
 	contents          []string
+	knowledgePoints   []int64
 	questions         []string
 	choicesByQuestion [][]string
 	correctChoiceIdxs []int
@@ -504,6 +528,15 @@ func parseEditModuleRequest(r *http.Request) (editModuleRequest, error) {
 	description := r.Form.Get("description")
 	blockTypes := r.Form["block-type[]"]
 	contents := r.Form["content-text[]"]
+	knowledgePoints := r.Form["knowledge-point[]"]
+	knowledgePointIds := make([]int64, 0)
+	for _, kp := range knowledgePoints {
+		kpId, err := strconv.Atoi(kp)
+		if err != nil {
+			return editModuleRequest{}, fmt.Errorf("Error parsing knowledge point id: %v", err)
+		}
+		knowledgePointIds = append(knowledgePointIds, int64(kpId))
+	}
 	uiQuestions, uiChoicesByQuestion, correctChoicesByQuestion, explanations, err := parseQuestions(r)
 	if err != nil {
 		return editModuleRequest{}, err
@@ -515,6 +548,7 @@ func parseEditModuleRequest(r *http.Request) (editModuleRequest, error) {
 		description,
 		blockTypes,
 		contents,
+		knowledgePointIds,
 		uiQuestions,
 		uiChoicesByQuestion,
 		correctChoicesByQuestion,
@@ -611,6 +645,12 @@ func handleEditModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 	if err != nil {
 		return fmt.Errorf("Module %d not found", req.moduleId)
 	}
+	for _, kpId := range req.knowledgePoints {
+		_, err = ctx.dbClient.GetKnowledgePoint(int64(req.courseId), kpId)
+		if err != nil {
+			return fmt.Errorf("Knowledge point %d not found", kpId)
+		}
+	}
 	tx, err := ctx.dbClient.Begin()
 	defer tx.Rollback()
 	if err != nil {
@@ -620,7 +660,7 @@ func handleEditModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 	if err != nil {
 		return err
 	}
-	questionIdx := 0
+	kpIdx := 0
 	contentIdx := 0
 	for i, blockType := range req.blockTypes {
 		blockId, err := db.InsertBlock(tx, version.Id, i, db.BlockType(blockType))
@@ -634,20 +674,11 @@ func handleEditModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 			}
 			contentIdx += 1
 		} else if db.BlockType(blockType) == db.KnowledgePointBlockType {
-			knowledgePointName := "knowledge point: " + req.questions[questionIdx]
-			knowledgePoint, err := db.InsertKnowledgePoint(tx, req.courseId, knowledgePointName)
+			err = db.InsertKnowledgePointBlock(tx, blockId, req.knowledgePoints[kpIdx])
 			if err != nil {
 				return err
 			}
-			err = db.InsertKnowledgePointBlock(tx, blockId, knowledgePoint.Id)
-			if err != nil {
-				return err
-			}
-			err = db.InsertQuestion(tx, knowledgePoint.Id, req.questions[questionIdx], req.choicesByQuestion[questionIdx], req.correctChoiceIdxs[questionIdx], req.explanations[questionIdx])
-			if err != nil {
-				return err
-			}
-			questionIdx += 1
+			kpIdx += 1
 		} else {
 			return fmt.Errorf("invalid block type: %s", blockType)
 		}
@@ -1066,7 +1097,7 @@ func handleEditKnowledgePointPage(w http.ResponseWriter, r *http.Request, ctx Ha
 		return err
 	}
 	kpId := int64(kpIdInt)
-	knowledgePoint, err := ctx.dbClient.GetKnowledgePoint(kpId)
+	knowledgePoint, err := ctx.dbClient.GetKnowledgePoint(courseId, kpId)
 	if err != nil {
 		return err
 	}

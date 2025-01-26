@@ -41,6 +41,21 @@
 	resize: none;
 }
 
+.kp-select {
+	font-size: 1rem;
+	padding: 0.5rem;
+	border: 1px solid #e0e0e0;
+	border-radius: 10px;
+	box-shadow: none;
+	width: 100%;
+	background-color: white;
+}
+
+.kp-select:hover {
+	cursor: pointer;
+	border: 1px solid #4e4e4e;
+}
+
 .cancel {
 	width: 35px;
 	height: 35px;
@@ -93,7 +108,7 @@
 	border: 1px solid #e0e0e0;
 	border-radius: 10px;
 	height: 250px;
-	padding: 0.5rem;
+	padding: 0.8rem;
 }
 {{ end }}
 
@@ -144,7 +159,7 @@
 	</div>
 	<textarea type="text" class="element-title" name="question-title[]" placeholder="Question" required autofocus>{{ .ElementText }}</textarea>
 	<input type="text" name="question-idx[]" value="{{ .Idx }}" hidden>
-	<input type="text" name="block-type[]" value="knowledge_point" hidden>
+	<input type="text" name="block-type[]" value="question" hidden>
 
 	<div id="choices-container">
 		<div class="choices">
@@ -164,6 +179,24 @@
 	<div class="explanation-container">
 		<textarea class="explanation" name="question-explanation[]" placeholder="Explanation (optional)">{{ .Explanation.Content }}</textarea>
 	</div>
+</div>
+{{ end }}
+
+{{ define "add_knowledge_point" }}
+<div class="element-container">
+	<div class="element-title-delete-container">
+		<h2 class="block-label">Knowledge Point</h2>
+		{{ template "delete_element_button" . }}
+	</div>
+	<select class="kp-select" name="knowledge-point[]" required>
+		<option value="" selected disabled>Select a knowledge point</option>
+		{{ range $kp := .KnowledgePoints }}
+			<option value="{{ $kp.Id }}"
+			{{ if $kp.Selected }}selected{{ end }}
+			>{{ $kp.Name }}</option>
+		{{ end }}
+	</select>
+	<input type="text" name="block-type[]" value="knowledge_point" hidden>
 </div>
 {{ end }}
 
@@ -199,6 +232,8 @@
 	{{ template "add_module" . }}
 {{ else if eq .ElementType "question" }}
 	{{ template "add_question" . }}
+{{ else if eq .ElementType "knowledge_point" }}
+	{{ template "add_knowledge_point" . }}
 {{ else if eq .ElementType "content" }}
 	{{ template "add_content" . }}
 {{ else if eq .ElementType "choice" }}

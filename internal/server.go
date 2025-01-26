@@ -103,6 +103,8 @@ func initRouter(dbClient *db.DbClient, renderer Renderer, webAuthn *webauthn.Web
 
 	mux.Handle("/ui/{questionIdx}/choice", newHandlerMap().
 		Get(handleAddChoice))
+	mux.Handle("/ui/{courseId}/knowledge-point", newHandlerMap().
+		Get(authRequiredHandler(handleAddKnowledgePoint)))
 	mux.Handle("/ui/{element}", newHandlerMap().
 		Get(handleAddElement).
 		Delete(handleDeleteElement))
