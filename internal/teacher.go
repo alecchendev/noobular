@@ -457,10 +457,6 @@ type editModuleRequest struct {
 	blockTypes        []string
 	contents          []string
 	knowledgePoints   []int64
-	questions         []string
-	choicesByQuestion [][]string
-	correctChoiceIdxs []int
-	explanations      []string
 }
 
 func parseQuestions(r *http.Request) ([]string, [][]string, []int, []string, error) {
@@ -537,10 +533,6 @@ func parseEditModuleRequest(r *http.Request) (editModuleRequest, error) {
 		}
 		knowledgePointIds = append(knowledgePointIds, int64(kpId))
 	}
-	uiQuestions, uiChoicesByQuestion, correctChoicesByQuestion, explanations, err := parseQuestions(r)
-	if err != nil {
-		return editModuleRequest{}, err
-	}
 	return editModuleRequest{
 		courseId,
 		moduleId,
@@ -549,10 +541,6 @@ func parseEditModuleRequest(r *http.Request) (editModuleRequest, error) {
 		blockTypes,
 		contents,
 		knowledgePointIds,
-		uiQuestions,
-		uiChoicesByQuestion,
-		correctChoicesByQuestion,
-		explanations,
 	}, nil
 }
 
@@ -605,6 +593,23 @@ func validateEditModuleRequest(req editModuleRequest) error {
 	if len(req.blockTypes) > MaxBlocks {
 		return fmt.Errorf("Cannot have more than %d blocks", MaxBlocks)
 	}
+	contentCount := 0
+	kpCount := 0
+	for _, blockType := range req.blockTypes {
+		if db.BlockType(blockType) == db.ContentBlockType {
+			contentCount += 1
+		} else if db.BlockType(blockType) == db.KnowledgePointBlockType {
+			kpCount += 1
+		} else {
+			return fmt.Errorf("invalid block type: %s", blockType)
+		}
+	}
+	if contentCount != len(req.contents) {
+		return fmt.Errorf("Each content block must have content")
+	}
+	if kpCount != len(req.knowledgePoints) {
+		return fmt.Errorf("Each knowledge point block must have a knowledge point")
+	}
 	if req.title == "" {
 		return fmt.Errorf("Title cannot be empty")
 	}
@@ -616,10 +621,6 @@ func validateEditModuleRequest(req editModuleRequest) error {
 	}
 	if len(req.description) > DescriptionMaxLength {
 		return fmt.Errorf("Description cannot be longer than %d characters", DescriptionMaxLength)
-	}
-	err := validateQuestions(req.questions, req.choicesByQuestion, req.correctChoiceIdxs, req.explanations)
-	if err != nil {
-		return fmt.Errorf("Error validating questions: %v", err)
 	}
 	for _, content := range req.contents {
 		if content == "" {
