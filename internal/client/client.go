@@ -48,6 +48,10 @@ func (c Client) delete(path string) *http.Response {
 	return c.request("DELETE", path, "")
 }
 
+func (c Client) GetPage(path string) *http.Response {
+	return c.get(path)
+}
+
 type ModuleInit struct {
 	Title       string
 	Description string
@@ -334,4 +338,8 @@ func (c Client) CreateKnowledgePoint(courseId int64, name string, question []Que
 	}
 	resp := c.post(fmt.Sprintf("/teacher/course/%d/knowledge-point", courseId), formData.Encode())
 	return resp
+}
+
+func EditKnowledgePointRoute(courseId, kpId int64) string {
+	return fmt.Sprintf("/teacher/course/%d/knowledge-point/%d", courseId, kpId)
 }

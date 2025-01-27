@@ -952,6 +952,12 @@ func TestFormat(t *testing.T) {
 	require.Equal(t, strings.TrimSpace(testModule), strings.TrimSpace(body))
 }
 
+func getPageBody(t *testing.T, client noob_client.Client, path string) string {
+	resp := client.GetPage(path)
+	require.Equal(t, 200, resp.StatusCode)
+	return bodyText(t, resp)
+}
+
 func TestKnowledgePoint(t *testing.T) {
 	ctx := startServer(t)
 	defer ctx.Close()
@@ -962,16 +968,43 @@ func TestKnowledgePoint(t *testing.T) {
 	client.CreateCourse("course", "description", true, []noob_client.ModuleInit{})
 	courseId := int64(1)
 
-	question := noob_client.QuestionBlock {
-		Text: "kp question",
+	question1 := noob_client.QuestionBlock {
+		Text: "kp1 question",
 		Choices: []noob_client.Choice{
-			{Text: "choice1", Correct: false},
-			{Text: "choice2", Correct: true},
+			{Text: "kp1 choice1", Correct: false},
+			{Text: "kp1 choice2", Correct: true},
 		},
-		Explanation: "kp explanation",
+		Explanation: "kp1 explanation",
 	}
-	resp := client.CreateKnowledgePoint(courseId, "kp1", []noob_client.QuestionBlock{question})
+	resp := client.CreateKnowledgePoint(courseId, "kp1", []noob_client.QuestionBlock{question1})
 	require.Equal(t, 200, resp.StatusCode)
+	kpId1 := 1
+
+	question2 := noob_client.QuestionBlock {
+		Text: "kp2 question",
+		Choices: []noob_client.Choice{
+			{Text: "kp2 choice1", Correct: false},
+			{Text: "kp2 choice2", Correct: true},
+		},
+		Explanation: "kp2 explanation",
+	}
+	resp = client.CreateKnowledgePoint(courseId, "kp2", []noob_client.QuestionBlock{question2})
+	require.Equal(t, 200, resp.StatusCode)
+	kpId2 := 2
+
+	checkKnowledgePoint := func(kpId int64, name string, question noob_client.QuestionBlock) {
+		body := getPageBody(t, client, noob_client.EditKnowledgePointRoute(courseId, kpId))
+		require.Contains(t, body, name)
+		require.Contains(t, body, question.Text)
+		for _, choice := range question.Choices {
+			require.Contains(t, body, choice.Text)
+			// TODO: check correct
+		}
+		require.Contains(t, body, question.Explanation)
+	}
+		
+	checkKnowledgePoint(int64(kpId1), "kp1", question1)
+	checkKnowledgePoint(int64(kpId2), "kp2", question2)
 }
 
 func TestInputValidationKnowledgePoint(t *testing.T) {
