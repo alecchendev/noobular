@@ -77,15 +77,20 @@ type Block struct {
 	BlockType BlockType
 	Question  QuestionBlock
 	Content   ContentBlock
+	KnowledgePoint KnowledgePointBlock
 }
 
 func NewQuestionBlock(text string, choices []Choice, explanation string) Block {
-	question := QuestionBlock{Text: text, Choices: choices, Explanation: explanation}
-	return Block{BlockType: KnowledgePointBlockType, Question: question}
+	question := NewQuestion(text, choices, explanation)
+	return Block{BlockType: QuestionBlockType, Question: question}
 }
 
 func NewContentBlock(content string) Block {
 	return Block{BlockType: ContentBlockType, Content: ContentBlock{content}}
+}
+
+func NewQuestion(text string, choices []Choice, explanation string) QuestionBlock {
+	return QuestionBlock{Text: text, Choices: choices, Explanation: explanation}
 }
 
 type QuestionBlock struct {
@@ -101,6 +106,10 @@ type Choice struct {
 
 type ContentBlock struct {
 	Text string
+}
+
+type KnowledgePointBlock struct {
+	Id int64
 }
 
 func CreateCourseRoute() string {
@@ -157,12 +166,11 @@ func editModuleForm(title string, description string, blocks []Block) url.Values
 		formData.Add("block-type[]", block.BlockType.String())
 		switch block.BlockType {
 		case KnowledgePointBlockType:
-			question := block.Question
-			addQuestionToForm(formData, question)
+			formData.Add("knowledge-point[]", strconv.FormatInt(block.KnowledgePoint.Id, 10))
 		case ContentBlockType:
 			formData.Add("content-text[]", block.Content.Text)
 		case QuestionBlockType:
-			panic("QuestionBlockType not supported")
+			addQuestionToForm(formData, block.Question)
 		}
 	}
 	return formData
@@ -318,10 +326,12 @@ func ParseModule(module string) (string, string, []Block, error) {
 	return moduleTitle, moduleDescription, blocks, nil
 }
 
-func (c Client) CreateKnowledgePoint(courseId int64, name string, question QuestionBlock) *http.Response {
+func (c Client) CreateKnowledgePoint(courseId int64, name string, question []QuestionBlock) *http.Response {
 	formData := url.Values{}
 	formData.Set("kp-name", name)
-	addQuestionToForm(formData, question)
+	for _, question := range question {
+		addQuestionToForm(formData, question)
+	}
 	resp := c.post(fmt.Sprintf("/teacher/course/%d/knowledge-point", courseId), formData.Encode())
 	return resp
 }

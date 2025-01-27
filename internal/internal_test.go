@@ -3,8 +3,8 @@ package internal_test
 import (
 	"bufio"
 	"database/sql"
-	"encoding/hex"
 	"fmt"
+	"net/http"
 	"noobular/internal"
 	noob_client "noobular/internal/client"
 	"noobular/internal/db"
@@ -307,32 +307,6 @@ func TestInputValidationEditModule(t *testing.T) {
 	client.editModuleFail(course.Id, dbModule(emptyDescription), blockInputs)
 	client.editModuleFail(course.Id, dbModule(tooLongTitle), blockInputs)
 	client.editModuleFail(course.Id, dbModule(tooLongDescription), blockInputs)
-	client.editModuleFail(course.Id, module, []blockInput{
-		newQuestionBlockInput(newUiQuestionBuilder().text("").choice("choice", true).build()),
-	})
-	client.editModuleFail(course.Id, module, []blockInput{
-		newQuestionBlockInput(newUiQuestionBuilder().text(strings.Repeat("a", internal.MaxQuestionLength + 1)).choice("choice", true).build()),
-	})
-	client.editModuleFail(course.Id, module, []blockInput{
-		newQuestionBlockInput(newUiQuestionBuilder().text("question").build()),
-	})
-	client.editModuleFail(course.Id, module, []blockInput{
-		newQuestionBlockInput(newUiQuestionBuilder().text("question").choice("", true).build()),
-	})
-	client.editModuleFail(course.Id, module, []blockInput{
-		newQuestionBlockInput(newUiQuestionBuilder().text("question").choice(strings.Repeat("a", internal.MaxChoiceLength + 1), true).build()),
-	})
-	client.editModuleFail(course.Id, module, []blockInput{
-		newQuestionBlockInput(newUiQuestionBuilder().text("question").choice("choice", false).build()),
-	})
-	tooManyChoices := newUiQuestionBuilder().text("question")
-	for i := 0; i < internal.MaxChoices; i++ {
-		tooManyChoices.choice("choice", false)
-	}
-	tooManyChoices.choice("choice", true)
-	client.editModuleFail(course.Id, module, []blockInput{
-		newQuestionBlockInput(tooManyChoices.build()),
-	})
 	client.editModuleFail(course.Id, module, []blockInput{
 		newContentBlockInput(""),
 	})
@@ -983,9 +957,7 @@ func TestKnowledgePoint(t *testing.T) {
 	defer ctx.Close()
 
 	user := ctx.createUser()
-	jwtSecret, _ := hex.DecodeString(testJwtSecretHex)
-	cookie, _ := internal.CreateAuthCookie(jwtSecret, user.Id, false)
-	client := noob_client.NewClient(testUrl, &cookie)
+	client := newTestNoobClient(user.Id)
 
 	client.CreateCourse("course", "description", true, []noob_client.ModuleInit{})
 	courseId := int64(1)
@@ -998,6 +970,69 @@ func TestKnowledgePoint(t *testing.T) {
 		},
 		Explanation: "kp explanation",
 	}
-	resp := client.CreateKnowledgePoint(courseId, "kp1", question)
+	resp := client.CreateKnowledgePoint(courseId, "kp1", []noob_client.QuestionBlock{question})
 	require.Equal(t, 200, resp.StatusCode)
+}
+
+func TestInputValidationKnowledgePoint(t *testing.T) {
+	ctx := startServer(t)
+	defer ctx.Close()
+
+	user := ctx.createUser()
+	client := newTestNoobClient(user.Id)
+
+	client.CreateCourse("course", "description", true, []noob_client.ModuleInit{})
+	courseId := int64(1)
+
+	var resp *http.Response
+	kpName := "kp1"
+	resp = client.CreateKnowledgePoint(courseId, kpName, []noob_client.QuestionBlock{
+		noob_client.NewQuestion("", []noob_client.Choice{
+			{Text: "choice1", Correct: true},
+		}, ""),
+	})
+	require.NotEqual(t, 200, resp.StatusCode)
+
+	resp = client.CreateKnowledgePoint(courseId, kpName, []noob_client.QuestionBlock{
+		noob_client.NewQuestion(strings.Repeat("a", internal.MaxQuestionLength + 1), []noob_client.Choice{
+			{Text: "choice1", Correct: true},
+		}, ""),
+	})
+	require.NotEqual(t, 200, resp.StatusCode)
+
+	resp = client.CreateKnowledgePoint(courseId, kpName, []noob_client.QuestionBlock{
+		noob_client.NewQuestion("question", []noob_client.Choice{}, ""),
+	})
+	require.NotEqual(t, 200, resp.StatusCode)
+
+	resp = client.CreateKnowledgePoint(courseId, kpName, []noob_client.QuestionBlock{
+		noob_client.NewQuestion("question", []noob_client.Choice{
+			{Text: "", Correct: true},
+		}, ""),
+	})
+	require.NotEqual(t, 200, resp.StatusCode)
+
+	resp = client.CreateKnowledgePoint(courseId, kpName, []noob_client.QuestionBlock{
+		noob_client.NewQuestion("question", []noob_client.Choice{
+			{Text: strings.Repeat("a", internal.MaxChoiceLength + 1), Correct: true},
+		}, ""),
+	})
+	require.NotEqual(t, 200, resp.StatusCode)
+
+	resp = client.CreateKnowledgePoint(courseId, kpName, []noob_client.QuestionBlock{
+		noob_client.NewQuestion("question", []noob_client.Choice{
+			{Text: "choice1", Correct: false},
+		}, ""),
+	})
+	require.NotEqual(t, 200, resp.StatusCode)
+
+	tooManyChoices := []noob_client.Choice{}
+	for i := 0; i < internal.MaxChoices; i++ {
+		tooManyChoices = append(tooManyChoices, noob_client.Choice{Text: "choice", Correct: false})
+	}
+	tooManyChoices = append(tooManyChoices, noob_client.Choice{Text: "choice", Correct: true})
+	resp = client.CreateKnowledgePoint(courseId, kpName, []noob_client.QuestionBlock{
+		noob_client.NewQuestion("question", tooManyChoices, ""),
+	})
+	require.NotEqual(t, 200, resp.StatusCode)
 }

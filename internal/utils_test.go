@@ -67,6 +67,12 @@ func startServer(t *testing.T) testContext {
 	return testContext{t: t, server: server, db: dbClient, userCount: 0}
 }
 
+func newTestNoobClient(userId int64) client.Client {
+	jwtSecret, _ := hex.DecodeString(testJwtSecretHex)
+	cookie, _ := internal.CreateAuthCookie(jwtSecret, userId, false)
+	return client.NewClient(testUrl, &cookie)
+}
+
 type testClient struct {
 	t             *testing.T
 	baseUrl       string
