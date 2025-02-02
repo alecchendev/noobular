@@ -1,7 +1,9 @@
 package internal
 
 import (
+	"crypto/rand"
 	"fmt"
+	"math/big"
 	"net/http"
 	"strconv"
 	"strings"
@@ -730,9 +732,43 @@ func handlePreviewModulePage(w http.ResponseWriter, r *http.Request, ctx Handler
 	blockCount := len(blocks)
 	uiBlocks := make([]UiBlock, blockCount)
 	for blockIdx := 0; blockIdx < blockCount; blockIdx++ {
-		uiBlock, err := getBlock(ctx, moduleVersion.Id, blockIdx, user.Id)
+		block, err := ctx.dbClient.GetBlock(moduleVersion.Id, blockIdx)
 		if err != nil {
-			return fmt.Errorf("Error getting block %d for module %d: %v", blockIdx, moduleId, err)
+			return fmt.Errorf("Error getting block %d for module %d: %v", blockIdx, moduleVersion.Id, err)
+		}
+		var uiBlock UiBlock
+		switch block.BlockType {
+		case db.ContentBlockType:
+			content, err := ctx.dbClient.GetContentFromBlock(block.Id)
+			if err != nil {
+				return fmt.Errorf("Error getting content for block %d: %v", block.Id, err)
+			}
+			rendered, err := NewUiContentRendered(content)
+			if err != nil {
+				return fmt.Errorf("Error converting content for block %d: %v", block.Id, err)
+			}
+			uiBlock = NewUiBlockContent(rendered, blockIdx)
+		case db.KnowledgePointBlockType:
+			knowledgePoint, err := ctx.dbClient.GetKnowledgePointFromBlock(block.Id)
+			if err != nil {
+				return fmt.Errorf("Error getting knowledge point for block %d: %v", block.Id, err)
+			}
+			questions, err := ctx.dbClient.GetQuestionsForKnowledgePoint(knowledgePoint.Id)
+			if err != nil {
+				return fmt.Errorf("Error getting question for knowledge point %d: %v", knowledgePoint.Id, err)
+			}
+			// Just select a random question from the knowlegdge point
+			// TODO: should load minimum effective dose once that's ready
+			questionIdx, err := rand.Int(rand.Reader, big.NewInt(int64(len(questions))))
+			if err != nil {
+				return fmt.Errorf("Error getting random question index: %v", err)
+			}
+			question := questions[questionIdx.Int64()]
+			uiQuestion, err := loadUiQuestion(ctx, question, user.Id)
+			if err != nil {
+				return fmt.Errorf("Error loading question for block %d: %v", block.Id, err)
+			}
+			uiBlock = NewUiBlockQuestion(uiQuestion, blockIdx)
 		}
 		uiBlocks[blockIdx] = uiBlock
 	}

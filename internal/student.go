@@ -180,32 +180,71 @@ func parseTakeModuleRequest(r *http.Request) (takeModuleRequest, error) {
 	return takeModuleRequest{courseId, moduleId, blockIdx}, nil
 }
 
-func getModule(ctx HandlerContext, courseId int, moduleId int, userId int64, createVisit bool) (UiModule, db.Visit, error) {
+func getModule(ctx HandlerContext, courseId int, moduleId int, moduleVersionId int64) (UiModule, error) {
 	module, err := ctx.dbClient.GetModule(courseId, moduleId)
 	if err != nil {
-		return UiModule{}, db.Visit{}, err
+		return UiModule{}, err
 	}
-	visit, err := ctx.dbClient.GetVisit(userId, moduleId)
-	if err != nil && err != sql.ErrNoRows {
-		return UiModule{}, db.Visit{}, err
+	moduleVersion, err := ctx.dbClient.GetModuleVersion(moduleVersionId)
+	if err != nil {
+		return UiModule{}, err
 	}
-	if err == sql.ErrNoRows && createVisit {
-		visit, err = ctx.dbClient.CreateVisit(userId, moduleId)
+	blockCount, err := ctx.dbClient.GetBlockCount(moduleVersionId)
+	if err != nil {
+		return UiModule{}, err
+	}
+	return NewUiModuleStudent(module.CourseId, moduleVersion, blockCount, false, time.Now(), 0), nil
+}
+
+func loadUiQuestion(ctx HandlerContext, question db.Question, userId int64) (UiQuestion, error) {
+	questionContent, err := ctx.dbClient.GetContent(question.ContentId)
+	if err != nil {
+		return UiQuestion{}, fmt.Errorf("Error getting question content for question %d: %v", question.Id, err)
+	}
+	choices, err := ctx.dbClient.GetChoicesForQuestion(question.Id)
+	if err != nil {
+		return UiQuestion{}, fmt.Errorf("Error getting choices for question %d: %v", question.Id, err)
+	}
+	choiceContents := make([]db.Content, 0)
+	for _, choice := range choices {
+		choiceContent, err := ctx.dbClient.GetContent(choice.ContentId)
 		if err != nil {
-			return UiModule{}, db.Visit{}, err
+			return UiQuestion{}, fmt.Errorf("Error getting choice content for choice %d: %v", choice.Id, err)
 		}
-	} else if err == sql.ErrNoRows {
-		return UiModule{}, db.Visit{}, fmt.Errorf("No visit found for module %d", moduleId)
+		choiceContents = append(choiceContents, choiceContent)
 	}
-	moduleVersion, err := ctx.dbClient.GetModuleVersion(visit.ModuleVersionId)
+	explanationContent, err := ctx.dbClient.GetExplanationForQuestion(question.Id)
 	if err != nil {
-		return UiModule{}, db.Visit{}, err
+		return UiQuestion{}, fmt.Errorf("Error getting explanation for question %d: %v", question.Id, err)
 	}
-	blockCount, err := ctx.dbClient.GetBlockCount(visit.ModuleVersionId)
+	choiceId, err := ctx.dbClient.GetAnswer(userId, question.Id)
 	if err != nil {
-		return UiModule{}, db.Visit{}, err
+		return UiQuestion{}, fmt.Errorf("Error getting answer for question %d: %v", question.Id, err)
 	}
-	return NewUiModuleStudent(module.CourseId, moduleVersion, blockCount, false, time.Now(), 0), visit, nil
+
+	questionRendered, err := NewUiContentRendered(questionContent)
+	if err != nil {
+		return UiQuestion{}, fmt.Errorf("Error converting question content for question %d: %v", question.Id, err)
+	}
+	choicesRendered := make([]UiContent, 0)
+	for _, choiceContent := range choiceContents {
+		rendered, err := NewUiContentRendered(choiceContent)
+		if err != nil {
+			return UiQuestion{}, fmt.Errorf("Error converting choice content for question %d: %v", question.Id, err)
+		}
+		choicesRendered = append(choicesRendered, rendered)
+	}
+	explanationRendered, err := NewUiContentRendered(explanationContent)
+	if err != nil {
+		return UiQuestion{}, fmt.Errorf("Error converting explanation content for question %d: %v", question.Id, err)
+	}
+	var uiQuestion UiQuestion
+	if choiceId == -1 {
+		uiQuestion = NewUiQuestionTake(question, questionRendered, choices, choicesRendered, explanationRendered)
+	} else {
+		uiQuestion = NewUiQuestionAnswered(question, questionRendered, choices, choicesRendered, choiceId, explanationRendered)
+	}
+	return uiQuestion, nil
 }
 
 func getBlock(ctx HandlerContext, moduleVersionId int64, blockIdx int, userId int64) (UiBlock, error) {
@@ -219,6 +258,14 @@ func getBlock(ctx HandlerContext, moduleVersionId int64, blockIdx int, userId in
 		if err != nil {
 			return UiBlock{}, fmt.Errorf("Error getting knowledge point for block %d: %v", block.Id, err)
 		}
+
+		// If we've visited this, get the question order
+
+
+		// Otherwise, get a random question, and mark the question order
+
+
+
 		// Figure out getting question for when student has answered
 		questions, err := ctx.dbClient.GetQuestionsForKnowledgePoint(knowledgePoint.Id)
 		if err != nil {
@@ -226,52 +273,9 @@ func getBlock(ctx HandlerContext, moduleVersionId int64, blockIdx int, userId in
 		}
 		// TODO: handle multiple questions
 		question := questions[0]
-		questionContent, err := ctx.dbClient.GetContent(question.ContentId)
+		uiQuestion, err := loadUiQuestion(ctx, question, userId)
 		if err != nil {
-			return UiBlock{}, fmt.Errorf("Error getting question content for question %d: %v", question.Id, err)
-		}
-		choices, err := ctx.dbClient.GetChoicesForQuestion(question.Id)
-		if err != nil {
-			return UiBlock{}, fmt.Errorf("Error getting choices for question %d: %v", question.Id, err)
-		}
-		choiceContents := make([]db.Content, 0)
-		for _, choice := range choices {
-			choiceContent, err := ctx.dbClient.GetContent(choice.ContentId)
-			if err != nil {
-				return UiBlock{}, fmt.Errorf("Error getting choice content for choice %d: %v", choice.Id, err)
-			}
-			choiceContents = append(choiceContents, choiceContent)
-		}
-		explanationContent, err := ctx.dbClient.GetExplanationForQuestion(question.Id)
-		if err != nil {
-			return UiBlock{}, fmt.Errorf("Error getting explanation for question %d: %v", question.Id, err)
-		}
-		choiceId, err := ctx.dbClient.GetAnswer(userId, question.Id)
-		if err != nil {
-			return UiBlock{}, fmt.Errorf("Error getting answer for question %d: %v", question.Id, err)
-		}
-
-		questionRendered, err := NewUiContentRendered(questionContent)
-		if err != nil {
-			return UiBlock{}, fmt.Errorf("Error converting question content for question %d: %v", question.Id, err)
-		}
-		choicesRendered := make([]UiContent, 0)
-		for _, choiceContent := range choiceContents {
-			rendered, err := NewUiContentRendered(choiceContent)
-			if err != nil {
-				return UiBlock{}, fmt.Errorf("Error converting choice content for question %d: %v", question.Id, err)
-			}
-			choicesRendered = append(choicesRendered, rendered)
-		}
-		explanationRendered, err := NewUiContentRendered(explanationContent)
-		if err != nil {
-			return UiBlock{}, fmt.Errorf("Error converting explanation content for question %d: %v", question.Id, err)
-		}
-		var uiQuestion UiQuestion
-		if choiceId == -1 {
-			uiQuestion = NewUiQuestionTake(question, questionRendered, choices, choicesRendered, explanationRendered)
-		} else {
-			uiQuestion = NewUiQuestionAnswered(question, questionRendered, choices, choicesRendered, choiceId, explanationRendered)
+			return UiBlock{}, fmt.Errorf("Error loading question for block %d: %v", block.Id, err)
 		}
 		uiBlock := NewUiBlockQuestion(uiQuestion, blockIdx)
 		return uiBlock, nil
@@ -325,7 +329,17 @@ func handleTakeModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 		return fmt.Errorf("Cannot take module %d because prereqs are not completed", moduleId)
 	}
 
-	module, visit, err := getModule(ctx, courseId, moduleId, user.Id, true)
+	visit, err := ctx.dbClient.GetVisit(user.Id, moduleId)
+	if err != nil && err != sql.ErrNoRows {
+		return fmt.Errorf("Error getting visit for module %d: %v", moduleId, err)
+	}
+	if err == sql.ErrNoRows {
+		visit, err = ctx.dbClient.CreateVisit(user.Id, moduleId)
+		if err != nil {
+			return fmt.Errorf("Error creating visit for module %d: %v", moduleId, err)
+		}
+	}
+	module, err := getModule(ctx, courseId, moduleId, visit.ModuleVersionId)
 	if err != nil {
 		return fmt.Errorf("Error getting module %d: %v", moduleId, err)
 	}
@@ -351,7 +365,11 @@ func handleTakeModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 }
 
 func getTakeModule(req takeModuleRequest, ctx HandlerContext, userId int64) (UiTakeModule, db.Visit, error) {
-	module, visit, err := getModule(ctx, req.courseId, req.moduleId, userId, false)
+	visit, err := ctx.dbClient.GetVisit(userId, req.moduleId)
+	if err != nil {
+		return UiTakeModule{}, db.Visit{}, err
+	}
+	module, err := getModule(ctx, req.courseId, req.moduleId, visit.ModuleVersionId)
 	if err != nil {
 		return UiTakeModule{}, db.Visit{}, err
 	}

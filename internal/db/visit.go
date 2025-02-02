@@ -35,7 +35,7 @@ insert into visits(user_id, module_version_id, block_index)
 values(?, ?, ?);
 `
 
-func InsertVisit(tx *sql.Tx, userId int64, moduleVersionId int64, blockIdx int) (Visit, error) {
+func insertVisit(tx *sql.Tx, userId int64, moduleVersionId int64, blockIdx int) (Visit, error) {
 	res, err := tx.Exec(insertVisitQuery, userId, moduleVersionId, blockIdx)
 	if err != nil {
 		return Visit{}, err
@@ -90,7 +90,7 @@ func (c *DbClient) CreateVisit(userId int64, moduleId int) (Visit, error) {
 	if err != nil {
 		return Visit{}, err
 	}
-	visit, err := InsertVisit(tx, userId, version.Id, 0)
+	visit, err := insertVisit(tx, userId, version.Id, 0)
 	if err != nil {
 		return Visit{}, err
 	}
