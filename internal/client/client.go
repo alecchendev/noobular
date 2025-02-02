@@ -375,3 +375,11 @@ func (c Client) CreateKnowledgePoint(courseId int64, name string, question []Que
 func EditKnowledgePointRoute(courseId, kpId int64) string {
 	return fmt.Sprintf("/teacher/course/%d/knowledge-point/%d", courseId, kpId)
 }
+
+func EnrollCourseRoute(courseId int64) string {
+	return fmt.Sprintf("/student/course/%d", courseId)
+}
+
+func (c Client) EnrollCourse(courseId int64) *http.Response {
+	return c.post(EnrollCourseRoute(courseId), "")
+}

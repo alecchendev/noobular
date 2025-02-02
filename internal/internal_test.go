@@ -198,31 +198,51 @@ func TestPrivateCourse(t *testing.T) {
 	defer ctx.Close()
 
 	user := ctx.createUser()
-	client := newTestClient(t).login(user.Id)
+	client := newTestNoobClient(user.Id)
 
-	course, modules, _ := client.initTestCourse()
+	courseTitle := "course title"
+	courseDescription := "course description"
+	modules := []noob_client.ModuleInit{
+		{Title: "module1", Description: "description1"},
+		{Title: "module2", Description: "description2"},
+	}
+	resp := client.CreateCourse(courseTitle, courseDescription, true, modules)
+	require.Equal(t, 200, resp.StatusCode)
+	courseId := int64(1)
 
-	body := client.getPageBody("/browse")
-	require.Contains(t, body, course.Title)
-	require.Contains(t, body, course.Description)
+	resp = client.EditModule(courseId, 1, "module1", "description1", []noob_client.Block{
+		noob_client.NewContentBlock("content1"),
+	})
+	require.Equal(t, 200, resp.StatusCode)
+	resp = client.EditModule(courseId, 2, "module2", "description2", []noob_client.Block{
+		noob_client.NewContentBlock("content2"),
+	})
+	require.Equal(t, 200, resp.StatusCode)
+
+	body := getPageBody(t, client, "/browse")
+	require.Contains(t, body, courseTitle)
+	require.Contains(t, body, courseDescription)
 	for _, module := range modules {
 		require.Contains(t, body, module.Title)
 		require.Contains(t, body, module.Description)
 	}
 
-	newCourse := course
-	newCourse.Public = false
-	client.editCourse(newCourse, modules)
+	moduleUpdates := []noob_client.ModuleUpdate{
+		{Id: 1, Title: "new module title1", Description: "new module description1"},
+		{Id: 2, Title: "new module title2", Description: "new module description2"},
+	}
+	resp = client.EditCourse(courseId, courseTitle, courseDescription, false, moduleUpdates)
 
-	body = client.getPageBody("/browse")
-	require.NotContains(t, body, course.Title)
-	require.NotContains(t, body, course.Description)
+	body = getPageBody(t, client, "/browse")
+	require.NotContains(t, body, courseTitle)
+	require.NotContains(t, body, courseDescription)
 	for _, module := range modules {
 		require.NotContains(t, body, module.Title)
 		require.NotContains(t, body, module.Description)
 	}
 
-	client.enrollCourseFail(course.Id)
+	resp = client.EnrollCourse(courseId)
+	require.NotEqual(t, 200, resp.StatusCode)
 }
 
 func TestEditModule(t *testing.T) {
