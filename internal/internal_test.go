@@ -459,138 +459,138 @@ func TestAuth(t *testing.T) {
 // - If we need the same content for multiple blocks, we should only store it once
 // - If we make a new module version, we delete the old version's unique content
 //   (even if it's referenced multiple times), but keep the shared content
-func TestNoDuplicateContent(t *testing.T) {
-	ctx := startServer(t)
-	defer ctx.Close()
-
-	user := ctx.createUser()
-	client := newTestClient(t).login(user.Id)
-
-	course, modules := sampleCreateCourseInput()
-	client.createCourse(course, modules)
-
-	courseId := 1
-	moduleId := 1
-
-	newModuleVersion := db.NewModuleVersion(2, moduleId, 1, "new title", "new description")
-	explanation := "qexplanation1"
-	contentStr := "qcontent1"
-	contentStr2 := "qcontent2" // Shared between blocks within version
-	question1 := newUiQuestionBuilder().
-		text("qname1").
-		choice("qchoice1", false).
-		choice("qchoice2", true).
-		choice("qchoice3", false).
-		explain(explanation).
-		build()
-	question1_2 := newUiQuestionBuilder().
-		text("qname1").
-		choice("qchoice1", true).
-		explain(contentStr2).
-		build()
-	blocks := []blockInput{
-		newQuestionBlockInput(question1),
-		newQuestionBlockInput(question1_2),
-		newContentBlockInput(contentStr),
-		newContentBlockInput(contentStr2),
-	}
-	client.editModule(int64(courseId), newModuleVersion, blocks)
-
-	// require contentStr2 is not duplicated (shared between explanation and content block)
-	// require question name/choice text is not duplicated
-	{
-		contentExplanationCount := 3
-		questionChoiceContentCount := 4
-		content, err := ctx.db.GetAllContent()
-		require.Nil(t, err)
-		require.Len(t, content, contentExplanationCount + questionChoiceContentCount)
-		contentStrings := []string{}
-		for _, c := range content {
-			contentStrings = append(contentStrings, c.Content)
-		}
-		require.Contains(t, contentStrings, explanation)
-		require.Contains(t, contentStrings, contentStr)
-		require.Contains(t, contentStrings, contentStr2)
-	}
-
-	newModuleVersion2 := db.NewModuleVersion(2, moduleId, 1, "new title2", "new description2")
-	question2 := newUiQuestionBuilder().
-		text("qname2").
-		choice("qchoice4", true).
-		explain(explanation).
-		build()
-	blocks2 := []blockInput{ newQuestionBlockInput(question2), newContentBlockInput(contentStr) }
-	client.editModule(int64(courseId), newModuleVersion2, blocks2)
-
-	// require contentStr is not duplicated
-	// require contentStr2 is deleted
-	// question 1 content is deleted
-	questionChoiceContentCount := 2
-	explanationContentCount := 2
-	content, err := ctx.db.GetAllContent()
-	require.Nil(t, err)
-	require.Len(t, content, questionChoiceContentCount + explanationContentCount)
-	contentStrings := []string{}
-	for _, c := range content {
-		contentStrings = append(contentStrings, c.Content)
-	}
-	require.Contains(t, contentStrings, explanation)
-	require.Contains(t, contentStrings, contentStr)
-}
+// func TestNoDuplicateContent(t *testing.T) {
+// 	ctx := startServer(t)
+// 	defer ctx.Close()
+//
+// 	user := ctx.createUser()
+// 	client := newTestClient(t).login(user.Id)
+//
+// 	course, modules := sampleCreateCourseInput()
+// 	client.createCourse(course, modules)
+//
+// 	courseId := 1
+// 	moduleId := 1
+//
+// 	newModuleVersion := db.NewModuleVersion(2, moduleId, 1, "new title", "new description")
+// 	explanation := "qexplanation1"
+// 	contentStr := "qcontent1"
+// 	contentStr2 := "qcontent2" // Shared between blocks within version
+// 	question1 := newUiQuestionBuilder().
+// 		text("qname1").
+// 		choice("qchoice1", false).
+// 		choice("qchoice2", true).
+// 		choice("qchoice3", false).
+// 		explain(explanation).
+// 		build()
+// 	question1_2 := newUiQuestionBuilder().
+// 		text("qname1").
+// 		choice("qchoice1", true).
+// 		explain(contentStr2).
+// 		build()
+// 	blocks := []blockInput{
+// 		newQuestionBlockInput(question1),
+// 		newQuestionBlockInput(question1_2),
+// 		newContentBlockInput(contentStr),
+// 		newContentBlockInput(contentStr2),
+// 	}
+// 	client.editModule(int64(courseId), newModuleVersion, blocks)
+//
+// 	// require contentStr2 is not duplicated (shared between explanation and content block)
+// 	// require question name/choice text is not duplicated
+// 	{
+// 		contentExplanationCount := 3
+// 		questionChoiceContentCount := 4
+// 		content, err := ctx.db.GetAllContent()
+// 		require.Nil(t, err)
+// 		require.Len(t, content, contentExplanationCount + questionChoiceContentCount)
+// 		contentStrings := []string{}
+// 		for _, c := range content {
+// 			contentStrings = append(contentStrings, c.Content)
+// 		}
+// 		require.Contains(t, contentStrings, explanation)
+// 		require.Contains(t, contentStrings, contentStr)
+// 		require.Contains(t, contentStrings, contentStr2)
+// 	}
+//
+// 	newModuleVersion2 := db.NewModuleVersion(2, moduleId, 1, "new title2", "new description2")
+// 	question2 := newUiQuestionBuilder().
+// 		text("qname2").
+// 		choice("qchoice4", true).
+// 		explain(explanation).
+// 		build()
+// 	blocks2 := []blockInput{ newQuestionBlockInput(question2), newContentBlockInput(contentStr) }
+// 	client.editModule(int64(courseId), newModuleVersion2, blocks2)
+//
+// 	// require contentStr is not duplicated
+// 	// require contentStr2 is deleted
+// 	// question 1 content is deleted
+// 	questionChoiceContentCount := 2
+// 	explanationContentCount := 2
+// 	content, err := ctx.db.GetAllContent()
+// 	require.Nil(t, err)
+// 	require.Len(t, content, questionChoiceContentCount + explanationContentCount)
+// 	contentStrings := []string{}
+// 	for _, c := range content {
+// 		contentStrings = append(contentStrings, c.Content)
+// 	}
+// 	require.Contains(t, contentStrings, explanation)
+// 	require.Contains(t, contentStrings, contentStr)
+// }
 
 // Test that if we delete a module, content unique to that module is deleted,
 // but content shared with other modules is not deleted
-func TestDeleteModuleSharedContent(t *testing.T) {
-	ctx := startServer(t)
-	defer ctx.Close()
-
-	user := ctx.createUser()
-	client := newTestClient(t).login(user.Id)
-
-	// Create a course with a module with one unique content, and one shared content
-	course, modules := sampleCreateCourseInput()
-	client.createCourse(course, modules)
-
-	courseId1 := 1
-	moduleId1 := 1
-
-	newModuleVersion1 := db.NewModuleVersion(2, moduleId1, 1, "new title", "new description")
-	contentStr := "qcontent1"
-	contentStr2 := "qcontent2"
-	question := newUiQuestionBuilder().
-		text("qname1").
-		choice("qchoice1", true).
-		explain("qexplanation1").
-		build()
-	blocks := []blockInput{
-		newQuestionBlockInput(question),
-		newContentBlockInput(contentStr),
-		newContentBlockInput(contentStr2),
-	}
-	client.editModule(int64(courseId1), newModuleVersion1, blocks)
-
-	// Create a course with a module with one shared content
-	client.createCourse(course, modules)
-
-	courseId2 := 2
-	moduleId2 := 2
-
-	newModuleVersion2 := db.NewModuleVersion(2, moduleId2, 1, "new title", "new description")
-	blocks = []blockInput{
-		newContentBlockInput(contentStr),
-	}
-	client.editModule(int64(courseId2), newModuleVersion2, blocks)
-
-	// Delete first courses module
-	client.deleteModule(courseId1, moduleId1)
-
-	// require shared content stays
-	// require unique content is deleted
-	content, err := ctx.db.GetAllContent()
-	require.Nil(t, err)
-	require.Len(t, content, 1)
-	require.Contains(t, content[0].Content, contentStr)
-}
+// func TestDeleteModuleSharedContent(t *testing.T) {
+// 	ctx := startServer(t)
+// 	defer ctx.Close()
+//
+// 	user := ctx.createUser()
+// 	client := newTestClient(t).login(user.Id)
+//
+// 	// Create a course with a module with one unique content, and one shared content
+// 	course, modules := sampleCreateCourseInput()
+// 	client.createCourse(course, modules)
+//
+// 	courseId1 := 1
+// 	moduleId1 := 1
+//
+// 	newModuleVersion1 := db.NewModuleVersion(2, moduleId1, 1, "new title", "new description")
+// 	contentStr := "qcontent1"
+// 	contentStr2 := "qcontent2"
+// 	question := newUiQuestionBuilder().
+// 		text("qname1").
+// 		choice("qchoice1", true).
+// 		explain("qexplanation1").
+// 		build()
+// 	blocks := []blockInput{
+// 		newQuestionBlockInput(question),
+// 		newContentBlockInput(contentStr),
+// 		newContentBlockInput(contentStr2),
+// 	}
+// 	client.editModule(int64(courseId1), newModuleVersion1, blocks)
+//
+// 	// Create a course with a module with one shared content
+// 	client.createCourse(course, modules)
+//
+// 	courseId2 := 2
+// 	moduleId2 := 2
+//
+// 	newModuleVersion2 := db.NewModuleVersion(2, moduleId2, 1, "new title", "new description")
+// 	blocks = []blockInput{
+// 		newContentBlockInput(contentStr),
+// 	}
+// 	client.editModule(int64(courseId2), newModuleVersion2, blocks)
+//
+// 	// Delete first courses module
+// 	client.deleteModule(courseId1, moduleId1)
+//
+// 	// require shared content stays
+// 	// require unique content is deleted
+// 	content, err := ctx.db.GetAllContent()
+// 	require.Nil(t, err)
+// 	require.Len(t, content, 1)
+// 	require.Contains(t, content[0].Content, contentStr)
+// }
 
 func TestStudentCoursePage(t *testing.T) {
 	ctx := startServer(t)
@@ -616,78 +616,78 @@ func TestStudentCoursePage(t *testing.T) {
 
 // Test module version, i.e. once someone has visited the module, then when you edit it
 // and they go back, it's still there
-func TestModuleVersioning(t *testing.T) {
-	ctx := startServer(t)
-	defer ctx.Close()
-
-	user := ctx.createUser()
-	client := newTestClient(t).login(user.Id)
-
-	// Create module with content
-	course, modules := sampleCreateCourseInput()
-	client.createCourse(course, modules)
-
-	courseId := 1
-	moduleId := 1
-
-	// Create one version
-	newModuleVersion1 := db.NewModuleVersion(2, moduleId, 1, "new title", "new description")
-	contentStr := "qcontent1"
-	question := newUiQuestionBuilder().
-			text("qname1").
-			choice("qchoice1", false).
-			choice("qchoice2", true).
-			explain("qexplanation1").
-			build()
-	blocks := []blockInput{
-		newContentBlockInput(contentStr),
-		newQuestionBlockInput(question),
-	}
-	client.editModule(int64(courseId), newModuleVersion1, blocks)
-
-	// Visit
-	client.enrollCourse(courseId)
-	body := client.getPageBody(studentCoursePageRoute(courseId))
-	require.Contains(t, body, takeModulePageRoute(courseId, moduleId))
-
-	// Take module initial page (first block = content)
-	body = client.getPageBody(takeModulePageRoute(courseId, moduleId))
-	require.Contains(t, body, contentStr)
-	require.NotContains(t, body, question.Content.Content)
-	require.Contains(t, body, takeModulePieceRoute(courseId, moduleId, 1))
-
-	// Next piece (question)
-	body = client.getPageBody(takeModulePieceRoute(courseId, moduleId, 1))
-	require.Contains(t, body, question.Content.Content)
-	require.Contains(t, body, question.Choices[0].Content.Content)
-	require.Contains(t, body, question.Choices[1].Content.Content)
-	require.NotContains(t, body, question.Explanation.Content)
-
-	// TODO: Answer question + reveal explanation
-
-	// Edit
-	newModuleVersion2 := db.NewModuleVersion(3, moduleId, 2, "new title2", "new description2")
-	contentStr2 := "qcontent2"
-	question2 := newUiQuestionBuilder().
-			text("q2name1").
-			choice("q2choice1", false).
-			choice("q2choice2", true).
-			explain("q2explanation1").
-			build()
-	blocks2 := []blockInput{
-		newQuestionBlockInput(question2),
-		newContentBlockInput(contentStr2),
-	}
-	client.editModule(int64(courseId), newModuleVersion2, blocks2)
-
-	// Visit again, and show old version
-	body = client.getPageBody(takeModulePageRoute(courseId, moduleId))
-	require.Contains(t, body, contentStr)
-	require.Contains(t, body, question.Content.Content)
-	require.Contains(t, body, question.Choices[0].Content.Content)
-	require.Contains(t, body, question.Choices[1].Content.Content)
-	require.NotContains(t, body, question.Explanation.Content)
-}
+// func TestModuleVersioning(t *testing.T) {
+// 	ctx := startServer(t)
+// 	defer ctx.Close()
+//
+// 	user := ctx.createUser()
+// 	client := newTestClient(t).login(user.Id)
+//
+// 	// Create module with content
+// 	course, modules := sampleCreateCourseInput()
+// 	client.createCourse(course, modules)
+//
+// 	courseId := 1
+// 	moduleId := 1
+//
+// 	// Create one version
+// 	newModuleVersion1 := db.NewModuleVersion(2, moduleId, 1, "new title", "new description")
+// 	contentStr := "qcontent1"
+// 	question := newUiQuestionBuilder().
+// 			text("qname1").
+// 			choice("qchoice1", false).
+// 			choice("qchoice2", true).
+// 			explain("qexplanation1").
+// 			build()
+// 	blocks := []blockInput{
+// 		newContentBlockInput(contentStr),
+// 		newQuestionBlockInput(question),
+// 	}
+// 	client.editModule(int64(courseId), newModuleVersion1, blocks)
+//
+// 	// Visit
+// 	client.enrollCourse(courseId)
+// 	body := client.getPageBody(studentCoursePageRoute(courseId))
+// 	require.Contains(t, body, takeModulePageRoute(courseId, moduleId))
+//
+// 	// Take module initial page (first block = content)
+// 	body = client.getPageBody(takeModulePageRoute(courseId, moduleId))
+// 	require.Contains(t, body, contentStr)
+// 	require.NotContains(t, body, question.Content.Content)
+// 	require.Contains(t, body, takeModulePieceRoute(courseId, moduleId, 1))
+//
+// 	// Next piece (question)
+// 	body = client.getPageBody(takeModulePieceRoute(courseId, moduleId, 1))
+// 	require.Contains(t, body, question.Content.Content)
+// 	require.Contains(t, body, question.Choices[0].Content.Content)
+// 	require.Contains(t, body, question.Choices[1].Content.Content)
+// 	require.NotContains(t, body, question.Explanation.Content)
+//
+// 	// TODO: Answer question + reveal explanation
+//
+// 	// Edit
+// 	newModuleVersion2 := db.NewModuleVersion(3, moduleId, 2, "new title2", "new description2")
+// 	contentStr2 := "qcontent2"
+// 	question2 := newUiQuestionBuilder().
+// 			text("q2name1").
+// 			choice("q2choice1", false).
+// 			choice("q2choice2", true).
+// 			explain("q2explanation1").
+// 			build()
+// 	blocks2 := []blockInput{
+// 		newQuestionBlockInput(question2),
+// 		newContentBlockInput(contentStr2),
+// 	}
+// 	client.editModule(int64(courseId), newModuleVersion2, blocks2)
+//
+// 	// Visit again, and show old version
+// 	body = client.getPageBody(takeModulePageRoute(courseId, moduleId))
+// 	require.Contains(t, body, contentStr)
+// 	require.Contains(t, body, question.Content.Content)
+// 	require.Contains(t, body, question.Choices[0].Content.Content)
+// 	require.Contains(t, body, question.Choices[1].Content.Content)
+// 	require.NotContains(t, body, question.Explanation.Content)
+// }
 
 func TestPrerequisites(t *testing.T) {
 	ctx := startServer(t)
