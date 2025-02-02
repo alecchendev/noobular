@@ -97,6 +97,10 @@ func NewQuestion(text string, choices []Choice, explanation string) QuestionBloc
 	return QuestionBlock{Text: text, Choices: choices, Explanation: explanation}
 }
 
+func NewKnowledgePointBlock(id int64) Block {
+	return Block{BlockType: KnowledgePointBlockType, KnowledgePoint: KnowledgePointBlock{id}}
+}
+
 type QuestionBlock struct {
 	Text        string
 	Choices     []Choice
@@ -192,6 +196,10 @@ func (c Client) UploadModule(courseId int64, moduleId int64, module string) (*ht
 		return nil, err
 	}
 	return c.EditModule(courseId, moduleId, moduleTitle, moduleDescription, blocks), nil
+}
+
+func ExportModuleRoute(courseId int64, moduleId int64) string {
+	return fmt.Sprintf("/teacher/course/%d/module/%d/export", courseId, moduleId)
 }
 
 func ParseModule(module string) (string, string, []Block, error) {

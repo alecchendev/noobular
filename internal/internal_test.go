@@ -221,65 +221,111 @@ func TestEditModule(t *testing.T) {
 	defer ctx.Close()
 
 	user := ctx.createUser()
-	client := newTestClient(t).login(user.Id)
+	nClient := newTestNoobClient(user.Id)
 
-	course, modules, blockInputs := client.initTestCourse()
+	courseTitle := "course"
+	courseDescription := "description"
+	var resp *http.Response
+	module := noob_client.ModuleInit{
+		Title: "module", Description: "description",
+	}
+	resp = nClient.CreateCourse(courseTitle, courseDescription, false, []noob_client.ModuleInit{module})
+	require.Equal(t, 200, resp.StatusCode)
 	courseId := int64(1)
+	moduleId := int64(1)
 
-	checkModule := func(module db.ModuleVersion, blockInput []blockInput) {
-		editModulePageLink := noob_client.EditModuleRoute(courseId, int64(module.ModuleId))
-		body := client.getPageBody(editModulePageLink)
+	question1 := noob_client.QuestionBlock {
+		Text: "kp1 question",
+		Choices: []noob_client.Choice{
+			{Text: "kp1 choice1", Correct: false},
+			{Text: "kp1 choice2", Correct: true},
+		},
+		Explanation: "kp1 explanation",
+	}
+	resp = nClient.CreateKnowledgePoint(courseId, "kp1", []noob_client.QuestionBlock{question1})
+	require.Equal(t, 200, resp.StatusCode)
+	kpId1 := int64(1)
+
+	question2 := noob_client.QuestionBlock {
+		Text: "kp2 question",
+		Choices: []noob_client.Choice{
+			{Text: "kp2 choice1", Correct: false},
+			{Text: "kp2 choice2", Correct: true},
+		},
+		Explanation: "kp2 explanation",
+	}
+	resp = nClient.CreateKnowledgePoint(courseId, "kp2", []noob_client.QuestionBlock{question2})
+	require.Equal(t, 200, resp.StatusCode)
+	kpId2 := int64(2)
+
+	blocks := []noob_client.Block{
+		noob_client.NewContentBlock("content1"),
+		noob_client.NewKnowledgePointBlock(kpId1),
+		noob_client.NewContentBlock("content2"),
+		noob_client.NewKnowledgePointBlock(kpId2),
+	}
+	resp = nClient.EditModule(courseId, moduleId, module.Title, module.Description, blocks)
+	require.Equal(t, 200, resp.StatusCode)
+
+	checkModule := func(moduleId int64, module noob_client.ModuleInit, blocks []noob_client.Block) {
+		editModulePageLink := noob_client.EditModuleRoute(courseId, moduleId)
+		body := getPageBody(t, nClient, editModulePageLink)
 		require.Contains(t, body, module.Title)
 		require.Contains(t, body, module.Description)
-		for _, block := range blockInput {
-			switch block.blockType {
-			case db.KnowledgePointBlockType:
-				question := block.block.(internal.UiQuestion)
-				require.Contains(t, body, question.Content.Content)
-				require.Contains(t, body, question.Explanation.Content)
-				for _, choice := range question.Choices {
-					require.Contains(t, body, choice.Content.Content)
-				}
-			case db.ContentBlockType:
-				content := block.block.(db.Content)
-				require.Contains(t, body, content.Content)
+		for _, block := range blocks {
+			switch block.BlockType {
+			case noob_client.KnowledgePointBlockType:
+				// Use regex to match <option value="value" selected>
+				// because there may be spaces between the attributes
+				// and the order of the attributes may be different
+				kpId := block.KnowledgePoint.Id
+				re := regexp.MustCompile(fmt.Sprintf(`value="%d"\s+selected`, kpId))
+				require.Regexp(t, re, body)
+			case noob_client.ContentBlockType:
+				require.Contains(t, body, block.Content.Text)
 			}
 		}
 	}
 
 	// Check that if we revisit the edit module page
 	// all of our changes are reflected
-	for i, module := range modules {
-		checkModule(module, blockInputs[i])
-	}
+	checkModule(moduleId, module, blocks)
 
-	modules = append(modules, db.NewModuleVersion(-1, -1, 1, "new module title3", "new module description3"))
-	client.editCourse(course, modules)
+	// Add new module
+	module2 := noob_client.ModuleInit{
+		Title: "module2", Description: "description2",
+	}
+	resp = nClient.CreateCourse(courseTitle, courseDescription, false, []noob_client.ModuleInit{module, module2})
+	require.Equal(t, 200, resp.StatusCode)
 
 	// Course + modules should show up in browse page now that module has blocks
-	body := client.getPageBody("/browse")
-	require.Contains(t, body, course.Title)
-	require.Contains(t, body, course.Description)
-	for _, module := range modules[:len(modules)-1] {
-		require.Contains(t, body, module.Title)
-		require.Contains(t, body, module.Description)
-	}
-	require.NotContains(t, body, modules[len(modules)-1].Title)
-	require.NotContains(t, body, modules[len(modules)-1].Description)
+	body := getPageBody(t, nClient, "/browse")
+	require.Contains(t, body, courseTitle)
+	require.Contains(t, body, courseDescription)
+	require.Contains(t, body, module.Title)
+	require.Contains(t, body, module.Description)
+	require.NotContains(t, body, module2.Title)
+	require.NotContains(t, body, module2.Description)
 
 	// Edit again and make sure creating new module version,
 	// with some things edited some things not, works.
-	client.editModule(courseId, modules[0], blockInputs[0])
-	checkModule(modules[0], blockInputs[0])
+	resp = nClient.EditModule(courseId, moduleId, module.Title, module.Description, blocks)
+	require.Equal(t, 200, resp.StatusCode)
+	checkModule(moduleId, module, blocks)
 
 	// require a user cannot edit a module for a course that's not theirs
 	// even if they put a course that is theirs
 	user2 := ctx.createUser()
-	client2 := newTestClient(t).login(user2.Id)
-	course2, _, _ := client2.initTestCourseN(1, 3)
-	client2.editModuleFail(course2.Id, modules[0], blockInputs[0])
-	client2.deleteModuleFail(course2.Id, modules[0].ModuleId)
-	resp := client2.get(exportModuleRoute(course2.Id, modules[0].ModuleId))
+	nClient2 := newTestNoobClient(user2.Id)
+	course2Title := "course2"
+	course2Description := "description2"
+	resp = nClient2.CreateCourse(course2Title, course2Description, false, []noob_client.ModuleInit{module})
+	require.Equal(t, 200, resp.StatusCode)
+	course2Id := int64(2)
+	resp = nClient2.EditModule(course2Id, moduleId, module.Title, module.Description, blocks)
+	require.NotEqual(t, 200, resp.StatusCode)
+
+	resp = nClient2.GetPage(noob_client.ExportModuleRoute(course2Id, moduleId))
 	require.NotEqual(t, 200, resp.StatusCode)
 }
 
