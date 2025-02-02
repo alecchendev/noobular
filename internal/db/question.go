@@ -64,6 +64,25 @@ func InsertQuestion(tx *sql.Tx, knowledgePointId int64, question string, choices
 	return nil
 }
 
+const getQuestionQuery = `
+select q.id, q.knowledge_point_id, q.content_id, q.latest
+from questions q
+where q.id = ?;
+`
+
+func (c *DbClient) GetQuestion(questionId int64) (Question, error) {
+	row := c.db.QueryRow(getQuestionQuery, questionId)
+	var id int
+	var knowledgePointId int64
+	var contentId int
+	var latest bool
+	err := row.Scan(&id, &knowledgePointId, &contentId, &latest)
+	if err != nil {
+		return Question{}, err
+	}
+	return NewQuestion(id, knowledgePointId, contentId, latest), nil
+}
+
 const getQuestionsForKnowledgePointQuery = `
 select q.id, q.knowledge_point_id, q.content_id, q.latest
 from questions q

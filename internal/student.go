@@ -1,9 +1,11 @@
 package internal
 
 import (
+	"crypto/rand"
 	"database/sql"
 	"fmt"
 	"log"
+	"math/big"
 	"net/http"
 	"sort"
 	"strconv"
@@ -247,54 +249,6 @@ func loadUiQuestion(ctx HandlerContext, question db.Question, userId int64) (UiQ
 	return uiQuestion, nil
 }
 
-func getBlock(ctx HandlerContext, moduleVersionId int64, blockIdx int, userId int64) (UiBlock, error) {
-	block, err := ctx.dbClient.GetBlock(moduleVersionId, blockIdx)
-	if err != nil {
-		return UiBlock{}, fmt.Errorf("Error getting block %d for module %d: %v", blockIdx, moduleVersionId, err)
-	}
-	// TODO: use a html sanitizer like blue monday?
-	if block.BlockType == db.KnowledgePointBlockType {
-		knowledgePoint, err := ctx.dbClient.GetKnowledgePointFromBlock(block.Id)
-		if err != nil {
-			return UiBlock{}, fmt.Errorf("Error getting knowledge point for block %d: %v", block.Id, err)
-		}
-
-		// If we've visited this, get the question order
-
-
-		// Otherwise, get a random question, and mark the question order
-
-
-
-		// Figure out getting question for when student has answered
-		questions, err := ctx.dbClient.GetQuestionsForKnowledgePoint(knowledgePoint.Id)
-		if err != nil {
-			return UiBlock{}, fmt.Errorf("Error getting question for knowledge point %d: %v", knowledgePoint.Id, err)
-		}
-		// TODO: handle multiple questions
-		question := questions[0]
-		uiQuestion, err := loadUiQuestion(ctx, question, userId)
-		if err != nil {
-			return UiBlock{}, fmt.Errorf("Error loading question for block %d: %v", block.Id, err)
-		}
-		uiBlock := NewUiBlockQuestion(uiQuestion, blockIdx)
-		return uiBlock, nil
-	} else if block.BlockType == db.ContentBlockType {
-		content, err := ctx.dbClient.GetContentFromBlock(block.Id)
-		if err != nil {
-			return UiBlock{}, fmt.Errorf("Error getting content for block %d: %v", block.Id, err)
-		}
-		rendered, err := NewUiContentRendered(content)
-		if err != nil {
-			return UiBlock{}, fmt.Errorf("Error converting content for block %d: %v", block.Id, err)
-		}
-		uiBlock := NewUiBlockContent(rendered, blockIdx)
-		return uiBlock, nil
-	} else {
-		return UiBlock{}, fmt.Errorf("Unknown block type %s", block.BlockType)
-	}
-}
-
 func handleTakeModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
 	courseId, err := strconv.Atoi(r.PathValue("courseId"))
 	if err != nil {
@@ -347,13 +301,75 @@ func handleTakeModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 		return fmt.Errorf("Block index %d is out of bounds (>=%d) for module %d", visit.BlockIndex, module.BlockCount, moduleId)
 	}
 	nBlocks := min(visit.BlockIndex+1, module.BlockCount)
-	uiBlocks := make([]UiBlock, nBlocks)
+	uiBlocks := make([]UiBlock, 0)
 	for blockIdx := 0; blockIdx < nBlocks; blockIdx++ {
-		uiBlock, err := getBlock(ctx, visit.ModuleVersionId, blockIdx, user.Id)
+		block, err := ctx.dbClient.GetBlock(visit.ModuleVersionId, blockIdx)
 		if err != nil {
-			return fmt.Errorf("Error getting block %d for module %d: %v", blockIdx, moduleId, err)
+			return fmt.Errorf("Error getting block %d for module %d: %v", blockIdx, visit.ModuleVersionId, err)
 		}
-		uiBlocks[blockIdx] = uiBlock
+
+		var uiBlock UiBlock
+		switch block.BlockType {
+		case db.KnowledgePointBlockType:
+			knowledgePoint, err := ctx.dbClient.GetKnowledgePointFromBlock(block.Id)
+			if err != nil {
+				return fmt.Errorf("Error getting knowledge point for block %d: %v", block.Id, err)
+			}
+
+			questionOrders, err := ctx.dbClient.GetQuestionOrders(visit.Id, knowledgePoint.Id)
+			if err != nil {
+				return fmt.Errorf("Error getting question orders for visit %d and knowledge point %d: %v", visit.Id, knowledgePoint.Id, err)
+			}
+			var question db.Question
+			if len(questionOrders) > 0 {
+				// If we've already seen this block, get the latest question order
+				// TODO: handle multiple question orders
+				questionOrder := questionOrders[len(questionOrders)-1]
+				question, err = ctx.dbClient.GetQuestion(questionOrder.QuestionId)
+				if err != nil {
+					return fmt.Errorf("Error getting question %d: %v", questionOrder.QuestionId, err)
+				}
+			} else {
+				if blockIdx != nBlocks-1 {
+					return fmt.Errorf("No question order found for block %d, but not at the last block", block.Id)
+				}
+				// Since this is the first time we're seeing this block,
+				// get a random question and mark the question order
+				questions, err := ctx.dbClient.GetLatestQuestionsForKnowledgePoint(knowledgePoint.Id)
+				if err != nil {
+					return fmt.Errorf("Error getting question for knowledge point %d: %v", knowledgePoint.Id, err)
+				}
+				questionIdx, err := rand.Int(rand.Reader, big.NewInt(int64(len(questions))))
+				if err != nil {
+					return fmt.Errorf("Error getting random question index: %v", err)
+				}
+				question = questions[questionIdx.Int64()]
+				_, err = ctx.dbClient.InsertQuestionOrder(visit.Id, knowledgePoint.Id, int64(question.Id), 0)
+				if err != nil {
+					return fmt.Errorf("Error inserting question order for visit %d and knowledge point %d: %v", visit.Id, knowledgePoint.Id, err)
+				}
+			}
+
+			uiQuestion, err := loadUiQuestion(ctx, question, user.Id)
+			if err != nil {
+				return fmt.Errorf("Error loading question for block %d: %v", block.Id, err)
+			}
+			uiBlock = NewUiBlockQuestion(uiQuestion, blockIdx)
+		case db.ContentBlockType:
+			content, err := ctx.dbClient.GetContentFromBlock(block.Id)
+			if err != nil {
+				return fmt.Errorf("Error getting content for block %d: %v", block.Id, err)
+			}
+			rendered, err := NewUiContentRendered(content)
+			if err != nil {
+				return fmt.Errorf("Error converting content for block %d: %v", block.Id, err)
+			}
+			uiBlock = NewUiBlockContent(rendered, blockIdx)
+		default:
+			return fmt.Errorf("Unknown block type %s", block.BlockType)
+		}
+
+		uiBlocks = append(uiBlocks, uiBlock)
 	}
 	uiModule := UiTakeModulePage{
 		Module:     module,
@@ -364,30 +380,14 @@ func handleTakeModulePage(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	return ctx.renderer.RenderTakeModulePage(w, uiModule)
 }
 
-func getTakeModule(req takeModuleRequest, ctx HandlerContext, userId int64) (UiTakeModule, db.Visit, error) {
-	visit, err := ctx.dbClient.GetVisit(userId, req.moduleId)
-	if err != nil {
-		return UiTakeModule{}, db.Visit{}, err
+func validateTakeModuleBlockIdx(blockIdx int, module UiModule, visit db.Visit) error {
+	if blockIdx >= module.BlockCount {
+		return fmt.Errorf("Block index %d is out of bounds (>=%d) for module %d", blockIdx, module.BlockCount, module.Id)
 	}
-	module, err := getModule(ctx, req.courseId, req.moduleId, visit.ModuleVersionId)
-	if err != nil {
-		return UiTakeModule{}, db.Visit{}, err
+	if blockIdx > visit.BlockIndex+1 {
+		return fmt.Errorf("Block index %d is ahead of visit block index %d for module %d", blockIdx, visit.BlockIndex, module.Id)
 	}
-	if req.blockIdx >= module.BlockCount {
-		return UiTakeModule{}, db.Visit{}, fmt.Errorf("Block index %d is out of bounds (>=%d) for module %d", req.blockIdx, module.BlockCount, req.moduleId)
-	}
-	if req.blockIdx > visit.BlockIndex+1 {
-		return UiTakeModule{}, db.Visit{}, fmt.Errorf("Block index %d is ahead of visit block index %d for module %d", req.blockIdx, visit.BlockIndex, req.moduleId)
-	}
-	uiBlock, err := getBlock(ctx, visit.ModuleVersionId, req.blockIdx, userId)
-	if err != nil {
-		return UiTakeModule{}, db.Visit{}, err
-	}
-	return UiTakeModule{
-		Module:     module,
-		Block:      uiBlock,
-		VisitIndex: visit.BlockIndex,
-	}, visit, nil
+	return nil
 }
 
 func handleTakeModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
@@ -395,16 +395,76 @@ func handleTakeModule(w http.ResponseWriter, r *http.Request, ctx HandlerContext
 	if err != nil {
 		return err
 	}
-	module, visit, err := getTakeModule(req, ctx, user.Id)
+	visit, err := ctx.dbClient.GetVisit(user.Id, req.moduleId)
 	if err != nil {
 		return err
 	}
+	module, err := getModule(ctx, req.courseId, req.moduleId, visit.ModuleVersionId)
+	if err != nil {
+		return err
+	}
+	err = validateTakeModuleBlockIdx(req.blockIdx, module, visit)
+	if err != nil {
+		return err
+	}
+
+	block, err := ctx.dbClient.GetBlock(visit.ModuleVersionId, req.blockIdx)
+	if err != nil {
+		return fmt.Errorf("Error getting block %d for module %d: %v", req.blockIdx, visit.ModuleVersionId, err)
+	}
+
+	var uiBlock UiBlock
+	switch block.BlockType {
+	case db.KnowledgePointBlockType:
+		knowledgePoint, err := ctx.dbClient.GetKnowledgePointFromBlock(block.Id)
+		if err != nil {
+			return fmt.Errorf("Error getting knowledge point for block %d: %v", block.Id, err)
+		}
+		// Since this is the first time we're seeing this block,
+		// get a random question and mark the question order
+		questions, err := ctx.dbClient.GetLatestQuestionsForKnowledgePoint(knowledgePoint.Id)
+		if err != nil {
+			return fmt.Errorf("Error getting question for knowledge point %d: %v", knowledgePoint.Id, err)
+		}
+		questionIdx, err := rand.Int(rand.Reader, big.NewInt(int64(len(questions))))
+		if err != nil {
+			return fmt.Errorf("Error getting random question index: %v", err)
+		}
+		question := questions[questionIdx.Int64()]
+		uiQuestion, err := loadUiQuestion(ctx, question, user.Id)
+		if err != nil {
+			return fmt.Errorf("Error loading question for block %d: %v", block.Id, err)
+		}
+		uiBlock = NewUiBlockQuestion(uiQuestion, req.blockIdx)
+
+		_, err = ctx.dbClient.InsertQuestionOrder(visit.Id, knowledgePoint.Id, int64(question.Id), 0)
+		if err != nil {
+			return fmt.Errorf("Error inserting question order for visit %d and knowledge point %d: %v", visit.Id, knowledgePoint.Id, err)
+		}
+	case db.ContentBlockType:
+		content, err := ctx.dbClient.GetContentFromBlock(block.Id)
+		if err != nil {
+			return fmt.Errorf("Error getting content for block %d: %v", block.Id, err)
+		}
+		rendered, err := NewUiContentRendered(content)
+		if err != nil {
+			return fmt.Errorf("Error converting content for block %d: %v", block.Id, err)
+		}
+		uiBlock = NewUiBlockContent(rendered, req.blockIdx)
+	default:
+		return fmt.Errorf("Unknown block type %s", block.BlockType)
+	}
+
 	err = ctx.dbClient.UpdateVisit(user.Id, visit.ModuleVersionId, req.blockIdx)
 	if err != nil {
 		return err
 	}
-	module.VisitIndex = req.blockIdx
-	return ctx.renderer.RenderTakeModule(w, module)
+	uiTakeModule := UiTakeModule{
+		Module:     module,
+		Block:      uiBlock,
+		VisitIndex: req.blockIdx,
+	}
+	return ctx.renderer.RenderTakeModule(w, uiTakeModule)
 }
 
 func handleAnswerQuestion(w http.ResponseWriter, r *http.Request, ctx HandlerContext, user db.User) error {
@@ -412,12 +472,54 @@ func handleAnswerQuestion(w http.ResponseWriter, r *http.Request, ctx HandlerCon
 	if err != nil {
 		return err
 	}
-	uiTakeModule, _, err := getTakeModule(req, ctx, user.Id)
+	visit, err := ctx.dbClient.GetVisit(user.Id, req.moduleId)
 	if err != nil {
 		return err
 	}
-	if uiTakeModule.Block.BlockType != db.KnowledgePointBlockType {
+	module, err := getModule(ctx, req.courseId, req.moduleId, visit.ModuleVersionId)
+	if err != nil {
+		return err
+	}
+	err = validateTakeModuleBlockIdx(req.blockIdx, module, visit)
+	if err != nil {
+		return err
+	}
+	block, err := ctx.dbClient.GetBlock(visit.ModuleVersionId, req.blockIdx)
+	if err != nil {
+		return fmt.Errorf("Error getting block %d for module %d: %v", req.blockIdx, visit.ModuleVersionId, err)
+	}
+	if block.BlockType != db.KnowledgePointBlockType {
 		return fmt.Errorf("Tried to submit answer, but block at index %d for module %d is not a knowledge point block", req.blockIdx, req.moduleId)
+	}
+
+	knowledgePoint, err := ctx.dbClient.GetKnowledgePointFromBlock(block.Id)
+	if err != nil {
+		return fmt.Errorf("Error getting knowledge point for block %d: %v", block.Id, err)
+	}
+	// Get the latest question order
+	questionOrders, err := ctx.dbClient.GetQuestionOrders(visit.Id, knowledgePoint.Id)
+	if err != nil {
+		return fmt.Errorf("Error getting question orders for visit %d and knowledge point %d: %v", visit.Id, knowledgePoint.Id, err)
+	}
+	if len(questionOrders) == 0 {
+		return fmt.Errorf("No question orders found for visit %d and knowledge point %d", visit.Id, knowledgePoint.Id)
+	}
+	questionOrder := questionOrders[len(questionOrders)-1]
+	question, err := ctx.dbClient.GetQuestion(questionOrder.QuestionId)
+	if err != nil {
+		return fmt.Errorf("Error getting question %d: %v", questionOrder.QuestionId, err)
+	}
+
+	uiQuestion, err := loadUiQuestion(ctx, question, user.Id)
+	if err != nil {
+		return fmt.Errorf("Error loading question for block %d: %v", block.Id, err)
+	}
+	uiBlock := NewUiBlockQuestion(uiQuestion, req.blockIdx)
+
+	uiTakeModule := UiTakeModule{
+		Module:     module,
+		Block:      uiBlock,
+		VisitIndex: req.blockIdx,
 	}
 	err = r.ParseForm()
 	if err != nil {

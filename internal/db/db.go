@@ -69,11 +69,12 @@ func initDb(db *sql.DB) {
 		createDbVersionTable,
 		createKnowledgePointTable,
 		createKnowledgePointBlockTable,
+		createQuestionOrderTable,
 	}
 	for _, stmt := range stmts {
 		_, err := tx.Exec(stmt)
 		if err != nil {
-			log.Fatal(err)
+			log.Fatal("Failed to create table: ", err)
 		}
 	}
 	latestVersion := latestDbVersion()
