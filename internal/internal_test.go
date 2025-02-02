@@ -200,43 +200,28 @@ func TestPrivateCourse(t *testing.T) {
 	user := ctx.createUser()
 	client := newTestNoobClient(user.Id)
 
-	courseTitle := "course title"
-	courseDescription := "course description"
-	modules := []noob_client.ModuleInit{
-		{Title: "module1", Description: "description1"},
-		{Title: "module2", Description: "description2"},
+	course, module := createSampleCourse(t, client, 1, 1)
+	courseId := int64(course.Id)
+	moduleUpdate := noob_client.ModuleUpdate{
+		Id: 1, Title: module.Title, Description: module.Description,
 	}
-	resp := client.CreateCourse(courseTitle, courseDescription, true, modules)
-	require.Equal(t, 200, resp.StatusCode)
-	courseId := int64(1)
-
-	resp = client.EditModule(courseId, 1, "module1", "description1", []noob_client.Block{
-		noob_client.NewContentBlock("content1"),
-	})
-	require.Equal(t, 200, resp.StatusCode)
-	resp = client.EditModule(courseId, 2, "module2", "description2", []noob_client.Block{
-		noob_client.NewContentBlock("content2"),
-	})
-	require.Equal(t, 200, resp.StatusCode)
+	populateSampleModule(t, client, moduleUpdate, 1, 1)
 
 	body := getPageBody(t, client, "/browse")
-	require.Contains(t, body, courseTitle)
-	require.Contains(t, body, courseDescription)
-	for _, module := range modules {
-		require.Contains(t, body, module.Title)
-		require.Contains(t, body, module.Description)
-	}
+	require.Contains(t, body, course.Title)
+	require.Contains(t, body, course.Description)
+	require.Contains(t, body, moduleUpdate.Title)
+	require.Contains(t, body, moduleUpdate.Description)
 
 	moduleUpdates := []noob_client.ModuleUpdate{
 		{Id: 1, Title: "new module title1", Description: "new module description1"},
-		{Id: 2, Title: "new module title2", Description: "new module description2"},
 	}
-	resp = client.EditCourse(courseId, courseTitle, courseDescription, false, moduleUpdates)
+	resp := client.EditCourse(courseId, course.Title, course.Description, false, moduleUpdates)
 
 	body = getPageBody(t, client, "/browse")
-	require.NotContains(t, body, courseTitle)
-	require.NotContains(t, body, courseDescription)
-	for _, module := range modules {
+	require.NotContains(t, body, course.Title)
+	require.NotContains(t, body, course.Description)
+	for _, module := range moduleUpdates {
 		require.NotContains(t, body, module.Title)
 		require.NotContains(t, body, module.Description)
 	}
@@ -359,15 +344,29 @@ func TestEditModule(t *testing.T) {
 }
 
 // Creates a course with an empty module
-func createSampleCourse(t *testing.T, client noob_client.Client, courseId int64, moduleId int64) (int64, int64) {
+func createSampleCourse(t *testing.T, client noob_client.Client, courseId int64, moduleId int64) (db.Course, db.ModuleVersion) {
 	prefix := fmt.Sprintf("module%d", moduleId)
 	module := noob_client.ModuleInit{
 		Title: fmt.Sprintf("%s title", prefix),
 		Description: fmt.Sprintf("%s description", prefix),
 	}
-	resp := client.CreateCourse(fmt.Sprintf("course%d", courseId), fmt.Sprintf("description%d", courseId), false, []noob_client.ModuleInit{module})
+	resp := client.CreateCourse(fmt.Sprintf("course%d", courseId), fmt.Sprintf("description%d", courseId), true, []noob_client.ModuleInit{module})
 	require.Equal(t, 200, resp.StatusCode)
-	return courseId, moduleId
+	course := db.NewCourse(int(courseId), module.Title, module.Description, true)
+	moduleVersionId := int64(1)
+	moduleVersion := db.NewModuleVersion(moduleVersionId, int(moduleId), 1, module.Title, module.Description)
+	return course, moduleVersion
+}
+
+func populateSampleModule(t *testing.T, client noob_client.Client, moduleUpdate noob_client.ModuleUpdate, courseId, kpId int64) []noob_client.Block {
+	createSampleKnowledgePoint(t, client, courseId, kpId)
+	blocks := []noob_client.Block{
+		noob_client.NewKnowledgePointBlock(kpId),
+		noob_client.NewContentBlock(fmt.Sprintf("module%d content", moduleUpdate.Id)),
+	}
+	resp := client.EditModule(courseId, moduleUpdate.Id, moduleUpdate.Title, moduleUpdate.Description, blocks)
+	require.Equal(t, 200, resp.StatusCode)
+	return blocks
 }
 
 func createSampleKnowledgePoint(t *testing.T, client noob_client.Client, courseId, kpId int64) int64 {
@@ -392,31 +391,31 @@ func TestInputValidationEditModule(t *testing.T) {
 	user := ctx.createUser()
 	client := newTestNoobClient(user.Id)
 
-	courseId, moduleId := createSampleCourse(t, client, 1, 1)
+	course, module := createSampleCourse(t, client, 1, 1)
 
 	emptyTitle := newTitleDescInput("", "description")
 	emptyDescription := newTitleDescInput("title", "")
 	tooLongTitle := newTitleDescInput(strings.Repeat("a", internal.TitleMaxLength + 1), "description")
 	tooLongDescription := newTitleDescInput("title", strings.Repeat("a", internal.DescriptionMaxLength + 1))
 
-	resp := client.EditModule(courseId, moduleId, emptyTitle.Title, emptyTitle.Description, []noob_client.Block{})
+	resp := client.EditModule(int64(course.Id), int64(module.ModuleId), emptyTitle.Title, emptyTitle.Description, []noob_client.Block{})
 	require.NotEqual(t, 200, resp.StatusCode)
 
-	resp = client.EditModule(courseId, moduleId, emptyDescription.Title, emptyDescription.Description, []noob_client.Block{})
+	resp = client.EditModule(int64(course.Id), int64(module.ModuleId), emptyDescription.Title, emptyDescription.Description, []noob_client.Block{})
 	require.NotEqual(t, 200, resp.StatusCode)
 
-	resp = client.EditModule(courseId, moduleId, tooLongTitle.Title, tooLongTitle.Description, []noob_client.Block{})
+	resp = client.EditModule(int64(course.Id), int64(module.ModuleId), tooLongTitle.Title, tooLongTitle.Description, []noob_client.Block{})
 	require.NotEqual(t, 200, resp.StatusCode)
 
-	resp = client.EditModule(courseId, moduleId, tooLongDescription.Title, tooLongDescription.Description, []noob_client.Block{})
+	resp = client.EditModule(int64(course.Id), int64(module.ModuleId), tooLongDescription.Title, tooLongDescription.Description, []noob_client.Block{})
 	require.NotEqual(t, 200, resp.StatusCode)
 
-	resp = client.EditModule(courseId, moduleId, "title", "description", []noob_client.Block{
+	resp = client.EditModule(int64(course.Id), int64(module.ModuleId), "title", "description", []noob_client.Block{
 		noob_client.NewContentBlock(""),
 	})
 	require.NotEqual(t, 200, resp.StatusCode)
 
-	resp = client.EditModule(courseId, moduleId, "title", "description", []noob_client.Block{
+	resp = client.EditModule(int64(course.Id), int64(module.ModuleId), "title", "description", []noob_client.Block{
 		noob_client.NewContentBlock(strings.Repeat("a", internal.MaxContentLength + 1)),
 	})
 	require.NotEqual(t, 200, resp.StatusCode)
