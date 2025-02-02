@@ -2,6 +2,8 @@ package db
 
 import (
 	"database/sql"
+	"fmt"
+	"log"
 	"strconv"
 )
 
@@ -39,6 +41,7 @@ func migrations() []DbMigration {
 		knowledgePointQuestionMigration,
 		multiKnowledgePointQuestionMigration,
 		latestQuestionMigration,
+		backfillQuestionOrders,
 	}
 }
 
@@ -630,6 +633,118 @@ func latestQuestionMigration(tx *sql.Tx) error {
 	_, err := tx.Exec(addLatestColumnToQuestionTable)
 	if err != nil {
 		return err
+	}
+	return nil
+}
+
+const getAllVisits = `
+select v.id, v.user_id, v.module_version_id, v.block_index
+from visits v;
+`
+
+const getBlockCountQueryMigration = `
+select count(*)
+from blocks b
+where b.module_version_id = ?;
+`
+
+const getBlockQueryMigration = `
+select b.id, b.module_version_id, b.block_index, b.block_type
+from blocks b
+where b.block_index = ?
+and b.module_version_id = ?;
+`
+
+const getLatestQuestionsForKnowledgePointQueryMigration = `
+select q.id, q.knowledge_point_id, q.content_id, q.latest
+from questions q
+join content c on q.content_id = c.id
+where q.knowledge_point_id = ? and q.latest = true;
+`
+
+const getKnowledgePointFromBlockQueryMigration = `
+select k.id, k.course_id, k.name
+from knowledge_points k
+join knowledge_point_blocks kb on k.id = kb.knowledge_point_id
+where kb.block_id = ?;
+`
+
+const insertQuestionOrderQueryMigration = `
+insert into question_orders(visit_id, knowledge_point_id, question_id, question_index)
+values(?, ?, ?, ?);
+`
+
+func backfillQuestionOrders(tx *sql.Tx) error {
+	// for every visit, go through the visited blocks, and for
+	// each knowledge point block, get the first question and mark
+	// the question order
+
+	visitRows, err := tx.Query(getAllVisits)
+	if err != nil {
+		return err
+	}
+	defer visitRows.Close()
+	for visitRows.Next() {
+		var visitId int64
+		var userId int64
+		var moduleVersionId int64
+		var blockIdx int
+		err := visitRows.Scan(&visitId, &userId, &moduleVersionId, &blockIdx)
+		if err != nil {
+			return err
+		}
+
+		blockCountRow := tx.QueryRow(getBlockCountQueryMigration, moduleVersionId)
+		var blockCount int
+		err = blockCountRow.Scan(&blockCount)
+		if err != nil {
+			return err
+		}
+
+		nBlocks := min(blockIdx+1, blockCount)
+		for blockIndex := 0; blockIndex < nBlocks; blockIndex++ {
+			blockRow := tx.QueryRow(getBlockQueryMigration, blockIndex, moduleVersionId)
+			var block Block
+			err := blockRow.Scan(&block.Id, &block.ModuleVersionId, &block.BlockIndex, &block.BlockType)
+			if err != nil {
+				return err
+			}
+			if block.BlockType == "knowledge_point" {
+				knowledgePointRow := tx.QueryRow(getKnowledgePointFromBlockQueryMigration, block.Id)
+				var knowledgePoint KnowledgePoint
+				err := knowledgePointRow.Scan(&knowledgePoint.Id, &knowledgePoint.CourseId, &knowledgePoint.Name)
+				if err != nil {
+					return err
+				}
+
+				questionRows, err := tx.Query(getLatestQuestionsForKnowledgePointQueryMigration, knowledgePoint.Id)
+				if err != nil {
+					return err
+				}
+				defer questionRows.Close()
+				questions := []Question{}
+				for questionRows.Next() {
+					var questionId int
+					var knowledgePointId int
+					var contentId int
+					var latest bool
+					err := questionRows.Scan(&questionId, &knowledgePointId, &contentId, &latest)
+					if err != nil {
+						return err
+					}
+					questions = append(questions, NewQuestion(questionId, knowledgePoint.Id, contentId, latest))
+				}
+				if len(questions) == 0 {
+					log.Printf("no questions for knowledge point %d", knowledgePoint.Id)
+					return fmt.Errorf("no questions for knowledge point %d", knowledgePoint.Id)
+				}
+				question := questions[0]
+				_, err = tx.Exec(insertQuestionOrderQueryMigration, visitId, knowledgePoint.Id, question.Id, 0)
+				if err != nil {
+					return err
+				}
+			}
+		}
 	}
 	return nil
 }
