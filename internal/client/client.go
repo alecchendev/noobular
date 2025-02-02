@@ -78,9 +78,9 @@ func (b BlockType) String() string {
 }
 
 type Block struct {
-	BlockType BlockType
-	Question  QuestionBlock
-	Content   ContentBlock
+	BlockType      BlockType
+	Question       QuestionBlock
+	Content        ContentBlock
 	KnowledgePoint KnowledgePointBlock
 }
 
@@ -120,11 +120,13 @@ type KnowledgePointBlock struct {
 	Id int64
 }
 
-func CreateCourseRoute() string {
-	return "/teacher/course/create"
+type ModuleUpdate struct {
+	Id          int64
+	Title       string
+	Description string
 }
 
-func CreateCourseForm(title string, description string, public bool, modules []ModuleInit) url.Values {
+func CreateOrEditCourseForm(title string, description string, public bool, modules []ModuleUpdate) url.Values {
 	formData := url.Values{}
 	formData.Set("title", title)
 	formData.Set("description", description)
@@ -133,15 +135,37 @@ func CreateCourseForm(title string, description string, public bool, modules []M
 	}
 	for _, module := range modules {
 		formData.Add("module-title[]", module.Title)
-		formData.Add("module-id[]", "-1")
+		formData.Add("module-id[]", strconv.FormatInt(module.Id, 10))
 		formData.Add("module-description[]", module.Description)
 	}
 	return formData
 }
 
+func CreateCourseRoute() string {
+	return "/teacher/course/create"
+}
+
+func CreateCourseForm(title string, description string, public bool, modules []ModuleInit) url.Values {
+	moduleUpdates := []ModuleUpdate{}
+	for _, module := range modules {
+		moduleUpdates = append(moduleUpdates, ModuleUpdate{-1, module.Title, module.Description})
+	}
+	return CreateOrEditCourseForm(title, description, public, moduleUpdates)
+}
+
 func (c Client) CreateCourse(title string, description string, public bool, modules []ModuleInit) *http.Response {
 	formData := CreateCourseForm(title, description, public, modules)
 	resp := c.post(CreateCourseRoute(), formData.Encode())
+	return resp
+}
+
+func EditCourseRoute(courseId int64) string {
+	return fmt.Sprintf("/teacher/course/%d", courseId)
+}
+
+func (c Client) EditCourse(courseId int64, title string, description string, public bool, modules []ModuleUpdate) *http.Response {
+	formData := CreateOrEditCourseForm(title, description, public, modules)
+	resp := c.put(EditCourseRoute(courseId), formData.Encode())
 	return resp
 }
 

@@ -85,26 +85,34 @@ func TestEditCourse(t *testing.T) {
 	defer ctx.Close()
 
 	user := ctx.createUser()
-	client := newTestClient(t).login(user.Id)
+	client := newTestNoobClient(user.Id)
 
-	course, modules := sampleCreateCourseInput()
-	client.createCourse(course, modules)
-	courseId := 1
-
-	body := client.getPageBody("/teacher")
-	require.Contains(t, body, editCourseRoute(courseId))
-
-	newCourse := db.NewCourse(courseId, "new title", "new description", true)
-	newModules := []db.ModuleVersion{
-		db.NewModuleVersion(-1, 1, 1, "new module title1", "new module description1"),
-		db.NewModuleVersion(-1, 2, 1, "new module title2", "new module description2"),
+	courseTitle := "course"
+	courseDescription := "description"
+	modules := []noob_client.ModuleInit{
+		{Title: "module1", Description: "description1"},
+		{Title: "module2", Description: "description2"},
 	}
-	client.editCourse(newCourse, newModules)
+	resp := client.CreateCourse(courseTitle, courseDescription, false, modules)
+	require.Equal(t, 200, resp.StatusCode)
+	courseId := int64(1)
 
-	for _, route := range []string{"/teacher", editCourseRoute(courseId)} {
-		body = client.getPageBody(route)
-		require.Contains(t, body, newCourse.Title)
-		require.Contains(t, body, newCourse.Description)
+	body := getPageBody(t, client, "/teacher")
+	require.Contains(t, body, noob_client.EditCourseRoute(courseId))
+
+	newCourseTitle := "new course title"
+	newCourseDescription := "new course description"
+	newModules := []noob_client.ModuleUpdate{
+		{Id: 1, Title: "new module title1", Description: "new module description1"},
+		{Id: 2, Title: "new module title2", Description: "new module description2"},
+	}
+	resp = client.EditCourse(courseId, newCourseTitle, newCourseDescription, false, newModules)
+	require.Equal(t, 200, resp.StatusCode)
+
+	for _, route := range []string{"/teacher", noob_client.EditCourseRoute(courseId)} {
+		body = getPageBody(t, client, route)
+		require.Contains(t, body, newCourseTitle)
+		require.Contains(t, body, newCourseDescription)
 		for _, module := range newModules {
 			require.Contains(t, body, module.Title)
 			require.Contains(t, body, module.Description)
@@ -114,10 +122,11 @@ func TestEditCourse(t *testing.T) {
 	// require a user cannot edit a module for a course that's not theirs
 	// even if they put a course that is theirs
 	user2 := ctx.createUser()
-	client2 := newTestClient(t).login(user2.Id)
-	course2, _, _ := client2.initTestCourseN(1, 2)
-	module := db.NewModuleVersion(-1, 1, 2, "different module title", "different module description")
-	client2.editCourseFail(course2, []db.ModuleVersion{module})
+	client2 := newTestNoobClient(user2.Id)
+	resp = client2.CreateCourse(courseTitle, courseDescription, false, modules)
+	courseId2 := int64(2)
+	resp = client2.EditCourse(courseId2, newCourseTitle, newCourseDescription, false, newModules)
+	require.NotEqual(t, 200, resp.StatusCode)
 }
 
 func TestCreateEditCourseInputValidation(t *testing.T) {
@@ -339,6 +348,21 @@ func createSampleCourse(t *testing.T, client noob_client.Client, courseId int64,
 	resp := client.CreateCourse(fmt.Sprintf("course%d", courseId), fmt.Sprintf("description%d", courseId), false, []noob_client.ModuleInit{module})
 	require.Equal(t, 200, resp.StatusCode)
 	return courseId, moduleId
+}
+
+func createSampleKnowledgePoint(t *testing.T, client noob_client.Client, courseId, kpId int64) int64 {
+	prefix := fmt.Sprintf("kp%d", kpId)
+	question := noob_client.QuestionBlock {
+		Text: fmt.Sprintf("%s question", prefix),
+		Choices: []noob_client.Choice{
+			{Text: fmt.Sprintf("%s choice1", prefix), Correct: false},
+			{Text: fmt.Sprintf("%s choice2", prefix), Correct: true},
+		},
+		Explanation: fmt.Sprintf("%s explanation", prefix),
+	}
+	resp := client.CreateKnowledgePoint(courseId, prefix, []noob_client.QuestionBlock{question})
+	require.Equal(t, 200, resp.StatusCode)
+	return kpId
 }
 
 func TestInputValidationEditModule(t *testing.T) {
