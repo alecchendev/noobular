@@ -600,21 +600,21 @@ func TestStudentCoursePage(t *testing.T) {
 	defer ctx.Close()
 
 	user := ctx.createUser()
-	client := newTestClient(t).login(user.Id)
+	client := newTestNoobClient(user.Id)
 
-	course, modules, _ := client.initTestCourse()
-	courseId := 1
+	course, module := createSampleCourse(t, client, 1, 1)
+	populateSampleModule(t, client, noob_client.ModuleUpdate{Id: 1, Title: module.Title, Description: module.Description}, 1, 1)
 
-	client.enrollCourse(courseId)
+	resp := client.EnrollCourse(int64(course.Id))
+	require.Equal(t, 200, resp.StatusCode)
 
-	body := client.getPageBody(studentCoursePageRoute(courseId))
+	body := getPageBody(t, client, studentCoursePageRoute(course.Id))
 	require.Contains(t, body, course.Title)
-	for _, module := range modules {
-		require.Equal(t, strings.Count(body, module.Title), 1)
-	}
+	require.Equal(t, strings.Count(body, module.Title), 1)
 
 	// If we enroll again in the same course it should not succeed
-	client.enrollCourseFail(courseId)
+	resp = client.EnrollCourse(int64(course.Id))
+	require.NotEqual(t, 200, resp.StatusCode)
 }
 
 // Test module version, i.e. once someone has visited the module, then when you edit it
