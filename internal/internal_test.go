@@ -329,36 +329,53 @@ func TestEditModule(t *testing.T) {
 	require.NotEqual(t, 200, resp.StatusCode)
 }
 
+// Creates a course with an empty module
+func createSampleCourse(t *testing.T, client noob_client.Client, courseId int64, moduleId int64) (int64, int64) {
+	prefix := fmt.Sprintf("module%d", moduleId)
+	module := noob_client.ModuleInit{
+		Title: fmt.Sprintf("%s title", prefix),
+		Description: fmt.Sprintf("%s description", prefix),
+	}
+	resp := client.CreateCourse(fmt.Sprintf("course%d", courseId), fmt.Sprintf("description%d", courseId), false, []noob_client.ModuleInit{module})
+	require.Equal(t, 200, resp.StatusCode)
+	return courseId, moduleId
+}
+
 func TestInputValidationEditModule(t *testing.T) {
 	ctx := startServer(t)
 	defer ctx.Close()
 
 	user := ctx.createUser()
-	client := newTestClient(t).login(user.Id)
+	client := newTestNoobClient(user.Id)
 
-	course, modules, blocks := client.initTestCourse()
-	module := modules[0]
-	module.Id = 1
-	blockInputs := blocks[0]
+	courseId, moduleId := createSampleCourse(t, client, 1, 1)
 
 	emptyTitle := newTitleDescInput("", "description")
 	emptyDescription := newTitleDescInput("title", "")
 	tooLongTitle := newTitleDescInput(strings.Repeat("a", internal.TitleMaxLength + 1), "description")
 	tooLongDescription := newTitleDescInput("title", strings.Repeat("a", internal.DescriptionMaxLength + 1))
 
-	dbModule := func(in titleDescInput) db.ModuleVersion {
-		return db.NewModuleVersion(2, int(module.Id), 2, in.Title, in.Description)
-	}
-	client.editModuleFail(course.Id, dbModule(emptyTitle), blockInputs)
-	client.editModuleFail(course.Id, dbModule(emptyDescription), blockInputs)
-	client.editModuleFail(course.Id, dbModule(tooLongTitle), blockInputs)
-	client.editModuleFail(course.Id, dbModule(tooLongDescription), blockInputs)
-	client.editModuleFail(course.Id, module, []blockInput{
-		newContentBlockInput(""),
+	resp := client.EditModule(courseId, moduleId, emptyTitle.Title, emptyTitle.Description, []noob_client.Block{})
+	require.NotEqual(t, 200, resp.StatusCode)
+
+	resp = client.EditModule(courseId, moduleId, emptyDescription.Title, emptyDescription.Description, []noob_client.Block{})
+	require.NotEqual(t, 200, resp.StatusCode)
+
+	resp = client.EditModule(courseId, moduleId, tooLongTitle.Title, tooLongTitle.Description, []noob_client.Block{})
+	require.NotEqual(t, 200, resp.StatusCode)
+
+	resp = client.EditModule(courseId, moduleId, tooLongDescription.Title, tooLongDescription.Description, []noob_client.Block{})
+	require.NotEqual(t, 200, resp.StatusCode)
+
+	resp = client.EditModule(courseId, moduleId, "title", "description", []noob_client.Block{
+		noob_client.NewContentBlock(""),
 	})
-	client.editModuleFail(course.Id, module, []blockInput{
-		newContentBlockInput(strings.Repeat("a", internal.MaxContentLength + 1)),
+	require.NotEqual(t, 200, resp.StatusCode)
+
+	resp = client.EditModule(courseId, moduleId, "title", "description", []noob_client.Block{
+		noob_client.NewContentBlock(strings.Repeat("a", internal.MaxContentLength + 1)),
 	})
+	require.NotEqual(t, 200, resp.StatusCode)
 }
 
 func TestAuth(t *testing.T) {
