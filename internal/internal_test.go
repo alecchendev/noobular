@@ -426,40 +426,36 @@ func TestAuth(t *testing.T) {
 	defer ctx.Close()
 
 	user1 := ctx.createUser()
-	client1 := newTestClient(t).login(user1.Id)
+	client1 := newTestNoobClient(user1.Id)
 
 	user2 := ctx.createUser()
-	client2 := newTestClient(t).login(user2.Id)
+	client2 := newTestNoobClient(user2.Id)
 
-	course, modules, _ := client1.initTestCourse()
+	course, module := createSampleCourse(t, client1, 1, 1)
 
-	body := client1.getPageBody("/teacher")
+	body := getPageBody(t, client1, "/teacher")
 	require.Contains(t, body, course.Title)
-	require.Contains(t, body, modules[0].Title)
+	require.Contains(t, body, module.Title)
 	require.Contains(t, body, editCourseRoute(course.Id))
-	require.Contains(t, body, noob_client.EditModuleRoute(int64(course.Id), int64(modules[0].ModuleId)))
+	require.Contains(t, body, noob_client.EditModuleRoute(int64(course.Id), int64(module.ModuleId)))
 
-	body = client2.getPageBody("/teacher")
+	body = getPageBody(t, client2, "/teacher")
 	require.NotContains(t, body, course.Title)
-	require.NotContains(t, body, modules[0].Title)
+	require.NotContains(t, body, module.Title)
 	require.NotContains(t, body, editCourseRoute(course.Id))
-	require.NotContains(t, body, noob_client.EditModuleRoute(int64(course.Id), int64(modules[0].ModuleId)))
+	require.NotContains(t, body, noob_client.EditModuleRoute(int64(course.Id), int64(module.ModuleId)))
 
 	newCourse := db.NewCourse(course.Id, "new title", "new description", true)
-	newModules := []db.ModuleVersion{
-		db.NewModuleVersion(-1, 1, 1, "new module title1", "new module description1"),
-		db.NewModuleVersion(-1, 2, 1, "new module title2", "new module description2"),
+	newModules := []noob_client.ModuleUpdate{
+		{Id: 1, Title: "new module title1", Description: "new module description1"},
 	}
-	client2.editCourseFail(newCourse, newModules)
+	resp := client2.EditCourse(int64(course.Id), newCourse.Title, newCourse.Description, false, newModules)
+	require.NotEqual(t, 200, resp.StatusCode)
 
-	newModuleVersion1 := db.NewModuleVersion(2, modules[0].ModuleId, 1, "new title", "new description")
-	contentStr := "qcontent1"
-	contentStr2 := "qcontent2"
-	blocks := []blockInput{
-		newContentBlockInput(contentStr),
-		newContentBlockInput(contentStr2),
-	}
-	client2.editModuleFail(course.Id, newModuleVersion1, blocks)
+	resp = client2.EditModule(int64(course.Id), int64(module.ModuleId), module.Title, module.Description, []noob_client.Block{
+		noob_client.NewContentBlock("content"),
+	})
+	require.NotEqual(t, 200, resp.StatusCode)
 }
 
 // Test a couple things:
