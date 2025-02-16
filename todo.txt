@@ -1,0 +1,292 @@
+Rewrite
+- I think the tech stack is fine.
+- Lot of things I should clean up this go around.
+	- Error handling from the get go - some major categories - user input error, internal error (user should retry later)
+	- int64 everywhere
+	- Don't reuse Ui structs between pages
+	- Use a little bit of JS. It's fine.
+- Simplify things
+	- Don't even make a UI for teachers to create courses. Just use a markdown file.
+	- No one uses this app, so don't do extra work. Let's see if my experiment works first.
+- Plan
+	- Rewrite noobular
+	- Implement all the key private tutor features
+	- Write my cryptography course, but heavily lean into AI. This is a test
+	with a subject I'm familiar in, to see how autonomous it can be.
+	- Use this to create a course about a subject I don't know.
+	- Pass the AP Physics/Chemistry exam using noobular
+
+
+Next big version of noobular.
+This is when noobular changes from being a textbook
+to a private tutor.
+- Refactor to center around knowledge points
+        - Add new api to create a knowledge point - i.e. a name and a bunch of questions
+	        - add level of indirection between a block and question since question can
+		be a part of a knowledge point pool or just a standalone question
+		- maybe just drop standalone questions and have questions only be tied
+		to knowledge points
+- Remake/create new primitives based on knowledge points
+	- Module
+	        - Second attempts at questions within a module
+	- Review
+	- Diagnostic exam
+	- Mastery learning
+
+Right now jan 4
+- DONE Migrate everything
+- Handle knowledge points having more than one question
+	- DONE Add course page for knowledge points
+	- DONE Create knowledge point page - only allows single question
+	- Edit knowledge point page
+		- DONE make page
+		- DONE Update name, insert new questions
+			- DONE Remove unique constraint
+		- DONE Deleting questions
+			- DONE Delete question content when editing knowledge point (if it hasn't been answered by anyone)
+			- DONE Add an "latest" field to the question table
+			- DONE Mark old questions as old
+			- DONE Delete content for questions when deleting questions
+	- DONE Change module UI to just have a dropdown to select an existing knowledge point
+		- DONE Change tests
+			- DONE Move validation as first step
+			- DONE Don't check question content in edit module page
+			- DONE Change editing module to point to KPs
+			- DONE Change initiating module with default questions to create KPs
+	- Handle multiple questions
+		- DONE Allow adding multiple questions
+		- Somehow need to record which question the student saw and what order
+		(maybe add some thing referencing visit, knowledge point, and/or block/question)
+			- DONE Mark question order on visit
+			- DONE DB migration to backfill question orders
+			- DONE Only load non-old questions when editing kp or on taking module
+			- Don't delete question content when deleting module/module version
+		- DONE Serve at random in a module
+	- Handle second chances for knowledge points
+		- Define minimum effective dose
+	- Edit import/export functionality post-knowledge points
+	- Add some sort of linting
+- Implement other features
+
+For LS launch
+- I should actually add a content gating feature that you can unlock with lightning
+        - People can pay to take a course using pinkdrink
+	- I don't make this a broadly available feature unless people care
+
+- Make knowledge point system
+	- DONE Allow creating knowledge point
+	- Allow creating questions for a knowledge point
+	- Allow referencing knowledge points in a module block
+	- Allow taking module to render questions from knowledge point
+- Migrate questions to knowledge points
+	- Move question to link to knowledge point instead of block
+		- Delete block_id, add knowledge_point_id
+			- Delete table and create two new ones (will need to delete choices, answers, explanations too)
+		- When creating a question, create a knowledge point
+		- When creating a module, blocks can be knowledge point or
+		- When getting a block, get the knowledge point
+-
+
+Right now
+- Continue creating content
+	- For the bases module, i should really make a separate section
+	for converting from base 10 to a another base instead of just throwing
+	the question in there.
+	- Make a git repo for my content
+		- Would be super cool to make a script/program to update all the content automatically in a github workflow
+- DONE Content protocol
+- DONE Try to write some simple scripts for generating questions
+	- Worth continuing to explore, but math academy does everything manually
+- Put together a style guide for how to create good courses/modules
+- Really question what features are necessary
+- Make some more organized doc of ideas vs. things I actually want to do
+
+Feedback from sydney on binary module
+- Clarify remainders somehow
+- padding - each number has to be 8
+- explanations for binary
+
+- For me now that I'm actually creating content
+	- DONE z index for math vs. progress bar
+	- DONE background color for code blocks
+	- DONE Missing katex fonts
+	- DONE Markdown in questions and choices
+		- DONE DB migration
+		- DONE Render questions
+		- DONE render choices
+		- DONE change ui to be larger text box
+	- DONE Add test coverage for prerequisites
+	- DONE Add test coverage for point system
+	- DONE Let myself just edit text as files
+		- DONE content protocol
+		- DONE Export all modules for a course to files
+		- DONE Import from files
+		- DONE Make it a part of the cli
+	- Tables
+	- Small things
+		- Split binary into two modules
+	- Merge the client with the test code
+		- Refactor to use the client's blocks
+		- Just rewrite the tests, don't try and merge the two - don't care about other people using the client module, nobody is lol
+	- Don't show logs in tests when only one test fails
+	- Block type in DB should be a number not a string
+	- Create some course dashboard for teachers to see how students are doing
+
+	- Short answer questions
+	- Save images when pasted
+	- Tools to make generating questions easier - would be nice for any numeric question to just have a "generate random choices" button
+
+	- Why is highlighting on modules so weird...?
+	- Module editing
+		- Add shortcut to save module so you don't have to scroll everytime
+			- Need to add a toast on success/error
+		- Allow reordering modules and blocks within modules
+		- Instead of creating modules in the create/edit course page, just add a "new module" button to teacher courses page. Hmm, but then what about reordering...?
+	- Full text module input
+	- Modify point assigning:
+		- Maybe make questions a point each, then word count of blocks certain points
+		- Maybe manual point counts
+	- Show teacher username on course page
+	- Show more/show less course description.
+	- Ability to clear visits on a module if you want to retake or just see the latest version
+		- Make sure to delete the module version if it's old and this was the only visit
+	- target="_blank" for links in markdown
+	- Just use javascript so you don't make a request for new empty things
+	- Markdown in question title/choices
+
+Next up
+- Couple basic techniques to make learning more effective
+	- Spaced repetition
+		- Basic: review once
+			- How to ask the teacher to make this content?
+		- More: review multiple times further spread out
+	- Mastery learning
+		- how to implement this?
+		- Pieces
+			- If a student gets a question wrong, reveal another question
+				- Requires teacher to provide an extra backup question
+			- If a student fails a module, don't unlock the next prerequisite. Surface it to them
+- More question types
+	- Short answer
+	- Fill in the blank
+- Points graph!!!
+- Diagnostic
+- Markdown engine
+	- Create the protocol for how certain things are expressed in markdown
+	- Implement exporting content to markdown
+	- Implement importing content from markdown
+
+- Delete users that don't finish sign up/don't create user until sign up is complete
+- Prereq followups
+	- Test this + cycles
+- Point system followups
+	- Graph of latest points
+	- Calculate the estimated completion date
+	- Test coverage
+- Fix the UI
+	- Maybe just go back to having one page per piece of the module
+	- Or somehow figure out how to scroll to not all the way to the top + make the nav sticky
+	- Current UI actually looks quite good on mobile..?
+	- Don't make a request just to get new empty forms
+- Do a scan to see if i can simplify/clean up some stuff
+	- Debugging
+		- Figure out actual error handling (user vs. internal error)
+		(do this when online, can see htmx error stuff)
+- Module versioning followups
+	- Deletion of courses and modules should be soft delete.
+		The people who have taken it can still review their work,
+		but no new people can take it.
+	- Hard delete should maybe still be available in case you
+		need to revoke personal information inside a module.
+- Simplify course creation even more - edit: idk about this tbh, i need the structure to do things
+	- Modules are just fully markdown. Questions have a specified syntax, and --- to break up blocks.
+	- Add a preview button to see what the module will look like + check if there are parsing errors
+
+Features before launch
+- DONE Render all answered questions in a module up front
+- DONE Delete start/inprogress stuff
+- DONE Module versioning system
+- DONE Prod vs. dev stuff (includes TLS)
+- DONE Point system - points are awarded based on content, local to a given course
+- DONE Prerequisite graph + basic recommendation (just let you do any of the next available modules)
+- IN PROGRESS Solid test coverage
+- IN PROGRESS Student dashboard (show points, completed, etc.)
+- Better error messages surfaced to the user upon form submission
+- More kinds of question blocks =
+- Extra questions - provide 4 questions, use 2, but reveal up to 2 for each they get wrong
+- Diagnostic exam
+- Feedback link
+- Better logging
+- Discord bot
+
+Post launch features
+- Course students dashboard for teachers - see all students, when they completed modules, points, answers, etc.
+- Retake a module? Delete points and everything
+
+Bugs
+- If you try to sign in as a user that doesn't exist, you get a bad error
+- Sometimes just weirdness with sign in
+
+Later, discovery of courses
+- Start with just a fuzzy search of all courses/modules
+
+Small refactor
+- Be consistent about the capital/lowercase things - capital is only for exporting from package
+- Type safety for id's
+- Courses / modules should not be shown based on if they have blocks They should be shown based on if the user says they're ready..?
+- Set a convention for how we handle sql queries that should return a single row
+	- Have some optional value and error instead of just having callsite handle NoRows
+- Can just use if else in template not whole shenanigans
+- Separate out test and prod stuff
+	- Don't re-render templates in prod
+	- Don't print secrets and shit in prod
+	- TLS, enforce https for cookie
+- Make some sort of framework for DB queries + privacy/security
+- Be more consistent about how we use/don't use transactions for the DB stuff
+- Consistent use of int vs. int64
+- Split bigger SQL queries into smaller ones and do logic of consolidation in server side?
+- Use more type safety in constructing UI/non-UI structs - make constructors, don't just use literals
+- Add a basic test for the jwt expiry and different user stuff
+- More test coverage
+- Error messages everywhere
+
+UX things
+- Handling form submission errors - need to do a toast or error message near the submission button
+- Medium UX thing: be able to move or reorder modules/questions/choices around
+	- Will be irrelevant when I rewrite to use markdown
+	- Drag and drop? https://stackoverflow.com/questions/10588607/tutorial-for-html5-dragdrop-sortable-list
+		- or https://www.youtube.com/watch?v=jfYWwQrtzzY
+- During/after onboading: Decide how to set the default page when you login (i.e. teacher vs. student dashboard)?
+- Add new device with passkeys
+
+Lower priority but eventually
+- Make every sql query interface with txs
+- My HTML is formatted inconsistently
+- Logger
+	- Need to have a really simple API, i.e. log.info. Don't require passing logger around
+	- Make a basic logger with request id
+	- Set a convention for how we log stuff
+	- Log levels, info, error, debug
+- Errors
+	- Somehow make a better trace of where an error is from
+- Using forms has been utter nonsense, either switch to json, or simplify my form somehow
+- Right now the DB does a lot of the work in aggregating things into what's needed for the UI
+but really that should probably be the logic of the backend itself, and the DB just offers
+some utility methods....? doesn't matter for now, get shit done first
+- Some way to input mock data to just play with things
+- When I actually release this, I should setu}p a discord bot for alerts
+
+Future features
+- For short answers, if there may be multiple ways to express the same thing,
+teachers could opt into automatic grading, where an LLM is asked to assess
+whether the student's answer matches the teacher's answer key. And a student
+could request a manual review upon errors (and then we try to minimize these occurrences)
+- Importing/exporting your course data - markdown protocol
+- Exporting your user data
+
+Markdown content system brainstorming
+- Just use comments to do special parsing stuff
+	- This means it renders fine as normal markdown, but includes information for things that understand it
+	- https://stackoverflow.com/questions/4823468/comments-in-markdown -> [//]: # (STUFF HERE)
+	- Just need a way of denoting different blocks and their types
+	- Use --- title: <asdf> --- tags for module metadata (could also include prereqs/ids..?)
