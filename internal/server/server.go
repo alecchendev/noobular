@@ -1,27 +1,34 @@
 package server
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"noobular/internal/db"
+	"noobular/internal/ui"
 
 	"github.com/google/uuid"
 )
 
-func NewServer(port int, dbClient *db.DbClient) *http.Server {
+type Environment string
+
+const (
+	Local      Environment = "local"
+	Production Environment = "production"
+)
+
+func NewServer(port int, dbClient db.DbClient, renderer ui.Renderer, env Environment) *http.Server {
 	mux := http.NewServeMux()
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 	mux.Handle("/style/", http.StripPrefix("/style/", http.FileServer(http.Dir("style"))))
 
 	newMethodHandlerMap := func() methodHandlerMap {
-		return newMethodHandlerMap(dbClient)
+		return newMethodHandlerMap(dbClient, renderer, env)
 	}
 
 	mux.Handle("/", newMethodHandlerMap().
-		Get(func(w http.ResponseWriter, r *http.Request, ctx requestContext) {
-			fmt.Fprintf(w, "Hello, World!")
-		}))
+		Get(handleHomePage))
 
 	return &http.Server{
 		Addr:    fmt.Sprintf(":%d", port),
@@ -30,23 +37,35 @@ func NewServer(port int, dbClient *db.DbClient) *http.Server {
 }
 
 type requestContext struct {
-	reqId uuid.UUID
-	dbClient  *db.DbClient
+	reqId    uuid.UUID
+	dbClient db.DbClient
+	renderer ui.Renderer
 }
 
-func newRequestContext(reqId uuid.UUID, dbClient *db.DbClient) requestContext {
-	return requestContext{ reqId: reqId, dbClient: dbClient }
+func newRequestContext(reqId uuid.UUID, dbClient db.DbClient, renderer ui.Renderer) requestContext {
+	return requestContext{reqId: reqId, dbClient: dbClient, renderer: renderer}
 }
 
-type requestHandler func(w http.ResponseWriter, r *http.Request, ctx requestContext)
+type requestHandler func(
+	w http.ResponseWriter,
+	r *http.Request,
+	ctx requestContext,
+) error
 
 type methodHandlerMap struct {
-	dbClient *db.DbClient
+	dbClient db.DbClient
+	renderer ui.Renderer
 	handlers map[string]requestHandler
+	env      Environment
 }
 
-func newMethodHandlerMap(dbClient *db.DbClient) methodHandlerMap {
-	return methodHandlerMap{ dbClient: dbClient, handlers: make(map[string]requestHandler) }
+func newMethodHandlerMap(dbClient db.DbClient, renderer ui.Renderer, env Environment) methodHandlerMap {
+	return methodHandlerMap{
+		dbClient: dbClient,
+		renderer: renderer,
+		handlers: make(map[string]requestHandler),
+		env:      env,
+	}
 }
 
 func (m methodHandlerMap) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -64,13 +83,25 @@ func (m methodHandlerMap) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Println(requestId, r.Method, r.URL.Path, r.Form)
+	if m.env == Local {
+		// Refresh templates so we don't need to restart
+		// server to see changes.
+		m.renderer.RefreshTemplates()
+	}
 	handler, ok := m.handlers[r.Method]
 	if !ok {
 		log.Printf("%s: Method %s not allowed for path %s\n", requestId, r.Method, r.URL.Path)
 		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 		return
 	}
-	handler(w, r, newRequestContext(requestId, m.dbClient))
+	err = handler(w, r, newRequestContext(requestId, m.dbClient, m.renderer))
+	switch {
+	case errors.Is(err, ErrPageNotFound):
+		http.Error(w, err.Error(), http.StatusNotFound)
+	case err != nil:
+		log.Printf("%s: %v\n", requestId, err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
 func (m methodHandlerMap) Get(handler requestHandler) methodHandlerMap {
@@ -91,4 +122,13 @@ func (m methodHandlerMap) Put(handler requestHandler) methodHandlerMap {
 func (m methodHandlerMap) Delete(handler requestHandler) methodHandlerMap {
 	m.handlers["DELETE"] = handler
 	return m
+}
+
+var ErrPageNotFound = errors.New("Page not found")
+
+func handleHomePage(w http.ResponseWriter, r *http.Request, ctx requestContext) error {
+	if r.URL.Path != "/" {
+		return ErrPageNotFound
+	}
+	return ctx.renderer.RenderHomePage(w, false)
 }

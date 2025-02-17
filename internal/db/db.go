@@ -26,27 +26,27 @@ type DbClient struct {
 	db *sql.DB
 }
 
-func NewDbClient() *DbClient {
+func NewDbClient() DbClient {
 	db, err := sql.Open("sqlite3", "test.db?_foreign_keys=on")
 	if err != nil {
 		log.Fatal(err)
 	}
 	initDb(db)
-	return &DbClient{db}
+	return DbClient{db}
 }
 
-func NewMemoryDbClient() *DbClient {
+func NewMemoryDbClient() DbClient {
 	db, err := sql.Open("sqlite3", ":memory:?_foreign_keys=on")
 	if err != nil {
 		log.Fatal(err)
 	}
 	initDb(db)
-	return &DbClient{db}
+	return DbClient{db}
 }
 
 func initDb(db *sql.DB) {
 	tx, err := db.Begin()
-	defer log.Fatal(tx.Rollback())
+	defer tx.Rollback() // nolint: errcheck
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -57,7 +57,10 @@ func initDb(db *sql.DB) {
 			log.Fatal("Failed to create table: ", err)
 		}
 	}
-	log.Fatal(tx.Commit())
+	err = tx.Commit()
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 func (c *DbClient) Begin() (*sql.Tx, error) {
