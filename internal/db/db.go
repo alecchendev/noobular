@@ -63,10 +63,10 @@ func initDb(db *sql.DB) {
 	}
 }
 
-func (c *DbClient) Begin() (*sql.Tx, error) {
+func (c DbClient) Begin() (*sql.Tx, error) {
 	return c.db.Begin()
 }
 
-func (c *DbClient) Close() {
+func (c DbClient) Close() {
 	c.db.Close()
 }

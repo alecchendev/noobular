@@ -11,8 +11,12 @@ func main() {
 	dbClient := db.NewDbClient()
 	defer dbClient.Close()
 	renderer := ui.NewRenderer(".")
-	port := 8080
-	server := server.NewServer(port, dbClient, renderer, server.Local)
-	log.Println("Listening on port", port)
-	log.Fatal(server.ListenAndServe())
+	cfg := server.ParseServerConfig()
+	srv := server.NewServer(dbClient, renderer, cfg)
+	log.Println("Listening on port", cfg.Port)
+	if cfg.Env == server.Local {
+		log.Fatal(srv.ListenAndServe())
+	} else if cfg.Env == server.Production {
+		log.Fatal(srv.ListenAndServeTLS(cfg.CertChainFilepath, cfg.PrivKeyFilepath))
+	}
 }
