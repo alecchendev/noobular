@@ -1,3 +1,9 @@
+:root {
+	--accent: #7f48b5;
+	--accent-dim: #5f2f8a;
+	--white: #f0f0f0;
+}
+
 html, body {
 	max-width: 95%;
 	width: 900px;
@@ -16,6 +22,10 @@ html, body {
 
 * {
 	box-sizing: border-box;
+}
+
+a {
+	color: var(--accent);
 }
 
 textarea, input {
@@ -39,4 +49,17 @@ button {
 
 button:hover {
 	cursor: pointer;
+}
+
+.button-0 {
+	height: 50px;
+	background-color: var(--accent);
+	color: var(--white);
+	border: none;
+	border-radius: 10px;
+	padding: 0.5rem 1rem;
+}
+
+.button-0:hover {
+	background-color: var(--accent-dim);
 }

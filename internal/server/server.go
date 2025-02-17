@@ -29,6 +29,11 @@ func NewServer(port int, dbClient db.DbClient, renderer ui.Renderer, env Environ
 
 	mux.Handle("/", newMethodHandlerMap().
 		Get(handleHomePage))
+	mux.Handle("/signup", newMethodHandlerMap().
+		Get(handleSignupPage))
+	mux.Handle("/signin", newMethodHandlerMap().
+		Get(handleSigninPage))
+
 
 	return &http.Server{
 		Addr:    fmt.Sprintf(":%d", port),

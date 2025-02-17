@@ -26,6 +26,7 @@ func initTemplates(projectRootDir string) map[string]*template.Template {
 	funcMap := template.FuncMap{}
 	filePaths := map[string][]string{
 		"index.html": {"page.html", "index.html"},
+		"signup.html": {"page.html", "signup.html"},
 	}
 	templates := make(map[string]*template.Template)
 	for name, paths := range filePaths {
