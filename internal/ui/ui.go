@@ -25,7 +25,7 @@ func (r *Renderer) RefreshTemplates() {
 func initTemplates(projectRootDir string) map[string]*template.Template {
 	funcMap := template.FuncMap{}
 	filePaths := map[string][]string{
-		"index.html": {"page.html", "index.html"},
+		"index.html":  {"page.html", "index.html"},
 		"signup.html": {"page.html", "signup.html"},
 	}
 	templates := make(map[string]*template.Template)

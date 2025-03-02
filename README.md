@@ -8,6 +8,22 @@ Math Academy, and I want to expand the reach of Math Academy's learnings to teac
 and learn subjects beyond math. TL;DR, Noobular is a Math Academy duplicate where
 anyone can upload content.
 
+### Development
+
+Dependencies:
+- Go
+- Sqlite
+
+Run server locally:
+- `go run cmd/server/main.go`
+
+Run tests:
+- `go test ./...`
+
+Checks:
+- Linting: `golangci-lint run`
+- Formatting: `gofumpt -l -w .`
+
 ### Noobular rewrite
 
 In February 2025, I'm rewriting Noobular.

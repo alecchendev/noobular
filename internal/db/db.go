@@ -50,7 +50,11 @@ func initDb(db *sql.DB) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	stmts := []string{}
+	stmts := []string{
+		createUserTable,
+		createCredentialTable,
+		createSessionTable,
+	}
 	for _, stmt := range stmts {
 		_, err := tx.Exec(stmt)
 		if err != nil {

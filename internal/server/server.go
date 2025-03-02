@@ -8,9 +8,10 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
+
 	"noobular/internal/db"
 	"noobular/internal/ui"
-	"os"
 
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/google/uuid"
@@ -88,13 +89,30 @@ func NewServer(dbClient db.DbClient, renderer ui.Renderer, cfg ServerConfig) *ht
 		return newMethodHandlerMap(dbClient, renderer, cfg.Env)
 	}
 
+	authCtx := newAuthContext(cfg.Env, cfg.JwtSecret, cfg.WebAuthn)
+
 	mux.Handle("/", newMethodHandlerMap().
 		Get(handleHomePage))
 	mux.Handle("/signup", newMethodHandlerMap().
 		Get(handleSignupPage))
-	mux.Handle("/signin", newMethodHandlerMap().
-		Get(handleSigninPage))
+	// mux.Handle("/signin", newMethodHandlerMap().
+	// 	Get(handleSigninPage))
 
+	// mux.Handle("/signup", newMethodHandlerMap().
+	// 	Get(authRejectedHandler(handleSignupPage)))
+	// mux.Handle("/signin", newHandlerMap().
+	// 	Get(authRejectedHandler(handleSigninPage)))
+	mux.Handle("/signup/begin", newMethodHandlerMap().
+		Get(withAuthCtx(authCtx, handleSignupBegin)))
+	mux.Handle("/signup/finish", newMethodHandlerMap().
+		Post(withAuthCtx(authCtx, handleSignupFinish)))
+
+	// mux.Handle("/signin/begin", newHandlerMap().
+	// 	Get(authRejectedHandler(withWebAuthn(webAuthn, handleSigninBegin))))
+	// mux.Handle("/signin/finish", newHandlerMap().
+	// 	Post(authRejectedHandler(withWebAuthn(webAuthn, handleSigninFinish))))
+	// mux.Handle("/logout", newHandlerMap().
+	// 	Get(authOptionalHandler(handleLogout)))
 
 	return &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Port),
@@ -188,6 +206,24 @@ func (m methodHandlerMap) Put(handler requestHandler) methodHandlerMap {
 func (m methodHandlerMap) Delete(handler requestHandler) methodHandlerMap {
 	m.handlers["DELETE"] = handler
 	return m
+}
+
+type authContext struct {
+	env       Environment
+	jwtSecret []byte
+	webAuthn  *webauthn.WebAuthn
+}
+
+func newAuthContext(env Environment, jwtSecret []byte, webAuthn *webauthn.WebAuthn) authContext {
+	return authContext{env, jwtSecret, webAuthn}
+}
+
+type authHandler func(w http.ResponseWriter, r *http.Request, ctx requestContext, authCtx authContext) error
+
+func withAuthCtx(authCtx authContext, handler authHandler) requestHandler {
+	return func(w http.ResponseWriter, r *http.Request, ctx requestContext) error {
+		return handler(w, r, ctx, authCtx)
+	}
 }
 
 var ErrPageNotFound = errors.New("Page not found")
