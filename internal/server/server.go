@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 
+	"noobular/internal/db"
 	"noobular/internal/ui"
 
 	"github.com/go-webauthn/webauthn/webauthn"
@@ -91,24 +92,24 @@ func NewServer(db *sql.DB, renderer ui.Renderer, cfg ServerConfig) *http.Server 
 	authCtx := newAuthContext(cfg.Env, cfg.JwtSecret, cfg.WebAuthn)
 
 	mux.Handle("/", newMethodHandlerMap().
-		Get(handleHomePage))
+		Get(authOptionalHandler(authCtx, handleHomePage)))
 
 	mux.Handle("/signup", newMethodHandlerMap().
-		Get(handleSignupPage))
+		Get(authRejectedHandler(authCtx, handleSignupPage)))
 	mux.Handle("/signup/begin", newMethodHandlerMap().
-		Get(withAuthCtx(authCtx, handleSignupBegin)))
+		Get(authRejectedHandler(authCtx, withAuthCtx(authCtx, handleSignupBegin))))
 	mux.Handle("/signup/finish", newMethodHandlerMap().
-		Post(withAuthCtx(authCtx, handleSignupFinish)))
+		Post(authRejectedHandler(authCtx, withAuthCtx(authCtx, handleSignupFinish))))
 
 	mux.Handle("/signin", newMethodHandlerMap().
-		Get(handleSigninPage))
+		Get(authRejectedHandler(authCtx, handleSigninPage)))
 	mux.Handle("/signin/begin", newMethodHandlerMap().
-		Get(withAuthCtx(authCtx, handleSigninBegin)))
+		Get(authRejectedHandler(authCtx, withAuthCtx(authCtx, handleSigninBegin))))
 	mux.Handle("/signin/finish", newMethodHandlerMap().
-		Post(withAuthCtx(authCtx, handleSigninFinish)))
+		Post(authRejectedHandler(authCtx, withAuthCtx(authCtx, handleSigninFinish))))
 
-	// mux.Handle("/logout", newHandlerMap().
-	// 	Get(authOptionalHandler(handleLogout)))
+	mux.Handle("/logout", newMethodHandlerMap().
+		Get(withAuthCtx(authCtx, handleLogout)))
 
 	return &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Port),
@@ -118,9 +119,9 @@ func NewServer(db *sql.DB, renderer ui.Renderer, cfg ServerConfig) *http.Server 
 
 var ErrPageNotFound = errors.New("Page not found")
 
-func handleHomePage(w http.ResponseWriter, r *http.Request, ctx requestContext) error {
+func handleHomePage(w http.ResponseWriter, r *http.Request, ctx requestContext, user *db.User) error {
 	if r.URL.Path != "/" {
 		return ErrPageNotFound
 	}
-	return ctx.renderer.RenderHomePage(w, false)
+	return ctx.renderer.RenderHomePage(w, user != nil)
 }

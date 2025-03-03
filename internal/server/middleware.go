@@ -135,3 +135,76 @@ func withAuthCtx(authCtx authContext, handler authHandler) requestHandler {
 		return handler(w, r, ctx, authCtx)
 	}
 }
+
+type UserHandler func(http.ResponseWriter, *http.Request, requestContext, db.User) error
+
+func authRequiredHandler(authCtx authContext, handler UserHandler) requestHandler {
+	return func(w http.ResponseWriter, r *http.Request, ctx requestContext) error {
+		userId, err := checkCookie(r, authCtx.jwtSecret)
+		if err != nil {
+			http.Redirect(w, r, "/signin", http.StatusSeeOther)
+			return nil
+		}
+		user, ok, err := ctx.dbClient.GetUser(userId)
+		if err != nil {
+			log.Println("Error getting user:", err)
+			http.Redirect(w, r, "/signin", http.StatusSeeOther)
+			return nil
+		}
+		if !ok {
+			log.Println("User not found")
+			http.Redirect(w, r, "/signup", http.StatusSeeOther)
+			return nil
+		}
+		return handler(w, r, ctx, user)
+	}
+}
+
+func authRejectedHandler(authCtx authContext, handler requestHandler) requestHandler {
+	return func(w http.ResponseWriter, r *http.Request, ctx requestContext) error {
+		_, err := checkCookie(r, authCtx.jwtSecret)
+		if err == nil {
+			// If they have some wrong/expired cookie just delete it for them
+			http.Redirect(w, r, "/logout", http.StatusSeeOther)
+			return nil
+		}
+		return handler(w, r, ctx)
+	}
+}
+
+type OptionalUserHandler func(http.ResponseWriter, *http.Request, requestContext, *db.User) error
+
+func authOptionalHandler(authCtx authContext, handler OptionalUserHandler) requestHandler {
+	return func(w http.ResponseWriter, r *http.Request, ctx requestContext) error {
+		userId, err := checkCookie(r, authCtx.jwtSecret)
+		loggedIn := err == nil
+		if loggedIn {
+			user, ok, err := ctx.dbClient.GetUser(userId)
+			if err != nil {
+				log.Println("Error getting user:", err)
+				return handler(w, r, ctx, nil)
+			}
+			if !ok {
+				log.Println("Received valid cookie but user not found")
+				return handler(w, r, ctx, nil)
+			}
+			return handler(w, r, ctx, &user)
+		} else {
+			return handler(w, r, ctx, nil)
+		}
+	}
+}
+
+func checkCookie(r *http.Request, jwtSecret []byte) (int64, error) {
+	tokenCookie, err := r.Cookie("session_token")
+	if err != nil {
+		log.Println("No session token")
+		return 0, err
+	}
+	userId, err := ValidateJwt(jwtSecret, tokenCookie.Value)
+	if err != nil {
+		log.Println("Invalid session token:", err)
+		return 0, err
+	}
+	return userId, nil
+}
