@@ -92,24 +92,21 @@ func NewServer(db *sql.DB, renderer ui.Renderer, cfg ServerConfig) *http.Server 
 
 	mux.Handle("/", newMethodHandlerMap().
 		Get(handleHomePage))
+
 	mux.Handle("/signup", newMethodHandlerMap().
 		Get(handleSignupPage))
-	// mux.Handle("/signin", newMethodHandlerMap().
-	// 	Get(handleSigninPage))
-
-	// mux.Handle("/signup", newMethodHandlerMap().
-	// 	Get(authRejectedHandler(handleSignupPage)))
-	// mux.Handle("/signin", newHandlerMap().
-	// 	Get(authRejectedHandler(handleSigninPage)))
 	mux.Handle("/signup/begin", newMethodHandlerMap().
 		Get(withAuthCtx(authCtx, handleSignupBegin)))
 	mux.Handle("/signup/finish", newMethodHandlerMap().
 		Post(withAuthCtx(authCtx, handleSignupFinish)))
 
-	// mux.Handle("/signin/begin", newHandlerMap().
-	// 	Get(authRejectedHandler(withWebAuthn(webAuthn, handleSigninBegin))))
-	// mux.Handle("/signin/finish", newHandlerMap().
-	// 	Post(authRejectedHandler(withWebAuthn(webAuthn, handleSigninFinish))))
+	mux.Handle("/signin", newMethodHandlerMap().
+		Get(handleSigninPage))
+	mux.Handle("/signin/begin", newMethodHandlerMap().
+		Get(withAuthCtx(authCtx, handleSigninBegin)))
+	mux.Handle("/signin/finish", newMethodHandlerMap().
+		Post(withAuthCtx(authCtx, handleSigninFinish)))
+
 	// mux.Handle("/logout", newHandlerMap().
 	// 	Get(authOptionalHandler(handleLogout)))
 

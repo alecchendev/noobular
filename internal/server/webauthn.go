@@ -15,6 +15,14 @@ type WebAuthnUser struct {
 	Credentials []webauthn.Credential
 }
 
+func NewWebAuthnUser(user db.User) WebAuthnUser {
+	return WebAuthnUser{user, []webauthn.Credential{}}
+}
+
+func NewWebAuthnUserWithCred(user db.User, credential webauthn.Credential) WebAuthnUser {
+	return WebAuthnUser{user, []webauthn.Credential{credential}}
+}
+
 // Implement webauthn.User interface
 
 func (u *WebAuthnUser) WebAuthnID() []byte {

@@ -8,7 +8,7 @@ import (
 const createCredentialTable = `
 create table if not exists credentials (
 	id blob primary key,
-	user_id integer not null,
+	user_id integer not null unique,
 	public_key blob not null,
 	attestation_type text not null,
 	transport blob not null, --json

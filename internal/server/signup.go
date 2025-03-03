@@ -28,7 +28,7 @@ func handleSignupBegin(w http.ResponseWriter, r *http.Request, ctx requestContex
 	if err != nil {
 		return fmt.Errorf("Error creating user: %w", err)
 	}
-	webAuthnUser := WebAuthnUser{user, []webauthn.Credential{}}
+	webAuthnUser := NewWebAuthnUser(user)
 
 	options, session, err := authCtx.webAuthn.BeginRegistration(&webAuthnUser)
 	if err != nil {
@@ -65,7 +65,7 @@ func handleSignupFinish(w http.ResponseWriter, r *http.Request, ctx requestConte
 	if !ok {
 		return fmt.Errorf("User not found")
 	}
-	webAuthnUser := WebAuthnUser{user, []webauthn.Credential{}}
+	webAuthnUser := NewWebAuthnUser(user)
 
 	sessionData, err := ctx.dbClient.GetSession(webAuthnUser.User.Id)
 	if err != nil {
