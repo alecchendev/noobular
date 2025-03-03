@@ -33,7 +33,7 @@ func (c *DbClient) InsertCredential(credential Credential) error {
 		insert into credentials(id, user_id, public_key, attestation_type, transport, flags, authenticator)
 		values(?, ?, ?, ?, ?, ?, ?);
 		`
-	_, err := c.db.Exec(insertCredentialQuery, credential.Id, credential.UserId, credential.PublicKey, credential.AttestationType, credential.Transport, credential.Flags, credential.Authenticator)
+	_, err := c.tx.Exec(insertCredentialQuery, credential.Id, credential.UserId, credential.PublicKey, credential.AttestationType, credential.Transport, credential.Flags, credential.Authenticator)
 	return err
 }
 
@@ -43,7 +43,7 @@ func (c *DbClient) UpdateCredential(credential Credential) error {
 		set public_key = ?, attestation_type = ?, transport = ?, flags = ?, authenticator = ?
 		where id = ?;
 		`
-	_, err := c.db.Exec(updateCredentialQuery, credential.PublicKey, credential.AttestationType, credential.Transport, credential.Flags, credential.Authenticator, credential.Id)
+	_, err := c.tx.Exec(updateCredentialQuery, credential.PublicKey, credential.AttestationType, credential.Transport, credential.Flags, credential.Authenticator, credential.Id)
 	return err
 }
 
@@ -52,7 +52,7 @@ func (c *DbClient) GetCredentialByUserId(userId int64) (Credential, bool, error)
 		select id, user_id, public_key, attestation_type, transport, flags, authenticator from credentials where user_id = ?;
 		`
 	var credential Credential
-	res := c.db.QueryRow(getCredentialsByUserIdQuery, userId)
+	res := c.tx.QueryRow(getCredentialsByUserIdQuery, userId)
 	err := res.Scan(&credential.Id, &credential.UserId, &credential.PublicKey, &credential.AttestationType, &credential.Transport, &credential.Flags, &credential.Authenticator)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Credential{}, false, nil

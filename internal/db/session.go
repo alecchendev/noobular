@@ -13,7 +13,7 @@ func (c *DbClient) InsertSession(userId int64, sessionData []byte) error {
 	const deleteSessionQuery = `
 		delete from sessions where user_id = ?;
 		`
-	_, err := c.db.Exec(deleteSessionQuery, userId)
+	_, err := c.tx.Exec(deleteSessionQuery, userId)
 	if err != nil {
 		return err
 	}
@@ -21,7 +21,7 @@ func (c *DbClient) InsertSession(userId int64, sessionData []byte) error {
 		insert into sessions(user_id, session_data)
 		values(?, ?);
 		`
-	_, err = c.db.Exec(insertSessionQuery, userId, sessionData)
+	_, err = c.tx.Exec(insertSessionQuery, userId, sessionData)
 	if err != nil {
 		return err
 	}
@@ -33,7 +33,7 @@ func (c *DbClient) GetSession(userId int64) ([]byte, error) {
 		select session_data from sessions where user_id = ?;
 		`
 	var sessionData []byte
-	res := c.db.QueryRow(getSessionQuery, userId)
+	res := c.tx.QueryRow(getSessionQuery, userId)
 	err := res.Scan(&sessionData)
 	if err != nil {
 		return nil, err

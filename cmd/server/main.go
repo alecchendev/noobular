@@ -9,11 +9,11 @@ import (
 )
 
 func main() {
-	dbClient := db.NewDbClient()
-	defer dbClient.Close()
+	db := db.NewDb()
+	defer db.Close()
 	renderer := ui.NewRenderer(".")
 	cfg := server.ParseServerConfig()
-	srv := server.NewServer(dbClient, renderer, cfg)
+	srv := server.NewServer(db, renderer, cfg)
 	log.Println("Listening on port", cfg.Port)
 	if cfg.Env == server.Local {
 		log.Fatal(srv.ListenAndServe())

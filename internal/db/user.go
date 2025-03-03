@@ -23,7 +23,7 @@ func NewUser(id int64, username string) User {
 }
 
 func (c DbClient) CreateUser(username string) (User, error) {
-	res, err := c.db.Exec("insert into users(username) values(?);", username)
+	res, err := c.tx.Exec("insert into users(username) values(?);", username)
 	if err != nil {
 		return User{}, err
 	}
@@ -35,7 +35,7 @@ func (c DbClient) CreateUser(username string) (User, error) {
 }
 
 func (c DbClient) GetUser(userId int64) (User, bool, error) {
-	row := c.db.QueryRow("select id, username from users where id = ?;", userId)
+	row := c.tx.QueryRow("select id, username from users where id = ?;", userId)
 	var username string
 	err := row.Scan(&userId, &username)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -48,7 +48,7 @@ func (c DbClient) GetUser(userId int64) (User, bool, error) {
 }
 
 func (c DbClient) GetUserByUsername(username string) (User, bool, error) {
-	row := c.db.QueryRow("select id, username from users where username = ?;", username)
+	row := c.tx.QueryRow("select id, username from users where username = ?;", username)
 	var id int64
 	err := row.Scan(&id, &username)
 	if errors.Is(err, sql.ErrNoRows) {

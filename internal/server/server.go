@@ -2,6 +2,7 @@ package server
 
 import (
 	"crypto/rand"
+	"database/sql"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -10,11 +11,9 @@ import (
 	"net/url"
 	"os"
 
-	"noobular/internal/db"
 	"noobular/internal/ui"
 
 	"github.com/go-webauthn/webauthn/webauthn"
-	"github.com/google/uuid"
 )
 
 type Environment string
@@ -80,13 +79,13 @@ func ParseServerConfig() ServerConfig {
 	return ServerConfig{env, 8080, jwtSecret, certChainFilepath, privKeyFilepath, webAuthn}
 }
 
-func NewServer(dbClient db.DbClient, renderer ui.Renderer, cfg ServerConfig) *http.Server {
+func NewServer(db *sql.DB, renderer ui.Renderer, cfg ServerConfig) *http.Server {
 	mux := http.NewServeMux()
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 	mux.Handle("/style/", http.StripPrefix("/style/", http.FileServer(http.Dir("style"))))
 
 	newMethodHandlerMap := func() methodHandlerMap {
-		return newMethodHandlerMap(dbClient, renderer, cfg.Env)
+		return newMethodHandlerMap(db, renderer, cfg.Env)
 	}
 
 	authCtx := newAuthContext(cfg.Env, cfg.JwtSecret, cfg.WebAuthn)
@@ -117,112 +116,6 @@ func NewServer(dbClient db.DbClient, renderer ui.Renderer, cfg ServerConfig) *ht
 	return &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Port),
 		Handler: mux,
-	}
-}
-
-type requestContext struct {
-	reqId    uuid.UUID
-	dbClient db.DbClient
-	renderer ui.Renderer
-}
-
-func newRequestContext(reqId uuid.UUID, dbClient db.DbClient, renderer ui.Renderer) requestContext {
-	return requestContext{reqId: reqId, dbClient: dbClient, renderer: renderer}
-}
-
-type requestHandler func(
-	w http.ResponseWriter,
-	r *http.Request,
-	ctx requestContext,
-) error
-
-type methodHandlerMap struct {
-	dbClient db.DbClient
-	renderer ui.Renderer
-	handlers map[string]requestHandler
-	env      Environment
-}
-
-func newMethodHandlerMap(dbClient db.DbClient, renderer ui.Renderer, env Environment) methodHandlerMap {
-	return methodHandlerMap{
-		dbClient: dbClient,
-		renderer: renderer,
-		handlers: make(map[string]requestHandler),
-		env:      env,
-	}
-}
-
-func (m methodHandlerMap) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	var requestIdOpt uuid.NullUUID
-	_ = requestIdOpt.UnmarshalText([]byte(r.Header.Get("X-Request-Id")))
-	var requestId uuid.UUID
-	if requestIdOpt.Valid {
-		requestId = requestIdOpt.UUID
-	} else {
-		requestId = uuid.New()
-	}
-	err := r.ParseForm()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	log.Println(requestId, r.Method, r.URL.Path, r.Form)
-	if m.env == Local {
-		// Refresh templates so we don't need to restart
-		// server to see changes.
-		m.renderer.RefreshTemplates()
-	}
-	handler, ok := m.handlers[r.Method]
-	if !ok {
-		log.Printf("%s: Method %s not allowed for path %s\n", requestId, r.Method, r.URL.Path)
-		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
-		return
-	}
-	err = handler(w, r, newRequestContext(requestId, m.dbClient, m.renderer))
-	switch {
-	case errors.Is(err, ErrPageNotFound):
-		http.Error(w, err.Error(), http.StatusNotFound)
-	case err != nil:
-		log.Printf("%s: %v\n", requestId, err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-}
-
-func (m methodHandlerMap) Get(handler requestHandler) methodHandlerMap {
-	m.handlers["GET"] = handler
-	return m
-}
-
-func (m methodHandlerMap) Post(handler requestHandler) methodHandlerMap {
-	m.handlers["POST"] = handler
-	return m
-}
-
-func (m methodHandlerMap) Put(handler requestHandler) methodHandlerMap {
-	m.handlers["PUT"] = handler
-	return m
-}
-
-func (m methodHandlerMap) Delete(handler requestHandler) methodHandlerMap {
-	m.handlers["DELETE"] = handler
-	return m
-}
-
-type authContext struct {
-	env       Environment
-	jwtSecret []byte
-	webAuthn  *webauthn.WebAuthn
-}
-
-func newAuthContext(env Environment, jwtSecret []byte, webAuthn *webauthn.WebAuthn) authContext {
-	return authContext{env, jwtSecret, webAuthn}
-}
-
-type authHandler func(w http.ResponseWriter, r *http.Request, ctx requestContext, authCtx authContext) error
-
-func withAuthCtx(authCtx authContext, handler authHandler) requestHandler {
-	return func(w http.ResponseWriter, r *http.Request, ctx requestContext) error {
-		return handler(w, r, ctx, authCtx)
 	}
 }
 

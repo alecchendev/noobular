@@ -22,26 +22,22 @@ import (
 // query to get everything we need. Multiple queries that compose existing
 // methods are good too.
 
-type DbClient struct {
-	db *sql.DB
-}
-
-func NewDbClient() DbClient {
+func NewDb() *sql.DB {
 	db, err := sql.Open("sqlite3", "test.db?_foreign_keys=on")
 	if err != nil {
 		log.Fatal(err)
 	}
 	initDb(db)
-	return DbClient{db}
+	return db
 }
 
-func NewMemoryDbClient() DbClient {
+func NewMemoryDb() *sql.DB {
 	db, err := sql.Open("sqlite3", ":memory:?_foreign_keys=on")
 	if err != nil {
 		log.Fatal(err)
 	}
 	initDb(db)
-	return DbClient{db}
+	return db
 }
 
 func initDb(db *sql.DB) {
@@ -67,10 +63,10 @@ func initDb(db *sql.DB) {
 	}
 }
 
-func (c DbClient) Begin() (*sql.Tx, error) {
-	return c.db.Begin()
+type DbClient struct {
+	tx *sql.Tx
 }
 
-func (c DbClient) Close() {
-	c.db.Close()
+func NewDbClient(tx *sql.Tx) DbClient {
+	return DbClient{tx: tx}
 }
